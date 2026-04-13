@@ -33,7 +33,67 @@ function splitCSVLine(line) {
 function num(v) { return parseFloat(v) || 0 }
 function int_(v) { return parseInt(v) || null }
 
+// ── Shopify CSV auto-detection & normalisation ──────────────────────────────
+// Shopify exports one row per line item; order-level fields repeat or are
+// blank on rows 2+. We detect by presence of 'financial_status' + 'created_at'
+// then deduplicate by order Id before feeding into the shared importOrders path.
+
+function isShopifyCSV(firstRow) {
+  return 'financial_status' in firstRow && 'created_at' in firstRow
+}
+
+function shopifyMapStatus(financial, fulfillment) {
+  if (financial === 'refunded') return 'rto'
+  if (financial === 'voided') return 'cancelled'
+  if (fulfillment === 'fulfilled') return 'delivered'
+  if (fulfillment === 'partial') return 'shipped'
+  if (financial === 'paid') return 'shipped'
+  return 'pending'
+}
+
+function shopifyMapPaymentMode(gateway) {
+  const g = (gateway || '').toLowerCase().replace(/[\s_-]/g, '')
+  if (g.includes('cod') || g.includes('cashondelivery') || g === 'manual') return 'cod'
+  return 'prepaid'
+}
+
+// Returns rows in our canonical import format (order_date, payment_mode, …)
+function normaliseShopifyRows(rows) {
+  // Group by order Id — later line-item rows carry an empty Total, so only
+  // the first row for each order has reliable financial data.
+  const orderMap = new Map()
+  for (const r of rows) {
+    const key = r.id || r.name
+    if (!key) continue
+    if (!orderMap.has(key)) {
+      orderMap.set(key, { ...r })
+    } else {
+      // Grab first non-empty SKU from subsequent line-item rows
+      const existing = orderMap.get(key)
+      if (!existing.lineitem_sku && r.lineitem_sku) {
+        existing.lineitem_sku = r.lineitem_sku
+      }
+    }
+  }
+
+  return [...orderMap.values()].map((r) => ({
+    shopify_order_id: r.id || null,
+    order_date: r.created_at ? r.created_at.slice(0, 10) : null,
+    payment_mode: shopifyMapPaymentMode(r.payment_method || r.payment_gateway || ''),
+    status: shopifyMapStatus(r.financial_status, r.fulfillment_status),
+    selling_price: r.total || '',
+    product_sku: r.lineitem_sku || null,
+    notes: r.name || null,
+    // 3PL fields intentionally omitted — will default to 0
+  }))
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 async function importOrders(rows) {
+  // Auto-detect and normalise Shopify CSV exports
+  if (rows.length > 0 && isShopifyCSV(rows[0])) {
+    rows = normaliseShopifyRows(rows)
+  }
   const valid = []
   const errors = []
 
@@ -78,7 +138,12 @@ async function importOrders(rows) {
   }
 
   if (valid.length > 0) {
-    const { error } = await supabase.from('orders').insert(valid)
+    // Use upsert so re-importing (or importing after n8n auto-sync) is safe.
+    // Rows without a shopify_order_id fall back to plain insert behaviour
+    // because NULL != NULL in Postgres (no conflict fires).
+    const { error } = await supabase
+      .from('orders')
+      .upsert(valid, { onConflict: 'shopify_order_id' })
     if (error) return { inserted: 0, errors: [{ row: 'all', message: error.message }] }
   }
 
