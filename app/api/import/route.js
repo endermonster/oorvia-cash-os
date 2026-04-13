@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { computeOrderFees } from '@/lib/pnl'
+import { shouldImportShopifyOrder, mapShopifyPaymentMode } from '@/lib/shopify'
 
 // Parse a CSV string into array of objects using the first row as headers
 function parseCSV(text) {
@@ -34,41 +35,27 @@ function num(v) { return parseFloat(v) || 0 }
 function int_(v) { return parseInt(v) || null }
 
 // ── Shopify CSV auto-detection & normalisation ──────────────────────────────
-// Shopify exports one row per line item; order-level fields repeat or are
-// blank on rows 2+. We detect by presence of 'financial_status' + 'created_at'
-// then deduplicate by order Id before feeding into the shared importOrders path.
+// Shopify exports one row per line item; order-level fields (Total, Payment
+// Method, etc.) only appear on the first row for each order.
+// Detection: presence of 'financial_status' + 'fulfillment_status' columns.
+// Filter:    only paid + fulfilled orders enter the DB (same rule as n8n sync).
 
 function isShopifyCSV(firstRow) {
-  return 'financial_status' in firstRow && 'created_at' in firstRow
+  return 'financial_status' in firstRow && 'fulfillment_status' in firstRow
 }
 
-function shopifyMapStatus(financial, fulfillment) {
-  if (financial === 'refunded') return 'rto'
-  if (financial === 'voided') return 'cancelled'
-  if (fulfillment === 'fulfilled') return 'delivered'
-  if (fulfillment === 'partial') return 'shipped'
-  if (financial === 'paid') return 'shipped'
-  return 'pending'
-}
-
-function shopifyMapPaymentMode(gateway) {
-  const g = (gateway || '').toLowerCase().replace(/[\s_-]/g, '')
-  if (g.includes('cod') || g.includes('cashondelivery') || g === 'manual') return 'cod'
-  return 'prepaid'
-}
-
-// Returns rows in our canonical import format (order_date, payment_mode, …)
+// Deduplicate by Name (#1001), filter to paid+fulfilled, map to canonical
+// import format so the shared importOrders validator can process them normally.
 function normaliseShopifyRows(rows) {
-  // Group by order Id — later line-item rows carry an empty Total, so only
-  // the first row for each order has reliable financial data.
+  // Deduplicate: group by order Name, pick up first non-empty SKU from
+  // subsequent line-item rows
   const orderMap = new Map()
   for (const r of rows) {
-    const key = r.id || r.name
+    const key = r.name
     if (!key) continue
     if (!orderMap.has(key)) {
       orderMap.set(key, { ...r })
     } else {
-      // Grab first non-empty SKU from subsequent line-item rows
       const existing = orderMap.get(key)
       if (!existing.lineitem_sku && r.lineitem_sku) {
         existing.lineitem_sku = r.lineitem_sku
@@ -76,16 +63,17 @@ function normaliseShopifyRows(rows) {
     }
   }
 
-  return [...orderMap.values()].map((r) => ({
-    shopify_order_id: r.id || null,
-    order_date: r.created_at ? r.created_at.slice(0, 10) : null,
-    payment_mode: shopifyMapPaymentMode(r.payment_method || r.payment_gateway || ''),
-    status: shopifyMapStatus(r.financial_status, r.fulfillment_status),
-    selling_price: r.total || '',
-    product_sku: r.lineitem_sku || null,
-    notes: r.name || null,
-    // 3PL fields intentionally omitted — will default to 0
-  }))
+  return [...orderMap.values()]
+    .filter((r) => shouldImportShopifyOrder(r.financial_status, r.fulfillment_status))
+    .map((r) => ({
+      shopify_order_id: r.name,                              // e.g. "#1001"
+      order_date:       r.created_at ? r.created_at.slice(0, 10) : null,
+      payment_mode:     mapShopifyPaymentMode(r.payment_method || ''),
+      status:           'delivered',
+      selling_price:    r.total || '',
+      product_sku:      r.lineitem_sku || null,
+      notes:            r.name || null,
+    }))
 }
 // ────────────────────────────────────────────────────────────────────────────
 
