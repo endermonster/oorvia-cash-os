@@ -14,9 +14,12 @@ const defaultForm = {
   order_value:      '',
   checkout_fee:     '',
   cashfree_fee:     '',
-  order_mgmt_fee:   '',
-  platform_fee:     '',
-  cod_fee:          '',
+  order_mgmt_fee:       '',
+  platform_fee:         '',
+  cod_fee:              '',
+  forward_shipping_fee: '',
+  fulfillment_fee:      '',
+  rto_fee:              '',
   meta_ad_spend_attributed: '',
   notes:            '',
 }
@@ -53,6 +56,9 @@ export default function OrderForm({ onSaved, onClose, initial }) {
     order_mgmt_fee:           parseFloat(form.order_mgmt_fee) || 0,
     platform_fee:             parseFloat(form.platform_fee) || 0,
     cod_fee:                  parseFloat(form.cod_fee) || 0,
+    forward_shipping_fee:     parseFloat(form.forward_shipping_fee) || 0,
+    fulfillment_fee:          parseFloat(form.fulfillment_fee) || 0,
+    rto_fee:                  parseFloat(form.rto_fee) || 0,
     meta_ad_spend_attributed: parseFloat(form.meta_ad_spend_attributed) || 0,
   }
   const netProfit  = computeOrderNetProfit(previewOrder)
@@ -74,6 +80,9 @@ export default function OrderForm({ onSaved, onClose, initial }) {
       order_mgmt_fee:           parseFloat(form.order_mgmt_fee) || 0,
       platform_fee:             parseFloat(form.platform_fee) || 0,
       cod_fee:                  parseFloat(form.cod_fee) || 0,
+      forward_shipping_fee:     parseFloat(form.forward_shipping_fee) || 0,
+      fulfillment_fee:          parseFloat(form.fulfillment_fee) || 0,
+      rto_fee:                  parseFloat(form.rto_fee) || 0,
       meta_ad_spend_attributed: parseFloat(form.meta_ad_spend_attributed) || null,
       notes:                    form.notes || null,
     }
@@ -199,6 +208,20 @@ export default function OrderForm({ onSaved, onClose, initial }) {
                 disabled={form.payment_mode === 'prepaid'}
                 className={inputCls + (form.payment_mode === 'prepaid' ? ' opacity-40' : '')}
               />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-3">
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">Forward Shipping ₹</label>
+              <input type="number" name="forward_shipping_fee" value={form.forward_shipping_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">Fulfilment Fee ₹</label>
+              <input type="number" name="fulfillment_fee" value={form.fulfillment_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-400 mb-1">RTO Fee ₹</label>
+              <input type="number" name="rto_fee" value={form.rto_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
           </div>
 

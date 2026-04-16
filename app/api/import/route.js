@@ -34,98 +34,186 @@ function int_(v) { return parseInt(v) || null }
 function r2(n) { return Math.round(n * 100) / 100 }
 
 // ── vFulfill Transaction Export ──────────────────────────────────────────────
-// vFulfill exports one row per transaction. Each order produces multiple rows:
-//   "Order Managment Fee"        — charged on order placement (note: typo is theirs)
-//   "Convenience Fees Percentage"— platform fee, charged on dispatch
-//   "COD Fees"                   — COD handling fee, charged on delivery
-//   "COD Remittance"             — credit, cash remitted back to you
+// vFulfill exports one row per transaction. Each order has multiple rows.
 //
-// Detection: presence of 'shopify_order_name' + 'transaction_head' columns.
-// Strategy:  group by Shopify Order Name, aggregate each fee type, derive
-//            checkout_fee and cashfree_fee from order_value + payment_mode.
+//  Order-linked heads (shopify_order_name present):
+//   "Order Managment Fee"         → order_mgmt_fee        / wallet debit
+//   "Convenience Fees Percentage" → platform_fee          / wallet debit
+//   "COD Fees"                    → cod_fee               / wallet debit
+//   "COD Remittance"              → cod_remittance        / wallet credit
+//   "Forward Shipping"            → forward_shipping_fee  / wallet debit
+//   "Fulfilment Fees"             → fulfillment_fee       / wallet debit
+//   "RTO Handling Fee"            → rto_fee               / wallet debit
+//   "RTO Shipping"                → rto_fee               / wallet debit
+//
+//  Wallet-only heads (no shopify_order_name):
+//   "Add Funds - Wire Transfer"   → wallet add_funds
+//   "Add Funds - Razorpay"        → wallet add_funds
+//   "Withdraw Funds"              → wallet withdrawal
+//   "Client Sourcing Request"     → wallet debit
+//   "Wallet Recharge Service Fee" → wallet debit
+//
+// Accepted statuses: Processed, Pending, In_processing. Declined is skipped.
+// COD detection: presence of COD Fees or COD Remittance → payment_mode = 'cod'.
+// Dates: handles both YYYY-MM-DD and DD-MM-YYYY.
 
 function isVfulfillCSV(firstRow) {
   return 'shopify_order_name' in firstRow && 'transaction_head' in firstRow
 }
 
+function parseVfDate(s) {
+  if (!s || s === '-') return null
+  s = s.trim()
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+  if (/^\d{2}-\d{2}-\d{4}/.test(s)) {
+    const [d, m, y] = s.split('-')
+    return `${y}-${m}-${d}`
+  }
+  return null
+}
+
+const ACCEPTED_STATUSES = new Set(['processed', 'pending', 'in_processing'])
+
 function normaliseVfulfillRows(rows) {
-  // Skip non-Processed rows and rows with no Shopify order reference
-  const valid = rows.filter((r) =>
-    r.transaction_status === 'Processed' &&
-    r.shopify_order_name &&
-    r.shopify_order_name !== '-'
+  const accepted = rows.filter((r) =>
+    ACCEPTED_STATUSES.has((r.transaction_status || '').toLowerCase())
   )
 
-  const orderMap = new Map()
+  const orderMap    = new Map()
+  const walletEntries = []
 
-  for (const r of valid) {
-    const key = r.shopify_order_name
-    if (!orderMap.has(key)) {
-      orderMap.set(key, {
-        shopify_order_name: key,
-        order_date:         r.shopify_order_date ? r.shopify_order_date.slice(0, 10) : null,
-        payment_type:       r.payment_type || '',
-        order_value:        parseFloat(r.order_value) || 0,
-        qty:                null,
-        gst_rate:           null,
-        order_mgmt_fee:     0,
-        platform_fee:       0,
-        cod_fee:            0,
-        cod_remittance:     0,
-      })
-    }
+  for (const r of accepted) {
+    const head      = (r.transaction_head || '').trim()
+    const headLower = head.toLowerCase()
+    const absAmt    = Math.abs(parseFloat(r.total_amt) || 0)
+    const txnId     = r.transaction_id || null
+    const txnDate   = parseVfDate(r.transaction_date)
+    const orderName = (r.shopify_order_name || '').trim()
+    const txnStatus = (r.transaction_status || '').toLowerCase()
+    const hasOrder  = orderName && orderName !== '-'
 
-    const order = orderMap.get(key)
-    const amt  = parseFloat(r.total_amt) || 0
-    const head = (r.transaction_head || '').toLowerCase().trim()
+    if (hasOrder) {
+      if (!orderMap.has(orderName)) {
+        orderMap.set(orderName, {
+          shopify_order_name:   orderName,
+          order_date:           parseVfDate(r.shopify_order_date),
+          order_value:          0,
+          qty:                  null,
+          gst_rate:             null,
+          order_mgmt_fee:       0,
+          platform_fee:         0,
+          cod_fee:              0,
+          forward_shipping_fee: 0,
+          fulfillment_fee:      0,
+          rto_fee:              0,
+          cod_remittance:       0,
+          hasCodTransaction:    false,
+          hasRto:               false,
+        })
+      }
 
-    // Grab qty and gst_rate from the first item row that carries them
-    if (order.qty === null && r.qty && r.qty !== '-') {
-      order.qty = parseInt(r.qty) || null
-    }
-    if (order.gst_rate === null && r.vf_sku_gst_percentage && r.vf_sku_gst_percentage !== '-') {
-      order.gst_rate = parseFloat(r.vf_sku_gst_percentage) || null
-    }
+      const order = orderMap.get(orderName)
 
-    // Accumulate fee buckets
-    if (head.includes('order managment fee') || head.includes('order management fee')) {
-      order.order_mgmt_fee += amt
-    } else if (head.includes('convenience fees')) {
-      order.platform_fee += amt
-    } else if (head === 'cod fees') {
-      order.cod_fee += amt
-    } else if (head.includes('cod remittance')) {
-      order.cod_remittance += amt
+      if (!order.order_value && r.order_value && r.order_value !== '-') {
+        order.order_value = parseFloat(r.order_value) || 0
+      }
+      if (order.qty === null && r.qty && r.qty !== '-') {
+        order.qty = parseInt(r.qty) || null
+      }
+      if (order.gst_rate === null && r.vf_sku_gst_percentage && r.vf_sku_gst_percentage !== '-') {
+        order.gst_rate = parseFloat(r.vf_sku_gst_percentage) || null
+      }
+
+      const walletBase = {
+        entry_date:         txnDate,
+        amount:             absAmt,
+        reference:          head,
+        shopify_order_id:   orderName,
+        vf_transaction_id:  txnId,
+        transaction_status: txnStatus,
+      }
+
+      if (headLower.includes('order managment fee') || headLower.includes('order management fee')) {
+        order.order_mgmt_fee += absAmt
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      } else if (headLower.includes('convenience fees')) {
+        order.platform_fee += absAmt
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      } else if (headLower === 'cod fees') {
+        order.cod_fee += absAmt
+        order.hasCodTransaction = true
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      } else if (headLower.includes('cod remittance')) {
+        order.cod_remittance += absAmt
+        order.hasCodTransaction = true
+        walletEntries.push({ ...walletBase, entry_type: 'credit' })
+      } else if (headLower === 'forward shipping') {
+        order.forward_shipping_fee += absAmt
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      } else if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees') {
+        order.fulfillment_fee += absAmt
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      } else if (headLower.includes('rto handling fee') || headLower.includes('rto shipping')) {
+        order.rto_fee += absAmt
+        order.hasRto = true
+        walletEntries.push({ ...walletBase, entry_type: 'debit' })
+      }
+    } else {
+      // Wallet-only heads
+      let entry_type = null
+      if (headLower.startsWith('add funds')) {
+        entry_type = 'add_funds'
+      } else if (headLower === 'withdraw funds') {
+        entry_type = 'withdrawal'
+      } else if (headLower === 'client sourcing request' || headLower === 'wallet recharge service fee') {
+        entry_type = 'debit'
+      }
+
+      if (entry_type) {
+        walletEntries.push({
+          entry_date:         txnDate,
+          entry_type,
+          amount:             absAmt,
+          reference:          head,
+          shopify_order_id:   null,
+          vf_transaction_id:  txnId,
+          transaction_status: txnStatus,
+        })
+      }
     }
   }
 
-  return [...orderMap.values()].map((o) => {
-    const mode       = (o.payment_type || '').toLowerCase() === 'cod' ? 'cod' : 'prepaid'
-    const orderValue = o.order_value
+  const orders = [...orderMap.values()].map((o) => {
+    const mode   = o.hasCodTransaction ? 'cod' : 'prepaid'
+    const status = o.hasRto ? 'rto' : 'delivered'
 
-    // settlement_status derived from which fee types are present
     let settlement_status
-    if (o.cod_remittance > 0)      settlement_status = 'settled'
-    else if (o.platform_fee > 0)   settlement_status = 'in-transit'
-    else                           settlement_status = 'new'
+    if (o.cod_remittance > 0)    settlement_status = 'settled'
+    else if (o.platform_fee > 0) settlement_status = 'in-transit'
+    else                         settlement_status = 'new'
 
     return {
-      shopify_order_id:  o.shopify_order_name,
-      order_date:        o.order_date,
-      payment_mode:      mode,
-      status:            'delivered',
-      order_value:       r2(orderValue),
-      qty:               o.qty,
-      gst_rate:          o.gst_rate ?? 18,
-      checkout_fee:      r2(orderValue * 0.0236),          // 2% + 18% GST, from Shopify
-      cashfree_fee:      mode === 'prepaid' ? r2(orderValue * 0.025) : 0,
-      order_mgmt_fee:    r2(o.order_mgmt_fee),
-      platform_fee:      r2(o.platform_fee),
-      cod_fee:           r2(o.cod_fee),
-      cod_remittance:    r2(o.cod_remittance),
+      shopify_order_id:     o.shopify_order_name,
+      order_date:           o.order_date,
+      payment_mode:         mode,
+      status,
+      order_value:          r2(o.order_value),
+      qty:                  o.qty,
+      gst_rate:             o.gst_rate ?? 18,
+      checkout_fee:         r2(o.order_value * 0.0236),
+      cashfree_fee:         mode === 'prepaid' ? r2(o.order_value * 0.025) : 0,
+      order_mgmt_fee:       r2(o.order_mgmt_fee),
+      platform_fee:         r2(o.platform_fee),
+      cod_fee:              r2(o.cod_fee),
+      forward_shipping_fee: r2(o.forward_shipping_fee),
+      fulfillment_fee:      r2(o.fulfillment_fee),
+      rto_fee:              r2(o.rto_fee),
+      cod_remittance:       r2(o.cod_remittance),
       settlement_status,
     }
   })
+
+  return { orders, walletEntries }
 }
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -137,17 +225,29 @@ async function importOrders(rows) {
     }
   }
 
-  const normalised = normaliseVfulfillRows(rows)
-  if (normalised.length === 0) {
-    return { inserted: 0, errors: [{ row: 'all', message: 'No valid Processed orders found in vFulfill export.' }] }
+  const { orders, walletEntries } = normaliseVfulfillRows(rows)
+
+  if (orders.length === 0 && walletEntries.length === 0) {
+    return { inserted: 0, errors: [{ row: 'all', message: 'No valid orders or wallet entries found in vFulfill export.' }] }
   }
 
-  const { error } = await supabase
-    .from('orders')
-    .upsert(normalised, { onConflict: 'shopify_order_id' })
+  const errors = []
 
-  if (error) return { inserted: 0, errors: [{ row: 'all', message: error.message }] }
-  return { inserted: normalised.length, errors: [] }
+  if (orders.length > 0) {
+    const { error } = await supabase
+      .from('orders')
+      .upsert(orders, { onConflict: 'shopify_order_id' })
+    if (error) errors.push({ row: 'orders', message: error.message })
+  }
+
+  if (walletEntries.length > 0) {
+    const { error } = await supabase
+      .from('cod_wallet_entries')
+      .upsert(walletEntries, { onConflict: 'vf_transaction_id', ignoreDuplicates: true })
+    if (error) errors.push({ row: 'wallet', message: error.message })
+  }
+
+  return { inserted: orders.length, errors }
 }
 
 async function importAdSpend(rows) {

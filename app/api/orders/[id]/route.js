@@ -28,6 +28,9 @@ export async function PATCH(request, context) {
     order_mgmt_fee,
     platform_fee,
     cod_fee,
+    forward_shipping_fee,
+    fulfillment_fee,
+    rto_fee,
     checkout_fee,
     cashfree_fee,
     meta_ad_spend_attributed,
@@ -42,6 +45,9 @@ export async function PATCH(request, context) {
   if (order_mgmt_fee            !== undefined) updates.order_mgmt_fee            = parseFloat(order_mgmt_fee)
   if (platform_fee              !== undefined) updates.platform_fee              = parseFloat(platform_fee)
   if (cod_fee                   !== undefined) updates.cod_fee                   = parseFloat(cod_fee)
+  if (forward_shipping_fee      !== undefined) updates.forward_shipping_fee      = parseFloat(forward_shipping_fee)
+  if (fulfillment_fee           !== undefined) updates.fulfillment_fee           = parseFloat(fulfillment_fee)
+  if (rto_fee                   !== undefined) updates.rto_fee                   = parseFloat(rto_fee)
   if (notes                     !== undefined) updates.notes                     = notes || null
   if (meta_ad_spend_attributed  !== undefined)
     updates.meta_ad_spend_attributed = meta_ad_spend_attributed ? parseFloat(meta_ad_spend_attributed) : null
