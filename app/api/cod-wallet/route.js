@@ -6,7 +6,7 @@ export async function GET(request) {
 
   let query = supabase
     .from('cod_wallet_entries')
-    .select('*, orders(shopify_order_id, selling_price)')
+    .select('*')
     .order('entry_date', { ascending: true })
 
   if (month) {

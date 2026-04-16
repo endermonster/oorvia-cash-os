@@ -16,9 +16,19 @@ const inputCls =
 
 const TYPE_STYLES = {
   credit:     'bg-green-900 text-green-300',
+  add_funds:  'bg-blue-900 text-blue-300',
   debit:      'bg-red-900 text-red-300',
   withdrawal: 'bg-orange-900 text-orange-300',
 }
+
+const TYPE_LABELS = {
+  credit:     'Credit',
+  add_funds:  'Add Funds',
+  debit:      'Debit',
+  withdrawal: 'Withdrawal',
+}
+
+const IS_INFLOW = { credit: true, add_funds: true }
 
 export default function CodWalletPage() {
   const [month, setMonth] = useState(currentMonth)
@@ -52,8 +62,10 @@ export default function CodWalletPage() {
     setSaving(false)
   }
 
-  const totalCredits = entries.filter((e) => e.entry_type === 'credit').reduce((s, e) => s + Number(e.amount), 0)
+  const totalInflows = entries.filter((e) => IS_INFLOW[e.entry_type]).reduce((s, e) => s + Number(e.amount), 0)
+  const totalDebits = entries.filter((e) => e.entry_type === 'debit').reduce((s, e) => s + Number(e.amount), 0)
   const totalWithdrawals = entries.filter((e) => e.entry_type === 'withdrawal').reduce((s, e) => s + Number(e.amount), 0)
+  const pendingDebits = entries.filter((e) => e.transaction_status === 'pending').reduce((s, e) => s + Number(e.amount), 0)
   const currentBalance = entries.length > 0 ? entries[entries.length - 1].running_balance : 0
 
   return (
@@ -71,10 +83,11 @@ export default function CodWalletPage() {
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard title="Current Balance" value={fmtINR(currentBalance)} color={currentBalance >= 0 ? 'green' : 'red'} subtitle="running total" />
-        <StatCard title="Credits This Month" value={fmtINR(totalCredits)} color="green" />
-        <StatCard title="Withdrawals" value={fmtINR(totalWithdrawals)} color="zinc" />
+        <StatCard title="Inflows" value={fmtINR(totalInflows)} color="green" subtitle="credits + add funds" />
+        <StatCard title="Debits" value={fmtINR(totalDebits)} color="red" subtitle="fees & charges" />
+        <StatCard title="Upcoming Debits" value={fmtINR(pendingDebits)} color={pendingDebits > 0 ? 'red' : 'zinc'} subtitle="pending transactions" />
       </div>
 
       {showForm && (
@@ -88,8 +101,9 @@ export default function CodWalletPage() {
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1">Type</label>
               <select value={form.entry_type} onChange={(e) => setForm((p) => ({ ...p, entry_type: e.target.value }))} className={inputCls}>
-                <option value="credit">Credit</option>
-                <option value="debit">Debit</option>
+                <option value="credit">Credit (COD remittance)</option>
+                <option value="add_funds">Add Funds (wire / Razorpay)</option>
+                <option value="debit">Debit (fee / charge)</option>
                 <option value="withdrawal">Withdrawal</option>
               </select>
             </div>
@@ -138,12 +152,12 @@ export default function CodWalletPage() {
                   <tr key={e.id} className="hover:bg-zinc-800/60">
                     <td className="px-4 py-3 text-zinc-300 text-xs whitespace-nowrap">{new Date(e.entry_date).toLocaleDateString('en-IN')}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${TYPE_STYLES[e.entry_type] || 'bg-zinc-700 text-zinc-400'}`}>
-                        {e.entry_type}
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[e.entry_type] || 'bg-zinc-700 text-zinc-400'}`}>
+                        {TYPE_LABELS[e.entry_type] || e.entry_type}
                       </span>
                     </td>
-                    <td className={`px-4 py-3 text-right font-semibold ${e.entry_type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
-                      {e.entry_type === 'credit' ? '+' : '−'}{fmtINR(e.amount)}
+                    <td className={`px-4 py-3 text-right font-semibold ${IS_INFLOW[e.entry_type] ? 'text-green-400' : 'text-red-400'}`}>
+                      {IS_INFLOW[e.entry_type] ? '+' : '−'}{fmtINR(e.amount)}
                     </td>
                     <td className="px-4 py-3 text-zinc-400 text-xs">{e.reference || '—'}</td>
                     <td className={`px-4 py-3 text-right font-semibold ${e.running_balance >= 0 ? 'text-zinc-200' : 'text-red-400'}`}>
