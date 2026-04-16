@@ -1,6 +1,4 @@
 import { supabase } from '@/lib/supabase'
-import { computeOrderFees } from '@/lib/pnl'
-import { shouldImportShopifyOrder, mapShopifyPaymentMode } from '@/lib/shopify'
 
 // Parse a CSV string into array of objects using the first row as headers
 function parseCSV(text) {
@@ -33,109 +31,123 @@ function splitCSVLine(line) {
 
 function num(v) { return parseFloat(v) || 0 }
 function int_(v) { return parseInt(v) || null }
+function r2(n) { return Math.round(n * 100) / 100 }
 
-// ── Shopify CSV auto-detection & normalisation ──────────────────────────────
-// Shopify exports one row per line item; order-level fields (Total, Payment
-// Method, etc.) only appear on the first row for each order.
-// Detection: presence of 'financial_status' + 'fulfillment_status' columns.
-// Filter:    only paid + fulfilled orders enter the DB (same rule as n8n sync).
+// ── vFulfill Transaction Export ──────────────────────────────────────────────
+// vFulfill exports one row per transaction. Each order produces multiple rows:
+//   "Order Managment Fee"        — charged on order placement (note: typo is theirs)
+//   "Convenience Fees Percentage"— platform fee, charged on dispatch
+//   "COD Fees"                   — COD handling fee, charged on delivery
+//   "COD Remittance"             — credit, cash remitted back to you
+//
+// Detection: presence of 'shopify_order_name' + 'transaction_head' columns.
+// Strategy:  group by Shopify Order Name, aggregate each fee type, derive
+//            checkout_fee and cashfree_fee from order_value + payment_mode.
 
-function isShopifyCSV(firstRow) {
-  return 'financial_status' in firstRow && 'fulfillment_status' in firstRow
+function isVfulfillCSV(firstRow) {
+  return 'shopify_order_name' in firstRow && 'transaction_head' in firstRow
 }
 
-// Deduplicate by Name (#1001), filter to paid+fulfilled, map to canonical
-// import format so the shared importOrders validator can process them normally.
-function normaliseShopifyRows(rows) {
-  // Deduplicate: group by order Name, pick up first non-empty SKU from
-  // subsequent line-item rows
+function normaliseVfulfillRows(rows) {
+  // Skip non-Processed rows and rows with no Shopify order reference
+  const valid = rows.filter((r) =>
+    r.transaction_status === 'Processed' &&
+    r.shopify_order_name &&
+    r.shopify_order_name !== '-'
+  )
+
   const orderMap = new Map()
-  for (const r of rows) {
-    const key = r.name
-    if (!key) continue
+
+  for (const r of valid) {
+    const key = r.shopify_order_name
     if (!orderMap.has(key)) {
-      orderMap.set(key, { ...r })
-    } else {
-      const existing = orderMap.get(key)
-      if (!existing.lineitem_sku && r.lineitem_sku) {
-        existing.lineitem_sku = r.lineitem_sku
-      }
+      orderMap.set(key, {
+        shopify_order_name: key,
+        order_date:         r.shopify_order_date ? r.shopify_order_date.slice(0, 10) : null,
+        payment_type:       r.payment_type || '',
+        order_value:        parseFloat(r.order_value) || 0,
+        qty:                null,
+        gst_rate:           null,
+        order_mgmt_fee:     0,
+        platform_fee:       0,
+        cod_fee:            0,
+        cod_remittance:     0,
+      })
+    }
+
+    const order = orderMap.get(key)
+    const amt  = parseFloat(r.total_amt) || 0
+    const head = (r.transaction_head || '').toLowerCase().trim()
+
+    // Grab qty and gst_rate from the first item row that carries them
+    if (order.qty === null && r.qty && r.qty !== '-') {
+      order.qty = parseInt(r.qty) || null
+    }
+    if (order.gst_rate === null && r.vf_sku_gst_percentage && r.vf_sku_gst_percentage !== '-') {
+      order.gst_rate = parseFloat(r.vf_sku_gst_percentage) || null
+    }
+
+    // Accumulate fee buckets
+    if (head.includes('order managment fee') || head.includes('order management fee')) {
+      order.order_mgmt_fee += amt
+    } else if (head.includes('convenience fees')) {
+      order.platform_fee += amt
+    } else if (head === 'cod fees') {
+      order.cod_fee += amt
+    } else if (head.includes('cod remittance')) {
+      order.cod_remittance += amt
     }
   }
 
-  return [...orderMap.values()]
-    .filter((r) => shouldImportShopifyOrder(r.financial_status, r.fulfillment_status))
-    .map((r) => ({
-      shopify_order_id: r.name,                              // e.g. "#1001"
-      order_date:       r.created_at ? r.created_at.slice(0, 10) : null,
-      payment_mode:     mapShopifyPaymentMode(r.payment_method || ''),
-      status:           'delivered',
-      selling_price:    r.total || '',
-      product_sku:      r.lineitem_sku || null,
-      notes:            r.name || null,
-    }))
+  return [...orderMap.values()].map((o) => {
+    const mode       = (o.payment_type || '').toLowerCase() === 'cod' ? 'cod' : 'prepaid'
+    const orderValue = o.order_value
+
+    // settlement_status derived from which fee types are present
+    let settlement_status
+    if (o.cod_remittance > 0)      settlement_status = 'settled'
+    else if (o.platform_fee > 0)   settlement_status = 'in-transit'
+    else                           settlement_status = 'new'
+
+    return {
+      shopify_order_id:  o.shopify_order_name,
+      order_date:        o.order_date,
+      payment_mode:      mode,
+      status:            'delivered',
+      order_value:       r2(orderValue),
+      qty:               o.qty,
+      gst_rate:          o.gst_rate ?? 18,
+      checkout_fee:      r2(orderValue * 0.0236),          // 2% + 18% GST, from Shopify
+      cashfree_fee:      mode === 'prepaid' ? r2(orderValue * 0.025) : 0,
+      order_mgmt_fee:    r2(o.order_mgmt_fee),
+      platform_fee:      r2(o.platform_fee),
+      cod_fee:           r2(o.cod_fee),
+      cod_remittance:    r2(o.cod_remittance),
+      settlement_status,
+    }
+  })
 }
 // ────────────────────────────────────────────────────────────────────────────
 
 async function importOrders(rows) {
-  // Auto-detect and normalise Shopify CSV exports
-  if (rows.length > 0 && isShopifyCSV(rows[0])) {
-    rows = normaliseShopifyRows(rows)
-  }
-  const valid = []
-  const errors = []
-
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i]
-    if (!r.order_date || !r.payment_mode || !r.selling_price) {
-      errors.push({ row: i + 2, message: 'Missing required fields: order_date, payment_mode, selling_price' })
-      continue
+  if (!isVfulfillCSV(rows[0])) {
+    return {
+      inserted: 0,
+      errors: [{ row: 1, message: 'Unrecognised order CSV format. Expected a vFulfill transaction export.' }],
     }
-    const price = num(r.selling_price)
-    const mode = r.payment_mode?.toLowerCase()
-    if (!['prepaid', 'cod'].includes(mode)) {
-      errors.push({ row: i + 2, message: `Invalid payment_mode: ${r.payment_mode}` })
-      continue
-    }
-    const fees = computeOrderFees(price, mode)
-
-    // Look up product by SKU if provided
-    let productId = null
-    if (r.product_sku) {
-      const { data: prod } = await supabase.from('products').select('id').eq('sku', r.product_sku).single()
-      productId = prod?.id || null
-    }
-
-    valid.push({
-      shopify_order_id: r.shopify_order_id || null,
-      order_date: r.order_date,
-      payment_mode: mode,
-      status: r.status || 'delivered',
-      selling_price: price,
-      checkout_fee: fees.checkout,
-      payment_gateway_fee: fees.paymentGw,
-      inbound_fee: num(r.inbound_fee),
-      delivery_charge: num(r.delivery_charge),
-      packing_fee: num(r.packing_fee),
-      cod_handling_fee: num(r.cod_handling_fee),
-      other_3pl_charges: num(r.other_3pl_charges),
-      rto_charge: num(r.rto_charge),
-      product_id: productId,
-      notes: r.notes || null,
-    })
   }
 
-  if (valid.length > 0) {
-    // Use upsert so re-importing (or importing after n8n auto-sync) is safe.
-    // Rows without a shopify_order_id fall back to plain insert behaviour
-    // because NULL != NULL in Postgres (no conflict fires).
-    const { error } = await supabase
-      .from('orders')
-      .upsert(valid, { onConflict: 'shopify_order_id' })
-    if (error) return { inserted: 0, errors: [{ row: 'all', message: error.message }] }
+  const normalised = normaliseVfulfillRows(rows)
+  if (normalised.length === 0) {
+    return { inserted: 0, errors: [{ row: 'all', message: 'No valid Processed orders found in vFulfill export.' }] }
   }
 
-  return { inserted: valid.length, errors }
+  const { error } = await supabase
+    .from('orders')
+    .upsert(normalised, { onConflict: 'shopify_order_id' })
+
+  if (error) return { inserted: 0, errors: [{ row: 'all', message: error.message }] }
+  return { inserted: normalised.length, errors: [] }
 }
 
 async function importAdSpend(rows) {
@@ -149,13 +161,13 @@ async function importAdSpend(rows) {
       continue
     }
     valid.push({
-      spend_date: r.date || r.spend_date,
-      campaign: r.campaign_name || r.campaign || null,
-      adset: r.adset_name || r.adset || null,
-      spend: num(r.amount_spent || r.spend),
+      spend_date:  r.date || r.spend_date,
+      campaign:    r.campaign_name || r.campaign || null,
+      adset:       r.adset_name || r.adset || null,
+      spend:       num(r.amount_spent || r.spend),
       impressions: int_(r.impressions),
-      clicks: int_(r.link_clicks || r.clicks),
-      purchases: int_(r.purchases),
+      clicks:      int_(r.link_clicks || r.clicks),
+      purchases:   int_(r.purchases),
     })
   }
 
@@ -185,9 +197,9 @@ async function importCodWallet(rows) {
     valid.push({
       entry_date: r.date || r.entry_date,
       entry_type: type,
-      amount: num(r.amount),
-      reference: r.reference || null,
-      notes: r.notes || null,
+      amount:     num(r.amount),
+      reference:  r.reference || null,
+      notes:      r.notes || null,
     })
   }
 
@@ -210,12 +222,12 @@ async function importProducts(rows) {
       continue
     }
     valid.push({
-      name: r.name,
-      sku: r.sku,
-      category: r.category || null,
-      cogs: num(r.cogs),
+      name:          r.name,
+      sku:           r.sku,
+      category:      r.category || null,
+      cogs:          num(r.cogs),
       selling_price: num(r.selling_price),
-      weight_grams: int_(r.weight_grams),
+      weight_grams:  int_(r.weight_grams),
     })
   }
 
@@ -235,7 +247,7 @@ export async function POST(request) {
   }
 
   const formData = await request.formData()
-  const file = formData.get('file')
+  const file       = formData.get('file')
   const importType = formData.get('type')
 
   if (!file || typeof file === 'string') {
@@ -255,23 +267,22 @@ export async function POST(request) {
   }
 
   let result
-  if (importType === 'orders') result = await importOrders(rows)
+  if (importType === 'orders')       result = await importOrders(rows)
   else if (importType === 'ad_spend') result = await importAdSpend(rows)
   else if (importType === 'cod_wallet') result = await importCodWallet(rows)
   else result = await importProducts(rows)
 
-  // Log the import
   await supabase.from('import_logs').insert([{
-    import_type: importType,
-    filename: file.name,
-    row_count: rows.length,
-    error_count: result.errors.length,
-    errors: result.errors.length > 0 ? result.errors : null,
+    import_type:  importType,
+    filename:     file.name,
+    row_count:    rows.length,
+    error_count:  result.errors.length,
+    errors:       result.errors.length > 0 ? result.errors : null,
   }])
 
   return Response.json({
     inserted: result.inserted,
-    total: rows.length,
-    errors: result.errors,
+    total:    rows.length,
+    errors:   result.errors,
   })
 }
