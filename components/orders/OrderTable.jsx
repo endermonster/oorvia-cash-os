@@ -74,7 +74,7 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
   if (orders.length === 0) {
     return (
       <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-12 text-center text-zinc-500 text-sm">
-        No orders found. Add your first order above.
+        No orders found. Import a vFulfill transaction export to get started.
       </div>
     )
   }
@@ -87,9 +87,10 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
             <tr>
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Order ID</th>
-              <th className="px-4 py-3 text-left">Product</th>
+              <th className="px-4 py-3 text-left">State</th>
               <th className="px-4 py-3 text-left">Mode</th>
               <th className="px-4 py-3 text-left">Status</th>
+              <th className="px-4 py-3 text-left">Settlement</th>
               <th className="px-4 py-3 text-right">Revenue</th>
               <th className="px-4 py-3 text-right">Net P&L</th>
               <th className="px-4 py-3 w-10"></th>
@@ -97,7 +98,7 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
           </thead>
           <tbody className="divide-y divide-zinc-800">
             {slice.map((o) => {
-              const net = computeOrderNetProfit(o)
+              const net   = computeOrderNetProfit(o)
               const isRTO = o.status === 'rto'
               return (
                 <tr key={o.id} className="hover:bg-zinc-800/60">
@@ -107,8 +108,8 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
                   <td className="px-4 py-3 text-zinc-400 text-xs">
                     {o.shopify_order_id || <span className="text-zinc-600">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-zinc-200 max-w-[140px] truncate">
-                    {o.products?.name || <span className="text-zinc-600">—</span>}
+                  <td className="px-4 py-3 text-zinc-400 text-xs">
+                    {o.customer_state || <span className="text-zinc-600">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o.payment_mode === 'cod' ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
@@ -118,8 +119,19 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
                   <td className="px-4 py-3">
                     <OrderStatusBadge status={o.status} />
                   </td>
+                  <td className="px-4 py-3 text-xs">
+                    {o.settlement_status ? (
+                      <span className={`rounded-full px-2 py-0.5 font-medium ${
+                        o.settlement_status === 'settled'    ? 'bg-green-900 text-green-300' :
+                        o.settlement_status === 'in-transit' ? 'bg-yellow-900 text-yellow-300' :
+                                                               'bg-zinc-700 text-zinc-400'
+                      }`}>
+                        {o.settlement_status}
+                      </span>
+                    ) : <span className="text-zinc-600">—</span>}
+                  </td>
                   <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${isRTO ? 'text-red-400 line-through' : 'text-zinc-200'}`}>
-                    {fmtINR(o.selling_price)}
+                    {fmtINR(o.order_value)}
                   </td>
                   <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {net >= 0 ? '+' : ''}{fmtINR(net)}

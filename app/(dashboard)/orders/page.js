@@ -56,7 +56,7 @@ export default function OrdersPage() {
   const delivered = orders.filter((o) => o.status === 'delivered').length
   const rtoCount = orders.filter((o) => o.status === 'rto').length
   const rtoRate = total > 0 ? ((rtoCount / total) * 100).toFixed(1) : '0.0'
-  const grossRevenue = orders.reduce((s, o) => s + Number(o.selling_price || 0), 0)
+  const grossRevenue = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
 
   const inputCls = 'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
 
