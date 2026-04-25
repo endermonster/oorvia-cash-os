@@ -5,6 +5,16 @@ import { usePathname } from 'next/navigation'
 
 const NAV = [
   {
+    label: 'Import',
+    href: '/import',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 2v9M4 7l4 4 4-4" />
+        <path d="M2 13h12" />
+      </svg>
+    ),
+  },
+  {
     label: 'P&L Dashboard',
     href: '/pnl',
     icon: (
@@ -13,6 +23,18 @@ const NAV = [
         <rect x="6" y="5" width="3" height="10" rx="0.5" />
         <rect x="11" y="1" width="3" height="14" rx="0.5" />
         <path d="M2.5 7 6 4l3 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Cash Position',
+    href: '/cash',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="5" width="14" height="9" rx="1.5" />
+        <path d="M1 8h14" />
+        <circle cx="8" cy="11" r="1.5" />
+        <path d="M4 3h8" />
       </svg>
     ),
   },
@@ -46,6 +68,17 @@ const NAV = [
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 4.5 8 2l6 2.5v6.5L8 13.5 2 11V4.5z" />
         <path d="M8 2v11.5M2 4.5l6 2.5 6-2.5" />
+      </svg>
+    ),
+  },
+  {
+    label: 'Data',
+    href: '/data',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="8" cy="4" rx="6" ry="2" />
+        <path d="M2 4v4c0 1.1 2.7 2 6 2s6-.9 6-2V4" />
+        <path d="M2 8v4c0 1.1 2.7 2 6 2s6-.9 6-2V8" />
       </svg>
     ),
   },
