@@ -242,6 +242,20 @@ export async function POST(request) {
   if (delLiErr) errors.push({ row: 'line_items_delete', message: delLiErr.message })
 
   if (allLineItems.length > 0) {
+    // Auto-create stub products for any SKUs not yet in the products table
+    const uniqueSkus = [...new Set(allLineItems.map(li => li.sku).filter(Boolean))]
+    if (uniqueSkus.length > 0) {
+      const { data: existingProducts } = await supabase
+        .from('products').select('sku').in('sku', uniqueSkus)
+      const existingSkuSet = new Set((existingProducts || []).map(p => p.sku))
+      const missingSkus = uniqueSkus.filter(s => !existingSkuSet.has(s))
+      if (missingSkus.length > 0) {
+        const { error: stubErr } = await supabase.from('products')
+          .insert(missingSkus.map(sku => ({ sku, name: sku, current_cogs: 0 })))
+        if (stubErr) errors.push({ row: 'products_stub', message: stubErr.message })
+      }
+    }
+
     const { error } = await supabase.from('order_line_items').insert(allLineItems)
     if (error) errors.push({ row: 'line_items_insert', message: error.message })
   }
