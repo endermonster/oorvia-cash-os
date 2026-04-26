@@ -76,7 +76,7 @@ export async function GET(request) {
   const fixedCosts = (allFixed || []).filter(fc => fc.start_date <= to && (!fc.end_date || fc.end_date >= from))
 
   const { data: marketing } = await supabase
-    .from('marketing_spend').select('platform, amount, gst_amt, date').gte('date', from).lte('date', to)
+    .from('ad_spend').select('spend, spend_date').gte('spend_date', from).lte('spend_date', to)
 
   // ── Revenue ──
   const revenue_net = r2(deliveredOrders.reduce((s, o) => s + Number(o.order_value) / 1.18, 0))
@@ -101,8 +101,8 @@ export async function GET(request) {
   total_cogs = r2(total_cogs)
 
   const fixed_costs_prorated = r2(fixedCosts.reduce((s, fc) => s + prorateFixedCost(fc, from, to), 0))
-  const marketing_net        = r2((marketing || []).reduce((s, m) => s + Number(m.amount) - Number(m.gst_amt), 0))
-  const marketing_gst        = r2((marketing || []).reduce((s, m) => s + Number(m.gst_amt), 0))
+  const marketing_net        = r2((marketing || []).reduce((s, m) => s + Number(m.spend), 0))
+  const marketing_gst        = r2((marketing || []).reduce((s, m) => s + Number(m.spend) * 0.18, 0))
   const net_profit           = r2(revenue_net - variable_costs - total_cogs - fixed_costs_prorated - marketing_net)
   const margin_pct           = revenue_net > 0 ? r2((net_profit / revenue_net) * 100) : 0
   const total_itc            = r2(r2(inputGstFromCosts) + marketing_gst)

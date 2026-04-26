@@ -51,12 +51,12 @@ export async function GET(request) {
     costRows = data || []
   }
 
-  // Fetch marketing spend for meta ads ITC
+  // Fetch ad spend for meta ads ITC (ad_spend.spend is net; GST = spend × 18%)
   const { data: marketing, error: mktErr } = await supabase
-    .from('marketing_spend')
-    .select('amount, gst_amt')
-    .gte('date', start)
-    .lte('date', end)
+    .from('ad_spend')
+    .select('spend, spend_date')
+    .gte('spend_date', start)
+    .lte('spend_date', end)
   if (mktErr) return Response.json({ error: mktErr.message }, { status: 500 })
 
   // Fetch manual GST entries — soft error: gst_entries may not exist in all schema versions
@@ -103,14 +103,12 @@ export async function GET(request) {
   const itc3PL      = r2(costRows.filter(c => c.source === 'vfulfill').reduce((s, c) => s + Number(c.gst_amt), 0))
   const itcCheckout = r2(costRows.filter(c => c.source === 'fastrr').reduce((s, c) => s + Number(c.gst_amt), 0))
   const itcCashfree = r2(costRows.filter(c => c.source === 'cashfree').reduce((s, c) => s + Number(c.gst_amt), 0))
-  // marketing_spend.gst_amt = 18% IGST already stored; amount is gross (GST-inclusive)
-  const itcMetaAds  = r2((marketing || []).reduce((s, m) => s + Number(m.gst_amt), 0))
+  const itcMetaAds  = r2((marketing || []).reduce((s, m) => s + Number(m.spend) * 0.18, 0))
   const itcManual   = r2(manualEntries.filter(e => e.type === 'itc').reduce((s, e) => s + Number(e.gst_amount), 0))
   const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcManual)
   const netLiability = r2(totalOTC + manualOTC - totalITC)
 
-  // Net ad spend (pre-GST) for display
-  const adSpendTotal = r2((marketing || []).reduce((s, m) => s + Number(m.amount) - Number(m.gst_amt), 0))
+  const adSpendTotal = r2((marketing || []).reduce((s, m) => s + Number(m.spend), 0))
 
   return Response.json({
     period: { start, end, month },

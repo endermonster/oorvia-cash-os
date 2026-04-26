@@ -86,7 +86,7 @@ export default function AdSpendPage() {
   }
 
   const totalSpend = entries.reduce((s, e) => s + Number(e.spend || 0), 0)
-  const deliveredRevenue = orders.reduce((s, o) => s + Number(o.selling_price || 0), 0)
+  const deliveredRevenue = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
   const roas = totalSpend > 0 ? (deliveredRevenue / totalSpend).toFixed(2) : '—'
   const totalPurchases = entries.reduce((s, e) => s + Number(e.purchases || 0), 0)
   const cpa = totalPurchases > 0 ? (totalSpend / totalPurchases).toFixed(0) : '—'

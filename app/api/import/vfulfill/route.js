@@ -154,13 +154,14 @@ export async function POST(request) {
 
     if (!orderGroups.has(name)) {
       orderGroups.set(name, {
-        vf_order_id:   r.vf_order_id && r.vf_order_id !== '-' ? r.vf_order_id : null,
-        orderValue:    num(r.order_value),
-        orderDate:     vfDate(r.shopify_order_date),
-        vfPaymentRaw:  r.payment_type || null,
-        hasRto:        false,
-        hasFulfilled:  false,
-        costRows:      [],
+        vf_order_id:      r.vf_order_id && r.vf_order_id !== '-' ? r.vf_order_id : null,
+        orderValue:       num(r.order_value),
+        orderDate:        vfDate(r.shopify_order_date),
+        vfPaymentRaw:     r.payment_type || null,
+        hasRto:           false,
+        hasFulfilled:     false,
+        hasCodRemittance: false,
+        costRows:         [],
       })
     }
 
@@ -168,8 +169,9 @@ export async function POST(request) {
     if (!g.vf_order_id && !blank(r.vf_order_id)) g.vf_order_id = r.vf_order_id
 
     const headLower = r.transaction_head.toLowerCase().trim()
-    if (headLower.includes('rto'))         g.hasRto = true
-    if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees') g.hasFulfilled = true
+    if (headLower.includes('rto'))                                            g.hasRto = true
+    if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees')  g.hasFulfilled = true
+    if (headLower.includes('cod remittance'))                                 g.hasCodRemittance = true
 
     // Use total_amt − taxable_amt for gst_amt — vFulfill's gst_amt column has
     // a known bug on some rows (Inward Fees) where it echoes taxable_amt instead.
@@ -229,7 +231,7 @@ export async function POST(request) {
     for (const [name, g] of orderGroups) {
       if (!existingMap.has(name)) continue // stubs handled above
       const current = existingMap.get(name)
-      const newStatus = g.hasRto ? 'rto' : g.hasFulfilled ? 'delivered' : null
+      const newStatus = g.hasRto ? 'rto' : (g.hasFulfilled || g.hasCodRemittance) ? 'delivered' : null
 
       const updates = {}
       if (g.vf_order_id) updates.vf_order_id = g.vf_order_id
