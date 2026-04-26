@@ -11,9 +11,27 @@ function currentMonth() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Transaction heads that are charged even on RTO orders
+const RTO_COST_HEADS = new Set([
+  'forward shipping',
+  'fulfilment fees',
+  'fulfillment fees',
+  'order managment fee',
+  'order management fee',
+  'convenience fees percentage',
+  'rto handling fee',
+  'rto shipping',
+])
+
+// COD Fees are NOT charged when an order RTOs — exclude them
+function isRtoCostRow(transactionHead) {
+  return RTO_COST_HEADS.has(transactionHead.toLowerCase().trim())
+}
+
 export default function RTOPage() {
   const [month, setMonth] = useState(currentMonth)
   const [rtoOrders, setRtoOrders] = useState([])
+  const [costsMap, setCostsMap] = useState({}) // shopify_order_name → total RTO cost
   const [allCount, setAllCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [markingId, setMarkingId] = useState(null)
@@ -25,8 +43,24 @@ export default function RTOPage() {
       fetch(`/api/orders?month=${m}`),
     ])
     const [rtoData, allData] = await Promise.all([rtoRes.json(), allRes.json()])
+
+    const rtoOrders = Array.isArray(rtoData) ? rtoData : []
     if (Array.isArray(rtoData)) setRtoOrders(rtoData)
     if (Array.isArray(allData)) setAllCount(allData.length)
+
+    // Fetch order_costs for RTO orders to compute actual charges
+    if (rtoOrders.length > 0) {
+      const names = rtoOrders.map((o) => o.shopify_order_name).filter(Boolean)
+      const params = new URLSearchParams({ names: names.join(',') })
+      const costsRes = await fetch(`/api/rto-costs?${params}`)
+      if (costsRes.ok) {
+        const costsData = await costsRes.json()
+        setCostsMap(costsData)
+      }
+    } else {
+      setCostsMap({})
+    }
+
     setLoading(false)
   }
 
@@ -44,9 +78,11 @@ export default function RTOPage() {
     setMarkingId(null)
   }
 
-  const rtoCount = rtoOrders.length
-  const rtoRate = allCount > 0 ? ((rtoCount / allCount) * 100).toFixed(1) : '0.0'
-  const totalLoss = rtoOrders.reduce((s, o) => s + Number(o.order_value || 0), 0)
+  const rtoCount    = rtoOrders.length
+  const rtoRate     = allCount > 0 ? ((rtoCount / allCount) * 100).toFixed(1) : '0.0'
+  const totalLostRevenue = rtoOrders.reduce((s, o) => s + Number(o.order_value || 0), 0)
+  const totalRtoCosts    = Object.values(costsMap).reduce((s, v) => s + v, 0)
+  const totalRtoLoss     = totalLostRevenue + totalRtoCosts
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -56,10 +92,11 @@ export default function RTOPage() {
         actions={<MonthPicker monthStr={month} onChange={setMonth} />}
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard title="RTO Count" value={rtoCount} color="red" subtitle={`out of ${allCount} orders`} />
-        <StatCard title="RTO Rate" value={`${rtoRate}%`} color={parseFloat(rtoRate) > 25 ? 'red' : 'zinc'} subtitle="of all orders this month" />
-        <StatCard title="Total RTO Loss" value={fmtINR(totalLoss)} color="red" subtitle="lost revenue + return charges" />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <StatCard title="RTO Count"        value={rtoCount}            color="red"  subtitle={`out of ${allCount} orders`} />
+        <StatCard title="RTO Rate"         value={`${rtoRate}%`}       color={parseFloat(rtoRate) > 25 ? 'red' : 'zinc'} subtitle="of all orders this month" />
+        <StatCard title="Fulfilment Costs" value={fmtINR(totalRtoCosts)}    color="red"  subtitle="shipping + fees paid out" />
+        <StatCard title="Total RTO Loss"   value={fmtINR(totalRtoLoss)}     color="red"  subtitle="lost revenue + fulfilment costs" />
       </div>
 
       {loading ? (
@@ -72,36 +109,36 @@ export default function RTOPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Order Date</th>
                   <th className="px-4 py-3 text-left">Order ID</th>
-                  <th className="px-4 py-3 text-left">Product</th>
-                  <th className="px-4 py-3 text-right">Order Value</th>
-                  <th className="px-4 py-3 text-right">RTO Charge</th>
-                  <th className="px-4 py-3 text-right">Total Loss</th>
                   <th className="px-4 py-3 text-left">Mode</th>
+                  <th className="px-4 py-3 text-right">Lost Revenue</th>
+                  <th className="px-4 py-3 text-right">Fulfilment Costs</th>
+                  <th className="px-4 py-3 text-right">Total Loss</th>
                   <th className="px-4 py-3 text-left">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {rtoOrders.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-zinc-500">No RTO orders this month.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-zinc-500">No RTO orders this month.</td></tr>
                 ) : rtoOrders.map((o) => {
-                  const isCOD = o.payment_type === 'cash_on_delivery'
+                  const isCOD     = o.payment_type === 'cash_on_delivery'
                   const modeLabel = isCOD ? 'COD' : o.payment_type?.startsWith('prepaid') ? 'Prepaid' : (o.payment_type ?? '—').toUpperCase()
-                  const key = o.shopify_order_name
+                  const key       = o.shopify_order_name
+                  const rtoCost   = costsMap[key] ?? 0
+                  const totalLoss = Number(o.order_value || 0) + rtoCost
                   return (
                     <tr key={key} className="hover:bg-zinc-800/60">
                       <td className="px-4 py-3 whitespace-nowrap text-zinc-300 text-xs">
                         {new Date(o.order_date).toLocaleDateString('en-IN')}
                       </td>
-                      <td className="px-4 py-3 text-zinc-400 text-xs">{o.shopify_order_name || '—'}</td>
-                      <td className="px-4 py-3 text-zinc-200">—</td>
-                      <td className="px-4 py-3 text-right text-red-400 font-semibold line-through">{fmtINR(o.order_value)}</td>
-                      <td className="px-4 py-3 text-right text-red-400">{fmtINR(0)}</td>
-                      <td className="px-4 py-3 text-right text-red-400 font-bold">{fmtINR(o.order_value)}</td>
+                      <td className="px-4 py-3 text-zinc-400 text-xs">{key || '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isCOD ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
                           {modeLabel}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-right text-red-400 font-semibold line-through">{fmtINR(o.order_value)}</td>
+                      <td className="px-4 py-3 text-right text-orange-400 font-semibold">{rtoCost > 0 ? fmtINR(rtoCost) : '—'}</td>
+                      <td className="px-4 py-3 text-right text-red-400 font-bold">{fmtINR(totalLoss)}</td>
                       <td className="px-4 py-3">
                         <button
                           onClick={() => markDelivered(o)}
