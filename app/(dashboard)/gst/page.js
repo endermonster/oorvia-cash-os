@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
-import { fmtINR } from '@/lib/pnl'
+const fmtINR = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
 
 function currentMonth() {
   const d = new Date()
