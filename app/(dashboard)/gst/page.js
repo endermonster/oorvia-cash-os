@@ -233,30 +233,50 @@ export default function GSTPage() {
 
             {/* OTC Breakdown */}
             <SectionCard title="OTC Breakdown — Output Tax Collected" badge={otcTotal} badgeColor="blue">
+              {/* IGST / CGST / SGST summary */}
+              <div className="grid grid-cols-3 divide-x divide-zinc-800 border-b border-zinc-800 text-xs">
+                <div className="px-4 py-2.5 text-center">
+                  <p className="text-zinc-500 mb-0.5">IGST (inter-state)</p>
+                  <p className="text-blue-400 font-semibold">{fmtINR(data.otc.igst)}</p>
+                </div>
+                <div className="px-4 py-2.5 text-center">
+                  <p className="text-zinc-500 mb-0.5">CGST (MH, 9%)</p>
+                  <p className="text-blue-400 font-semibold">{fmtINR(data.otc.cgst)}</p>
+                </div>
+                <div className="px-4 py-2.5 text-center">
+                  <p className="text-zinc-500 mb-0.5">SGST (MH, 9%)</p>
+                  <p className="text-blue-400 font-semibold">{fmtINR(data.otc.sgst)}</p>
+                </div>
+              </div>
               {data?.otc?.orders?.length === 0 ? (
                 <p className="px-5 py-8 text-sm text-zinc-500 text-center">No delivered orders this month.</p>
               ) : (
-                <div className="overflow-y-auto max-h-72">
+                <div className="overflow-y-auto max-h-64">
                   <table className="min-w-full text-xs">
                     <thead className="bg-zinc-800 text-zinc-500 uppercase tracking-wide sticky top-0">
                       <tr>
                         <th className="px-4 py-2 text-left">Order</th>
                         <th className="px-4 py-2 text-left">State</th>
                         <th className="px-4 py-2 text-right">Sale</th>
-                        <th className="px-4 py-2 text-right">Rate</th>
+                        <th className="px-4 py-2 text-right">Tax Type</th>
                         <th className="px-4 py-2 text-right">GST</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-800">
-                      {data.otc.orders.map((o) => (
-                        <tr key={o.order_id} className="hover:bg-zinc-800/40">
-                          <td className="px-4 py-2 text-zinc-400">{o.shopify_order_name || String(o.order_id ?? '').slice(-6) || '—'}</td>
-                          <td className="px-4 py-2 text-zinc-300 max-w-[100px] truncate">{o.ship_state || '—'}</td>
-                          <td className="px-4 py-2 text-right text-zinc-300">{fmtINR(o.order_value)}</td>
-                          <td className="px-4 py-2 text-right text-zinc-500">{o.gst_rate}%</td>
-                          <td className="px-4 py-2 text-right text-blue-400 font-semibold">{fmtINR(o.gst_amount)}</td>
-                        </tr>
-                      ))}
+                      {data.otc.orders.map((o) => {
+                        const isIntra = o.cgst > 0
+                        return (
+                          <tr key={o.order_id} className="hover:bg-zinc-800/40">
+                            <td className="px-4 py-2 text-zinc-400">{o.shopify_order_name || String(o.order_id ?? '').slice(-6) || '—'}</td>
+                            <td className="px-4 py-2 text-zinc-300 max-w-[80px] truncate">{o.ship_state || '—'}</td>
+                            <td className="px-4 py-2 text-right text-zinc-300">{fmtINR(o.order_value)}</td>
+                            <td className="px-4 py-2 text-right text-zinc-500">
+                              {isIntra ? 'CGST+SGST 9%+9%' : 'IGST 18%'}
+                            </td>
+                            <td className="px-4 py-2 text-right text-blue-400 font-semibold">{fmtINR(o.gst_amount)}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                     <tfoot className="bg-zinc-800/60 border-t border-zinc-700">
                       <tr>

@@ -18,8 +18,9 @@ export async function GET(request) {
     const end   = new Date(y, m, 0).toISOString().slice(0, 10)
     query = query.gte('order_date', start).lte('order_date', end)
   }
-  if (status)      query = query.eq('status', status)
-  if (paymentMode) query = query.eq('payment_mode', paymentMode)
+  if (status) query = query.eq('status', status)
+  if (paymentMode === 'cod')     query = query.eq('payment_type', 'cash_on_delivery')
+  else if (paymentMode === 'prepaid') query = query.in('payment_type', ['prepaid_cashfree', 'prepaid_razorpay'])
 
   const { data, error } = await query
   if (error) return Response.json({ error: error.message }, { status: 500 })

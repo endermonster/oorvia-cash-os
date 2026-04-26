@@ -26,21 +26,27 @@ export default function OrdersPage() {
 
   const fetchOrders = async (m, status, mode) => {
     setLoading(true)
-    const params = new URLSearchParams({ month: m })
-    if (status) params.set('status', status)
-    if (mode) params.set('paymentMode', mode)
-    const res = await fetch(`/api/orders?${params}`)
-    const data = await res.json()
-    if (Array.isArray(data)) setOrders(data)
-    else setError(data.error || 'Failed to load')
+    setError(null)
+    try {
+      const params = new URLSearchParams({ month: m })
+      if (status) params.set('status', status)
+      if (mode) params.set('paymentMode', mode)
+      const res = await fetch(`/api/orders?${params}`)
+      const data = await res.json()
+      if (Array.isArray(data)) setOrders(data)
+      else setError(data.error || 'Failed to load')
+    } catch (e) {
+      setError('Failed to load orders')
+    }
     setLoading(false)
   }
 
   useEffect(() => { fetchOrders(month, statusFilter, modeFilter) }, [month, statusFilter, modeFilter])
 
   const handleSaved = (saved) => {
+    const key = saved.shopify_order_name ?? saved.id
     if (editingOrder) {
-      setOrders((prev) => prev.map((o) => (o.id === saved.id ? saved : o)))
+      setOrders((prev) => prev.map((o) => ((o.shopify_order_name ?? o.id) === key ? saved : o)))
       setEditingOrder(null)
     } else {
       setOrders((prev) => [saved, ...prev])
@@ -49,7 +55,7 @@ export default function OrdersPage() {
   }
 
   const handleEdit = (order) => { setEditingOrder(order); setShowForm(false) }
-  const handleDelete = (id) => setOrders((prev) => prev.filter((o) => o.id !== id))
+  const handleDelete = (key) => setOrders((prev) => prev.filter((o) => (o.shopify_order_name ?? o.id) !== key))
 
   // Stats
   const total = orders.length

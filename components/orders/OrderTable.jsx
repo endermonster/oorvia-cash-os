@@ -61,10 +61,10 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
   const [page, setPage] = useState(1)
   const [deleting, setDeleting] = useState(null)
 
-  const handleDelete = async (id) => {
-    setDeleting(id)
-    const res = await fetch(`/api/orders/${id}`, { method: 'DELETE' })
-    if (res.ok) onDelete(id)
+  const handleDelete = async (name) => {
+    setDeleting(name)
+    const res = await fetch(`/api/orders/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    if (res.ok) onDelete(name)
     setDeleting(null)
   }
 
@@ -100,20 +100,23 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
             {slice.map((o) => {
               const net   = computeOrderNetProfit(o)
               const isRTO = o.status === 'rto'
+              const isCOD = o.payment_type === 'cash_on_delivery'
+              const modeLabel = isCOD ? 'COD' : o.payment_type?.startsWith('prepaid') ? 'Prepaid' : (o.payment_type ?? '—').toUpperCase()
+              const key   = o.shopify_order_name ?? o.id
               return (
-                <tr key={o.id} className="hover:bg-zinc-800/60">
+                <tr key={key} className="hover:bg-zinc-800/60">
                   <td className="px-4 py-3 whitespace-nowrap text-zinc-300 text-xs">
                     {new Date(o.order_date).toLocaleDateString('en-IN')}
                   </td>
                   <td className="px-4 py-3 text-zinc-400 text-xs">
-                    {o.shopify_order_id || <span className="text-zinc-600">—</span>}
+                    {o.shopify_order_name || o.shopify_order_id || <span className="text-zinc-600">—</span>}
                   </td>
                   <td className="px-4 py-3 text-zinc-400 text-xs">
-                    {o.customer_state || <span className="text-zinc-600">—</span>}
+                    {o.ship_state || o.customer_state || <span className="text-zinc-600">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${o.payment_mode === 'cod' ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
-                      {o.payment_mode.toUpperCase()}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isCOD ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
+                      {modeLabel}
                     </span>
                   </td>
                   <td className="px-4 py-3">
@@ -139,8 +142,8 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
                   <td className="px-4 py-3">
                     <RowMenu
                       onEdit={() => onEdit(o)}
-                      onDelete={() => handleDelete(o.id)}
-                      deleting={deleting === o.id}
+                      onDelete={() => handleDelete(key)}
+                      deleting={deleting === key}
                     />
                   </td>
                 </tr>
