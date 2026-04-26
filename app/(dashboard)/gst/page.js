@@ -69,11 +69,15 @@ export default function GSTPage() {
   const fetchGST = async (m) => {
     setLoading(true)
     setError(null)
-    const res = await fetch(`/api/gst?month=${m}`)
-    const json = await res.json()
-    if (!res.ok) { setError(json.error || 'Failed to load'); setLoading(false); return }
-    setData(json)
-    setLoading(false)
+    try {
+      const res = await fetch(`/api/gst?month=${m}`)
+      const json = await res.json()
+      if (!res.ok) { setError(json.error || 'Failed to load'); setLoading(false); return }
+      setData(json)
+      setLoading(false)
+    } catch (e) {
+      setError('Failed to load GST data'); setLoading(false)
+    }
   }
 
   useEffect(() => { fetchGST(month) }, [month])
@@ -237,7 +241,7 @@ export default function GSTPage() {
                     <thead className="bg-zinc-800 text-zinc-500 uppercase tracking-wide sticky top-0">
                       <tr>
                         <th className="px-4 py-2 text-left">Order</th>
-                        <th className="px-4 py-2 text-left">Product</th>
+                        <th className="px-4 py-2 text-left">State</th>
                         <th className="px-4 py-2 text-right">Sale</th>
                         <th className="px-4 py-2 text-right">Rate</th>
                         <th className="px-4 py-2 text-right">GST</th>
@@ -246,9 +250,9 @@ export default function GSTPage() {
                     <tbody className="divide-y divide-zinc-800">
                       {data.otc.orders.map((o) => (
                         <tr key={o.order_id} className="hover:bg-zinc-800/40">
-                          <td className="px-4 py-2 text-zinc-400">{o.shopify_order_id || o.order_id.slice(-6)}</td>
-                          <td className="px-4 py-2 text-zinc-300 max-w-[100px] truncate">{o.product_name}</td>
-                          <td className="px-4 py-2 text-right text-zinc-300">{fmtINR(o.selling_price)}</td>
+                          <td className="px-4 py-2 text-zinc-400">{o.shopify_order_name || String(o.order_id ?? '').slice(-6) || '—'}</td>
+                          <td className="px-4 py-2 text-zinc-300 max-w-[100px] truncate">{o.ship_state || '—'}</td>
+                          <td className="px-4 py-2 text-right text-zinc-300">{fmtINR(o.order_value)}</td>
                           <td className="px-4 py-2 text-right text-zinc-500">{o.gst_rate}%</td>
                           <td className="px-4 py-2 text-right text-blue-400 font-semibold">{fmtINR(o.gst_amount)}</td>
                         </tr>

@@ -185,6 +185,6 @@ export async function GET(request) {
       cod:       allOrders.filter(o => o.payment_type === 'cash_on_delivery').length,
       prepaid:   allOrders.filter(o => ['prepaid_cashfree','prepaid_razorpay'].includes(o.payment_type)).length,
     },
-    cost_by_head, by_sku, by_payment_type, by_month,
+    cost_by_head: costByHead, by_sku, by_payment_type, by_month,
   })
 }

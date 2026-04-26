@@ -217,10 +217,14 @@ export default function PnLPage() {
 
   const load = async (f, t) => {
     setLoading(true); setError(null)
-    const res  = await fetch(`/api/pnl?from=${f}&to=${t}`)
-    const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Failed'); setLoading(false); return }
-    setPnl(data); setLoading(false)
+    try {
+      const res  = await fetch(`/api/pnl?from=${f}&to=${t}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Failed'); setLoading(false); return }
+      setPnl(data); setLoading(false)
+    } catch (e) {
+      setError('Failed to load P&L data'); setLoading(false)
+    }
   }
 
   useEffect(() => { load(from, to) }, []) // eslint-disable-line react-hooks/exhaustive-deps

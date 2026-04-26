@@ -2,18 +2,17 @@ import { supabase } from '@/lib/supabase'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
-// OTC = order_value × rate / (100 + rate)  [prices are GST-inclusive, standard in Indian D2C]
+// OTC = order_value × rate / (100 + rate)  [prices are GST-inclusive]
 function calcOTC(price, rate) {
   return r2(price * rate / (100 + rate))
 }
 
-// Seller's home state — orders to the same state → CGST + SGST, all others → IGST
 const SELLER_STATE      = 'MH'
 const SELLER_STATE_FULL = 'MAHARASHTRA'
 
-function isIntraState(customerState) {
-  if (!customerState) return false
-  const s = customerState.trim().toUpperCase()
+function isIntraState(shipState) {
+  if (!shipState) return false
+  const s = shipState.trim().toUpperCase()
   return s === SELLER_STATE || s === SELLER_STATE_FULL
 }
 
@@ -27,127 +26,114 @@ export async function GET(request) {
   const end   = new Date(y, m, 0).toISOString().slice(0, 10)
 
   // Fetch all non-cancelled orders for the month
-  // gst_rate is stored on the order (populated from vFulfill import)
   const { data: orders, error: ordersErr } = await supabase
     .from('orders')
-    .select('id, status, payment_mode, order_value, checkout_fee, cashfree_fee, order_mgmt_fee, platform_fee, cod_fee, shopify_order_id, order_date, customer_state, gst_rate')
+    .select('shopify_order_name, status, payment_type, order_value, order_date, ship_state')
     .gte('order_date', start)
     .lte('order_date', end)
     .neq('status', 'cancelled')
 
   if (ordersErr) return Response.json({ error: ordersErr.message }, { status: 500 })
 
-  // Fetch ad spend for the month
-  const { data: adSpend, error: adsErr } = await supabase
-    .from('ad_spend')
-    .select('spend_date, spend, campaign')
-    .gte('spend_date', start)
-    .lte('spend_date', end)
+  const allOrders       = orders || []
+  const allOrderNames   = allOrders.map(o => o.shopify_order_name)
+  const deliveredOrders = allOrders.filter(o => o.status === 'delivered')
 
-  if (adsErr) return Response.json({ error: adsErr.message }, { status: 500 })
+  // Fetch order costs (fees with GST amounts) for ITC — broken down by source
+  let costRows = []
+  if (allOrderNames.length > 0) {
+    const { data, error } = await supabase
+      .from('order_costs')
+      .select('shopify_order_name, source, gst_amt')
+      .in('shopify_order_name', allOrderNames)
+      .eq('nature', 'debit')
+    if (error) return Response.json({ error: error.message }, { status: 500 })
+    costRows = data || []
+  }
 
-  // Fetch manual GST entries for the month
-  const { data: manualEntries, error: manualErr } = await supabase
+  // Fetch marketing spend for meta ads ITC
+  const { data: marketing, error: mktErr } = await supabase
+    .from('marketing_spend')
+    .select('amount, gst_amt')
+    .gte('date', start)
+    .lte('date', end)
+  if (mktErr) return Response.json({ error: mktErr.message }, { status: 500 })
+
+  // Fetch manual GST entries — soft error: gst_entries may not exist in all schema versions
+  let manualEntries = []
+  const { data: manualData } = await supabase
     .from('gst_entries')
     .select('*')
     .eq('entry_month', start)
     .order('created_at', { ascending: false })
-
-  if (manualErr) return Response.json({ error: manualErr.message }, { status: 500 })
+  if (manualData) manualEntries = manualData
 
   // ── OTC Calculation ────────────────────────────────────────────────────────
-  // Only on DELIVERED orders (revenue realised, invoice settled)
-  // IGST for inter-state (customer outside MH), CGST+SGST for intra-state (customer in MH)
-  const deliveredOrders = (orders || []).filter((o) => o.status === 'delivered')
+  // Only on DELIVERED orders. Default GST rate 18% since v2 schema stores rate on products, not orders.
+  const DEFAULT_GST_RATE = 18
 
   const otcOrders = deliveredOrders.map((o) => {
-    const rate  = Number(o.gst_rate ?? 18)
+    const rate  = DEFAULT_GST_RATE
     const gst   = calcOTC(Number(o.order_value), rate)
-    const intra = isIntraState(o.customer_state)
+    const intra = isIntraState(o.ship_state)
 
     return {
-      order_id:        o.id,
-      shopify_order_id: o.shopify_order_id,
-      order_date:      o.order_date,
-      customer_state:  o.customer_state || null,
-      order_value:     Number(o.order_value),
-      gst_rate:        rate,
-      taxable_value:   r2(Number(o.order_value) - gst),
-      gst_amount:      gst,
-      igst:            intra ? 0 : gst,
-      cgst:            intra ? r2(gst / 2) : 0,
-      sgst:            intra ? r2(gst / 2) : 0,
+      order_id:           o.shopify_order_name,
+      shopify_order_name: o.shopify_order_name,
+      order_date:         o.order_date,
+      ship_state:         o.ship_state || null,
+      order_value:        Number(o.order_value),
+      gst_rate:           rate,
+      taxable_value:      r2(Number(o.order_value) - gst),
+      gst_amount:         gst,
+      igst:               intra ? 0 : gst,
+      cgst:               intra ? r2(gst / 2) : 0,
+      sgst:               intra ? r2(gst / 2) : 0,
     }
   })
 
-  const totalOTC    = r2(otcOrders.reduce((s, o) => s + o.gst_amount, 0))
-  const totalIGST   = r2(otcOrders.reduce((s, o) => s + o.igst, 0))
-  const totalCGST   = r2(otcOrders.reduce((s, o) => s + o.cgst, 0))
-  const totalSGST   = r2(otcOrders.reduce((s, o) => s + o.sgst, 0))
-  const manualOTC   = r2((manualEntries || []).filter((e) => e.type === 'otc').reduce((s, e) => s + Number(e.gst_amount), 0))
+  const totalOTC  = r2(otcOrders.reduce((s, o) => s + o.gst_amount, 0))
+  const totalIGST = r2(otcOrders.reduce((s, o) => s + o.igst, 0))
+  const totalCGST = r2(otcOrders.reduce((s, o) => s + o.cgst, 0))
+  const totalSGST = r2(otcOrders.reduce((s, o) => s + o.sgst, 0))
+  const manualOTC = r2(manualEntries.filter(e => e.type === 'otc').reduce((s, e) => s + Number(e.gst_amount), 0))
 
   // ── ITC Calculation ────────────────────────────────────────────────────────
-  // 1. vFulfill fulfillment fees — Total Amt is GST-inclusive (18% GST)
-  //    ITC = fee × 18/118
-  let itcFulfillment = 0
-  for (const o of orders || []) {
-    const vfFees =
-      Number(o.order_mgmt_fee || 0) +
-      Number(o.platform_fee   || 0) +
-      Number(o.cod_fee        || 0)
-    itcFulfillment += vfFees * 18 / 118
-  }
-  itcFulfillment = r2(itcFulfillment)
+  // All ITC comes from gst_amt stored on each cost row or marketing row.
+  const itc3PL      = r2(costRows.filter(c => c.source === 'vfulfill').reduce((s, c) => s + Number(c.gst_amt), 0))
+  const itcCheckout = r2(costRows.filter(c => c.source === 'fastrr').reduce((s, c) => s + Number(c.gst_amt), 0))
+  const itcCashfree = r2(costRows.filter(c => c.source === 'cashfree').reduce((s, c) => s + Number(c.gst_amt), 0))
+  // marketing_spend.gst_amt = 18% IGST already stored; amount is gross (GST-inclusive)
+  const itcMetaAds  = r2((marketing || []).reduce((s, m) => s + Number(m.gst_amt), 0))
+  const itcManual   = r2(manualEntries.filter(e => e.type === 'itc').reduce((s, e) => s + Number(e.gst_amount), 0))
+  const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcManual)
+  const netLiability = r2(totalOTC + manualOTC - totalITC)
 
-  // 2. Shopify checkout fee — stored as 2.36% (2% base + 18% GST), GST-inclusive
-  //    ITC = checkout_fee × 18/118
-  let itcCheckout = 0
-  for (const o of orders || []) {
-    itcCheckout += Number(o.checkout_fee || 0) * 18 / 118
-  }
-  itcCheckout = r2(itcCheckout)
-
-  // 3. Cashfree payment gateway fee — stored as 2.5% base, 18% GST on top
-  //    ITC = cashfree_fee × 0.18
-  let itcCashfree = 0
-  for (const o of orders || []) {
-    if (o.payment_mode === 'prepaid') {
-      itcCashfree += Number(o.cashfree_fee || 0) * 0.18
-    }
-  }
-  itcCashfree = r2(itcCashfree)
-
-  // 4. Meta Ads ITC: 18% GST on ad spend (IGST, since Meta is a foreign service)
-  const itcMetaAds = r2((adSpend || []).reduce((s, e) => s + Number(e.spend || 0), 0) * 0.18)
-
-  // 5. Manual ITC entries (Shopify RCM, vFulfill membership, etc.)
-  const itcManual = r2((manualEntries || []).filter((e) => e.type === 'itc').reduce((s, e) => s + Number(e.gst_amount), 0))
-
-  const totalITC      = r2(itcFulfillment + itcCheckout + itcCashfree + itcMetaAds + itcManual)
-  const netLiability  = r2(totalOTC + manualOTC - totalITC)
+  // Net ad spend (pre-GST) for display
+  const adSpendTotal = r2((marketing || []).reduce((s, m) => s + Number(m.amount) - Number(m.gst_amt), 0))
 
   return Response.json({
     period: { start, end, month },
     otc: {
-      from_orders:  totalOTC,
-      from_manual:  manualOTC,
-      total:        r2(totalOTC + manualOTC),
-      igst:         totalIGST,
-      cgst:         totalCGST,
-      sgst:         totalSGST,
-      orders:       otcOrders,
+      from_orders: totalOTC,
+      from_manual: manualOTC,
+      total:       r2(totalOTC + manualOTC),
+      igst:        totalIGST,
+      cgst:        totalCGST,
+      sgst:        totalSGST,
+      orders:      otcOrders,
     },
     itc: {
-      from_fulfillment: itcFulfillment,
-      from_checkout:    itcCheckout,
-      from_cashfree:    itcCashfree,
-      from_meta_ads:    itcMetaAds,
-      from_manual:      itcManual,
-      total:            totalITC,
+      from_3pl:        itc3PL,
+      from_checkout:   itcCheckout,
+      from_payment_gw: itcCashfree,
+      from_meta_ads:   itcMetaAds,
+      from_manual:     itcManual,
+      total:           totalITC,
     },
-    net_liability:    netLiability,
-    manual_entries:   manualEntries || [],
-    ad_spend_total:   r2((adSpend || []).reduce((s, e) => s + Number(e.spend || 0), 0)),
-    order_count:      deliveredOrders.length,
+    net_liability:  netLiability,
+    manual_entries: manualEntries,
+    ad_spend_total: adSpendTotal,
+    order_count:    deliveredOrders.length,
   })
 }
