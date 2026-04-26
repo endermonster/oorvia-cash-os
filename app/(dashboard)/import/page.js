@@ -58,6 +58,7 @@ function UploadCard({ title, subtitle, endpoint, onDone }) {
         type="file"
         accept=".csv"
         className="hidden"
+        aria-label={`Select CSV for ${title}`}
         onChange={(e) => { setFile(e.target.files[0] || null); setResult(null); setErr(null) }}
       />
 

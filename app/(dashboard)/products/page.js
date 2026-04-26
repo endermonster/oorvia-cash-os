@@ -55,16 +55,16 @@ function CogsHistoryPanel({ sku, onClose }) {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-zinc-400 mb-1">New COGS (₹)</label>
-            <input className={inp} type="number" step="0.01" required value={form.cogs} onChange={(e) => setForm({ ...form, cogs: e.target.value })} />
+            <input className={inp} name="cogs" type="number" step="0.01" required value={form.cogs} onChange={(e) => setForm({ ...form, cogs: e.target.value })} />
           </div>
           <div>
             <label className="block text-xs text-zinc-400 mb-1">Effective From</label>
-            <input className={inp} type="date" required value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
+            <input className={inp} name="effective_from" type="date" required value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
           </div>
         </div>
         <div>
           <label className="block text-xs text-zinc-400 mb-1">Note (optional)</label>
-          <input className={inp} placeholder="e.g. Supplier price revision" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+          <input className={inp} name="note" placeholder="e.g. Supplier price revision" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
         {err && <p className="text-sm text-red-400">{err}</p>}
         <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
@@ -201,32 +201,32 @@ export default function ProductsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">SKU *</label>
-                <input className={inp} required value={form.sku} onChange={f('sku')} disabled={!!editing} placeholder="e.g. YB31" />
+                <input className={inp} name="sku" required value={form.sku} onChange={f('sku')} disabled={!!editing} placeholder="e.g. YB31" />
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">GST %</label>
-                <input className={inp} type="number" step="0.01" value={form.gst_percentage} onChange={f('gst_percentage')} />
+                <input className={inp} name="gst_percentage" type="number" step="0.01" value={form.gst_percentage} onChange={f('gst_percentage')} />
               </div>
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Name *</label>
-              <input className={inp} required value={form.name} onChange={f('name')} placeholder="Product name" />
+              <input className={inp} name="name" required value={form.name} onChange={f('name')} placeholder="Product name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">
                   {editing ? 'COGS — use History to change' : 'Opening COGS (₹)'}
                 </label>
-                <input className={inp} type="number" step="0.01" value={form.current_cogs} onChange={f('current_cogs')} disabled={!!editing} placeholder="0.00" />
+                <input className={inp} name="current_cogs" type="number" step="0.01" value={form.current_cogs} onChange={f('current_cogs')} disabled={!!editing} placeholder="0.00" />
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Default Selling Price (₹)</label>
-                <input className={inp} type="number" step="0.01" value={form.default_selling_price} onChange={f('default_selling_price')} placeholder="0.00" />
+                <input className={inp} name="default_selling_price" type="number" step="0.01" value={form.default_selling_price} onChange={f('default_selling_price')} placeholder="0.00" />
               </div>
             </div>
             <div>
               <label className="block text-xs text-zinc-400 mb-1">HSN Code</label>
-              <input className={inp} value={form.hsn_code} onChange={f('hsn_code')} placeholder="e.g. 85176290" />
+              <input className={inp} name="hsn_code" value={form.hsn_code} onChange={f('hsn_code')} placeholder="e.g. 85176290" />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
             <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>

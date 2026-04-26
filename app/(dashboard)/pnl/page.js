@@ -259,12 +259,12 @@ export default function PnLPage() {
       {/* Date range picker */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2">
-          <label className="text-xs text-zinc-500">From</label>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)}
+          <label htmlFor="pnl-from" className="text-xs text-zinc-500">From</label>
+          <input id="pnl-from" type="date" value={from} onChange={e => setFrom(e.target.value)}
             className="bg-transparent text-sm text-zinc-100 focus:outline-none" />
           <span className="text-zinc-600">→</span>
-          <label className="text-xs text-zinc-500">To</label>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)}
+          <label htmlFor="pnl-to" className="text-xs text-zinc-500">To</label>
+          <input id="pnl-to" type="date" value={to} onChange={e => setTo(e.target.value)}
             className="bg-transparent text-sm text-zinc-100 focus:outline-none" />
         </div>
         <button onClick={handleApply} disabled={loading}

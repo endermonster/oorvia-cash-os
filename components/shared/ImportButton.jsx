@@ -39,6 +39,7 @@ export default function ImportButton({ importType, onDone, label }) {
         accept=".csv"
         onChange={handleFile}
         className="hidden"
+        aria-label={label || 'Import CSV'}
       />
       <button
         onClick={() => inputRef.current?.click()}

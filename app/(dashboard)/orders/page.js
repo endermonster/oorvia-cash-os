@@ -23,6 +23,7 @@ export default function OrdersPage() {
   const [modeFilter, setModeFilter] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const fetchOrders = async (m, status, mode) => {
     setLoading(true)
@@ -56,6 +57,17 @@ export default function OrdersPage() {
 
   const handleEdit = (order) => { setEditingOrder(order); setShowForm(false) }
   const handleDelete = (key) => setOrders((prev) => prev.filter((o) => (o.shopify_order_name ?? o.id) !== key))
+
+  // Client-side search filter
+  const filteredOrders = searchQuery.trim()
+    ? orders.filter((o) => {
+        const q = searchQuery.toLowerCase()
+        return (
+          (o.shopify_order_name ?? '').toLowerCase().includes(q) ||
+          (o.shopify_order_id ?? '').toLowerCase().includes(q)
+        )
+      })
+    : orders
 
   // Stats
   const total = orders.length
@@ -95,7 +107,17 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={inputCls}>
+        <label className="sr-only" htmlFor="orders-search">Search orders</label>
+        <input
+          id="orders-search"
+          type="search"
+          placeholder="Search by order ID…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className={inputCls + ' w-52'}
+        />
+        <label className="sr-only" htmlFor="orders-status">Filter by status</label>
+        <select id="orders-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={inputCls}>
           <option value="">All Statuses</option>
           <option value="pending">Pending</option>
           <option value="shipped">Shipped</option>
@@ -103,7 +125,8 @@ export default function OrdersPage() {
           <option value="rto">RTO</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} className={inputCls}>
+        <label className="sr-only" htmlFor="orders-mode">Filter by payment mode</label>
+        <select id="orders-mode" value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} className={inputCls}>
           <option value="">All Modes</option>
           <option value="prepaid">Prepaid</option>
           <option value="cod">COD</option>
@@ -117,7 +140,7 @@ export default function OrdersPage() {
       ) : error ? (
         <p className="text-sm text-red-400">{error}</p>
       ) : (
-        <OrderTable orders={orders} onEdit={handleEdit} onDelete={handleDelete} />
+        <OrderTable orders={filteredOrders} onEdit={handleEdit} onDelete={handleDelete} />
       )}
 
       {/* Modals */}
