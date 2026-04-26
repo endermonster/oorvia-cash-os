@@ -161,6 +161,7 @@ export async function POST(request) {
         hasRto:           false,
         hasFulfilled:     false,
         hasCodRemittance: false,
+        deliveredAt:      null, // transaction_date of the delivery-confirming row
         costRows:         [],
       })
     }
@@ -169,9 +170,17 @@ export async function POST(request) {
     if (!g.vf_order_id && !blank(r.vf_order_id)) g.vf_order_id = r.vf_order_id
 
     const headLower = r.transaction_head.toLowerCase().trim()
+    const txDate    = vfDate(r.transaction_date)
+
     if (headLower.includes('rto'))                                            g.hasRto = true
-    if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees')  g.hasFulfilled = true
-    if (headLower.includes('cod remittance'))                                 g.hasCodRemittance = true
+    if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees') {
+      g.hasFulfilled = true
+      if (txDate) g.deliveredAt = txDate
+    }
+    if (headLower.includes('cod remittance')) {
+      g.hasCodRemittance = true
+      if (txDate && !g.deliveredAt) g.deliveredAt = txDate
+    }
 
     // Use total_amt − taxable_amt for gst_amt — vFulfill's gst_amt column has
     // a known bug on some rows (Inward Fees) where it echoes taxable_amt instead.
@@ -209,15 +218,17 @@ export async function POST(request) {
     // Create stub orders for any names not found in DB (came from outside the Shopify import window)
     if (missingNames.length > 0) {
       const stubs = missingNames.map((name) => {
-        const g = orderGroups.get(name)
+        const g         = orderGroups.get(name)
+        const newStatus = g.hasRto ? 'rto' : (g.hasFulfilled || g.hasCodRemittance) ? 'delivered' : 'active'
         return {
           shopify_order_name:  name,
           payment_type:        'unknown',
           vf_payment_type_raw: g.vfPaymentRaw,
           order_value:         g.orderValue || 0,
           order_date:          g.orderDate  || new Date().toISOString().slice(0, 10),
-          status:              'active',
+          status:              newStatus,
           vf_order_id:         g.vf_order_id,
+          delivered_at:        newStatus === 'delivered' ? g.deliveredAt : null,
         }
       })
       const { error } = await supabase.from('orders').insert(stubs)
@@ -239,6 +250,7 @@ export async function POST(request) {
       if (newStatus && current.status !== 'rto') {
         if (newStatus === 'rto' || current.status === 'active') {
           updates.status = newStatus
+          if (newStatus === 'delivered' && g.deliveredAt) updates.delivered_at = g.deliveredAt
         }
       }
 

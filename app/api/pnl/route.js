@@ -28,15 +28,25 @@ export async function GET(request) {
   const to   = searchParams.get('to')
   if (!from || !to) return Response.json({ error: 'from and to params required (YYYY-MM-DD)' }, { status: 400 })
 
-  const { data: orders, error: ordErr } = await supabase
-    .from('orders')
-    .select('shopify_order_name, payment_type, order_value, order_date, status')
-    .gte('order_date', from).lte('order_date', to).neq('status', 'cancelled')
-  if (ordErr) return Response.json({ error: ordErr.message }, { status: 500 })
+  // Delivered orders: filter by delivered_at (delivery date) for correct GST period accounting.
+  // Active/RTO orders: filter by order_date for operational counts.
+  const [deliveredRes, nonDeliveredRes] = await Promise.all([
+    supabase.from('orders')
+      .select('shopify_order_name, payment_type, order_value, order_date, status')
+      .eq('status', 'delivered')
+      .gte('delivered_at', from).lte('delivered_at', to),
+    supabase.from('orders')
+      .select('shopify_order_name, payment_type, order_value, order_date, status')
+      .in('status', ['active', 'rto'])
+      .gte('order_date', from).lte('order_date', to),
+  ])
+  if (deliveredRes.error)    return Response.json({ error: deliveredRes.error.message }, { status: 500 })
+  if (nonDeliveredRes.error) return Response.json({ error: nonDeliveredRes.error.message }, { status: 500 })
 
-  const allOrders       = orders || []
+  const deliveredOrders = deliveredRes.data || []
+  const nonDelivered    = nonDeliveredRes.data || []
+  const allOrders       = [...deliveredOrders, ...nonDelivered]
   const orderNames      = allOrders.map(o => o.shopify_order_name)
-  const deliveredOrders = allOrders.filter(o => o.status === 'delivered')
   const deliveredNames  = deliveredOrders.map(o => o.shopify_order_name)
   const orderMap        = Object.fromEntries(allOrders.map(o => [o.shopify_order_name, o]))
 

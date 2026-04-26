@@ -25,19 +25,24 @@ export async function GET(request) {
   const start = `${y}-${String(m).padStart(2, '0')}-01`
   const end   = new Date(y, m, 0).toISOString().slice(0, 10)
 
-  // Fetch all non-cancelled orders for the month
-  const { data: orders, error: ordersErr } = await supabase
-    .from('orders')
-    .select('shopify_order_name, status, payment_type, order_value, order_date, ship_state')
-    .gte('order_date', start)
-    .lte('order_date', end)
-    .neq('status', 'cancelled')
+  // OTC is taxed in the month of delivery — filter delivered orders by delivered_at.
+  // Fetch non-delivered orders by order_date for cost/ITC context.
+  const [deliveredRes, nonDeliveredRes] = await Promise.all([
+    supabase.from('orders')
+      .select('shopify_order_name, status, payment_type, order_value, order_date, ship_state')
+      .eq('status', 'delivered')
+      .gte('delivered_at', start).lte('delivered_at', end),
+    supabase.from('orders')
+      .select('shopify_order_name, status, payment_type, order_value, order_date, ship_state')
+      .in('status', ['active', 'rto'])
+      .gte('order_date', start).lte('order_date', end),
+  ])
+  if (deliveredRes.error)    return Response.json({ error: deliveredRes.error.message }, { status: 500 })
+  if (nonDeliveredRes.error) return Response.json({ error: nonDeliveredRes.error.message }, { status: 500 })
 
-  if (ordersErr) return Response.json({ error: ordersErr.message }, { status: 500 })
-
-  const allOrders       = orders || []
+  const deliveredOrders = deliveredRes.data || []
+  const allOrders       = [...deliveredOrders, ...(nonDeliveredRes.data || [])]
   const allOrderNames   = allOrders.map(o => o.shopify_order_name)
-  const deliveredOrders = allOrders.filter(o => o.status === 'delivered')
 
   // Fetch order costs (fees with GST amounts) for ITC — broken down by source
   let costRows = []
