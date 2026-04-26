@@ -256,17 +256,20 @@ async function importAdSpend(rows) {
 
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i]
-    if (!r.date || !r.amount_spent) {
-      errors.push({ row: i + 2, message: 'Missing required fields: date, amount_spent' })
+    // Meta Ads Manager exports: "Reporting starts" → reporting_starts, "Amount spent (INR)" → amount_spent_inr
+    const spendDate = r.date || r.spend_date || r.reporting_starts || r.reporting_ends
+    const spend     = r.amount_spent || r.spend || r.amount_spent_inr
+    if (!spendDate || !spend) {
+      errors.push({ row: i + 2, message: 'Missing required fields: date and spend amount' })
       continue
     }
     valid.push({
-      spend_date:  r.date || r.spend_date,
+      spend_date:  spendDate,
       campaign:    r.campaign_name || r.campaign || null,
-      adset:       r.adset_name || r.adset || null,
-      spend:       num(r.amount_spent || r.spend),
+      adset:       r.adset_name || r.adset_name_ || r.adset || null,
+      spend:       num(spend),
       impressions: int_(r.impressions),
-      clicks:      int_(r.link_clicks || r.clicks),
+      clicks:      int_(r.link_clicks || r.clicks || r.unique_outbound_clicks),
       purchases:   int_(r.purchases),
     })
   }
