@@ -109,12 +109,8 @@ export async function POST(request) {
     )
   }
 
-  // Filter: paid + fulfilled only
-  const eligible = rows.filter(
-    (r) =>
-      r.financial_status?.toLowerCase() === 'paid' &&
-      r.fulfillment_status?.toLowerCase() === 'fulfilled'
-  )
+  // Skip only rows with no order name (blank line-item continuation rows, drafts)
+  const eligible = rows.filter((r) => r.name?.trim())
   const skippedCount = rows.length - eligible.length
 
   // Group by order name — Shopify repeats order-level fields for each line item row
@@ -164,12 +160,15 @@ export async function POST(request) {
       unknownPaymentRaws.push(rawPayment)
     }
 
+    const financialStatus = (meta.financial_status || '').toLowerCase().trim()
+    const initialStatus = financialStatus === 'voided' ? 'voided' : 'active'
+
     allOrderRows.push({
       shopify_order_name: name,
       payment_type:       paymentType,
       order_value:        r2(orderValue),
       order_date:         orderDate,
-      status:             'active',
+      status:             initialStatus,
       ship_state:         meta.shipping_province?.trim() || null,
     })
 
