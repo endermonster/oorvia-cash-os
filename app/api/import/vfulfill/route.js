@@ -52,8 +52,16 @@ function parseCSV(text) {
 
 function r2(n)   { return Math.round(n * 100) / 100 }
 function num(v)  { const n = parseFloat(v); return isNaN(n) ? 0 : n }
-// vFulfill dates: "2026-04-24" already YYYY-MM-DD; take first 10 chars to be safe
-function vfDate(s) { return (s && s !== '-') ? s.trim().slice(0, 10) : null }
+// vFulfill exports dates as either YYYY-MM-DD or DD-MM-YYYY depending on account locale
+function vfDate(s) {
+  if (!s || s === '-') return null
+  const t = s.trim().slice(0, 10)
+  if (/^\d{2}-\d{2}-\d{4}$/.test(t)) {
+    const [d, m, y] = t.split('-')
+    return `${y}-${m}-${d}`
+  }
+  return t
+}
 function blank(v)  { return !v || v === '-' }
 
 // ---------------------------------------------------------------------------
