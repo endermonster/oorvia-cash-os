@@ -36,6 +36,8 @@ export default function AdSpendPage() {
   const [form, setForm] = useState(defaultForm)
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState(null)
 
   const fetchData = async (m) => {
     setLoading(true)
@@ -78,6 +80,27 @@ export default function AdSpendPage() {
     setSaving(false)
   }
 
+  const handleMetaSync = async () => {
+    setSyncing(true)
+    setSyncMsg(null)
+    const [y, m] = month.split('-').map(Number)
+    const from = `${y}-${String(m).padStart(2, '0')}-01`
+    const to   = new Date(y, m, 0).toISOString().slice(0, 10)
+    const res  = await fetch('/api/sync/meta', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setSyncMsg({ ok: false, text: data.error })
+    } else {
+      setSyncMsg({ ok: true, text: `Synced ${data.synced} campaign-day rows from Meta` })
+      fetchData(month)
+    }
+    setSyncing(false)
+  }
+
   const handleDelete = async (id) => {
     setDeletingId(id)
     await fetch('/api/ad-spend', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
@@ -99,6 +122,9 @@ export default function AdSpendPage() {
         actions={
           <>
             <MonthPicker monthStr={month} onChange={setMonth} />
+            <button onClick={handleMetaSync} disabled={syncing} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50">
+              {syncing ? 'Syncing…' : 'Sync from Meta'}
+            </button>
             <ImportButton importType="ad_spend" onDone={() => fetchData(month)} />
             <button onClick={openAdd} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
               + Add Spend
@@ -106,6 +132,12 @@ export default function AdSpendPage() {
           </>
         }
       />
+
+      {syncMsg && (
+        <p className={`text-sm px-3 py-2 rounded-lg ${syncMsg.ok ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
+          {syncMsg.text}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard title="Total Ad Spend" value={fmtINR(totalSpend)} color="red" />
