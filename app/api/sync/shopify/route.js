@@ -15,7 +15,8 @@ export async function POST(request) {
   const secret = process.env.SYNC_SECRET
   if (secret) {
     const auth = request.headers.get('authorization') || ''
-    if (auth !== `Bearer ${secret}`) {
+    const keyParam = new URL(request.url).searchParams.get('key') || ''
+    if (auth !== `Bearer ${secret}` && keyParam !== secret) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
   }
