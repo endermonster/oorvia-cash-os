@@ -27,8 +27,13 @@ export async function POST(request) {
     return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const rawOrders = body?.orders
-  if (!Array.isArray(rawOrders) || rawOrders.length === 0) {
+  // Accept { orders: [...] } (bulk) or a single Shopify order object at root (webhook)
+  let rawOrders
+  if (Array.isArray(body?.orders)) {
+    rawOrders = body.orders
+  } else if (body?.name || body?.id) {
+    rawOrders = [body]
+  } else {
     return Response.json({ synced: 0, message: 'No orders in payload' })
   }
 
