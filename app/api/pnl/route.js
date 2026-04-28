@@ -85,8 +85,12 @@ export async function GET(request) {
   const { data: allFixed } = await supabase.from('fixed_costs').select('*')
   const fixedCosts = (allFixed || []).filter(fc => fc.start_date <= to && (!fc.end_date || fc.end_date >= from))
 
-  const { data: marketing } = await supabase
-    .from('ad_spend').select('spend, spend_date').gte('spend_date', from).lte('spend_date', to)
+  const [marketingRes, campaignMapRes] = await Promise.all([
+    supabase.from('ad_spend').select('spend, spend_date, campaign_id').gte('spend_date', from).lte('spend_date', to),
+    supabase.from('campaign_sku_map').select('campaign_id, sku'),
+  ])
+  const marketing       = marketingRes.data || []
+  const campaignSkuMap  = Object.fromEntries((campaignMapRes.data || []).map(m => [m.campaign_id, m.sku]))
 
   // ── Revenue ──
   const revenue_net = r2(deliveredOrders.reduce((s, o) => s + Number(o.order_value) / 1.18, 0))
@@ -111,11 +115,39 @@ export async function GET(request) {
   total_cogs = r2(total_cogs)
 
   const fixed_costs_prorated = r2(fixedCosts.reduce((s, fc) => s + prorateFixedCost(fc, from, to), 0))
-  const marketing_net        = r2((marketing || []).reduce((s, m) => s + Number(m.spend), 0))
-  const marketing_gst        = r2((marketing || []).reduce((s, m) => s + Number(m.spend) * 0.18, 0))
+  const marketing_net        = r2(marketing.reduce((s, m) => s + Number(m.spend || 0), 0))
+  const marketing_gst        = r2(marketing.reduce((s, m) => s + Number(m.spend || 0) * 0.18, 0))
   const net_profit           = r2(revenue_net - variable_costs - total_cogs - fixed_costs_prorated - marketing_net)
   const margin_pct           = revenue_net > 0 ? r2((net_profit / revenue_net) * 100) : 0
   const total_itc            = r2(r2(inputGstFromCosts) + marketing_gst)
+
+  // ── Per-order cost totals for SKU attribution ──
+  // Includes: all order_costs debits (vFulfill + fastrr checkout)
+  //         + Cashfree payment gateway fee (2.5% net of GST, prepaid_cashfree orders only)
+  const orderCostTotal = {}
+  for (const c of costRows) {
+    orderCostTotal[c.shopify_order_name] = (orderCostTotal[c.shopify_order_name] || 0) + Number(c.taxable_amt)
+  }
+  for (const o of deliveredOrders) {
+    if (o.payment_type === 'prepaid_cashfree') {
+      orderCostTotal[o.shopify_order_name] = (orderCostTotal[o.shopify_order_name] || 0) + Number(o.order_value) * 0.025
+    }
+  }
+
+  // Gross line revenue per order (pre-GST) used as the denominator for proportional splits
+  const orderLineRevenue = {}
+  for (const li of lineItems) {
+    orderLineRevenue[li.shopify_order_name] = (orderLineRevenue[li.shopify_order_name] || 0) + Number(li.unit_price) * Number(li.qty)
+  }
+
+  // Meta spend per SKU via campaign_sku_map
+  const skuMetaSpend = {}
+  for (const s of marketing) {
+    if (!s.campaign_id) continue
+    const sku = campaignSkuMap[s.campaign_id]
+    if (!sku) continue
+    skuMetaSpend[sku] = (skuMetaSpend[sku] || 0) + Number(s.spend || 0)
+  }
 
   // ── By SKU ──
   const skuAgg = {}
@@ -123,19 +155,33 @@ export async function GET(request) {
     if (!li.sku) continue
     const order = orderMap[li.shopify_order_name]
     if (!order) continue
-    const c = cogsAt(li.sku, order.order_date, cogsHistory, productMap)
-    if (!skuAgg[li.sku]) skuAgg[li.sku] = { sku: li.sku, name: productMap[li.sku]?.name || li.sku, units: 0, revenue_net: 0, cogs: 0 }
-    skuAgg[li.sku].units       += Number(li.qty)
-    skuAgg[li.sku].revenue_net += Number(li.unit_price) * Number(li.qty) / 1.18
-    skuAgg[li.sku].cogs        += Number(li.qty) * c
+    const c        = cogsAt(li.sku, order.order_date, cogsHistory, productMap)
+    const lineRev  = Number(li.unit_price) * Number(li.qty)
+    const totalRev = orderLineRevenue[li.shopify_order_name] || lineRev
+    const costFrac = totalRev > 0 ? lineRev / totalRev : 1
+
+    if (!skuAgg[li.sku]) skuAgg[li.sku] = { sku: li.sku, name: productMap[li.sku]?.name || li.sku, units: 0, revenue_net: 0, cogs: 0, allocated_costs: 0 }
+    skuAgg[li.sku].units           += Number(li.qty)
+    skuAgg[li.sku].revenue_net     += lineRev / 1.18
+    skuAgg[li.sku].cogs            += Number(li.qty) * c
+    skuAgg[li.sku].allocated_costs += costFrac * (orderCostTotal[li.shopify_order_name] || 0)
   }
-  const by_sku = Object.values(skuAgg).map(s => ({
-    ...s,
-    revenue_net:  r2(s.revenue_net),
-    cogs:         r2(s.cogs),
-    gross_profit: r2(s.revenue_net - s.cogs),
-    margin_pct:   s.revenue_net > 0 ? r2(((s.revenue_net - s.cogs) / s.revenue_net) * 100) : 0,
-  })).sort((a, b) => b.revenue_net - a.revenue_net)
+
+  const by_sku = Object.values(skuAgg).map(s => {
+    const meta_spend     = r2(skuMetaSpend[s.sku] || 0)
+    const net_profit_sku = r2(s.revenue_net - s.cogs - s.allocated_costs - meta_spend)
+    return {
+      ...s,
+      revenue_net:     r2(s.revenue_net),
+      cogs:            r2(s.cogs),
+      gross_profit:    r2(s.revenue_net - s.cogs),
+      margin_pct:      s.revenue_net > 0 ? r2(((s.revenue_net - s.cogs) / s.revenue_net) * 100) : 0,
+      allocated_costs: r2(s.allocated_costs),
+      meta_spend,
+      net_profit:      net_profit_sku,
+      net_margin_pct:  s.revenue_net > 0 ? r2((net_profit_sku / s.revenue_net) * 100) : 0,
+    }
+  }).sort((a, b) => b.revenue_net - a.revenue_net)
 
   // ── By payment type ──
   const ptAgg = {}

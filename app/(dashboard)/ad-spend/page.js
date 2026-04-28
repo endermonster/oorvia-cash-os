@@ -26,18 +26,159 @@ const defaultForm = {
   notes: '',
 }
 
+// ── Campaign Attribution Panel ────────────────────────────────────────────────
+
+function CampaignAttributionPanel({ products }) {
+  const [open, setCampaignOpen]   = useState(false)
+  const [campaigns, setCampaigns] = useState(null) // null = not yet fetched
+  const [saving, setSaving]       = useState(null)
+
+  useEffect(() => {
+    if (!open || campaigns !== null) return
+    fetch('/api/campaign-sku-map')
+      .then(r => r.json())
+      .then(data => setCampaigns(Array.isArray(data) ? data : []))
+  }, [open, campaigns])
+
+  const handleSkuChange = async (campaign_id, campaign_name, sku) => {
+    setSaving(campaign_id)
+    if (sku) {
+      await fetch('/api/campaign-sku-map', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id, sku, campaign_name }),
+      })
+    } else {
+      await fetch('/api/campaign-sku-map', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaign_id }),
+      })
+    }
+    setCampaigns(prev => prev.map(c => c.campaign_id === campaign_id ? { ...c, sku: sku || null } : c))
+    setSaving(null)
+  }
+
+  const autoLink = async () => {
+    const skuSet = new Set(products.map(p => p.sku))
+    const toLink = campaigns.filter(c => {
+      if (c.sku) return false
+      const prefix = (c.campaign_name || '').split(' - ')[0].trim()
+      return skuSet.has(prefix)
+    })
+    for (const c of toLink) {
+      const sku = c.campaign_name.split(' - ')[0].trim()
+      await handleSkuChange(c.campaign_id, c.campaign_name, sku)
+    }
+  }
+
+  const loaded        = campaigns !== null
+  const unlinkedCount = loaded ? campaigns.filter(c => !c.sku).length : 0
+
+  return (
+    <div className="rounded-2xl border border-zinc-700 bg-zinc-900">
+      <button
+        onClick={() => setCampaignOpen(o => !o)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-zinc-100">Campaign Attribution</span>
+          {!open && unlinkedCount > 0 && (
+            <span className="rounded-full bg-yellow-900/60 px-2 py-0.5 text-xs text-yellow-300">
+              {unlinkedCount} unlinked
+            </span>
+          )}
+          {!open && loaded && unlinkedCount === 0 && campaigns.length > 0 && (
+            <span className="rounded-full bg-green-900/60 px-2 py-0.5 text-xs text-green-400">all linked</span>
+          )}
+        </div>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2"
+          strokeLinecap="round" className={`text-zinc-500 transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M4 6l4 4 4-4" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="border-t border-zinc-700 px-5 pb-5">
+          <div className="flex items-center justify-between py-3">
+            <p className="text-xs text-zinc-400">
+              Link each Meta campaign to its SKU. Used to attribute ad spend in per-SKU net margin on the P&L page.
+              <br />
+              <span className="text-zinc-500">
+                Naming convention: <span className="font-mono text-zinc-400">SKU - Campaign Type - V#</span>
+                {' '}(e.g. <span className="font-mono text-zinc-400">YB31 - Conversion - V1</span>)
+              </span>
+            </p>
+            <button
+              onClick={autoLink}
+              className="ml-4 shrink-0 rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition"
+            >
+              Auto-link by name
+            </button>
+          </div>
+
+          {!loaded ? (
+            <p className="text-sm text-zinc-500 py-4">Loading…</p>
+          ) : campaigns.length === 0 ? (
+            <p className="text-sm text-zinc-500 py-4">No campaigns found. Sync from Meta first.</p>
+          ) : (
+            <div className="rounded-xl border border-zinc-700 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+                    <th className="px-4 py-3 text-left">Campaign</th>
+                    <th className="px-4 py-3 text-right">All-time Spend</th>
+                    <th className="px-4 py-3 text-left">Linked SKU</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-800">
+                  {campaigns.map(c => (
+                    <tr key={c.campaign_id} className="hover:bg-zinc-800/40">
+                      <td className="px-4 py-3">
+                        <p className="text-zinc-100">{c.campaign_name || '—'}</p>
+                        <p className="text-zinc-600 font-mono text-xs">{c.campaign_id}</p>
+                      </td>
+                      <td className="px-4 py-3 text-right text-zinc-300">{fmtINR(c.total_spend)}</td>
+                      <td className="px-4 py-3">
+                        <select
+                          value={c.sku || ''}
+                          disabled={saving === c.campaign_id}
+                          onChange={e => handleSkuChange(c.campaign_id, c.campaign_name, e.target.value || null)}
+                          className="rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-1.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-40"
+                        >
+                          <option value="">— unlinked —</option>
+                          {products.map(p => (
+                            <option key={p.sku} value={p.sku}>{p.sku} — {p.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function AdSpendPage() {
-  const [month, setMonth] = useState(currentMonth)
-  const [entries, setEntries] = useState([])
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  const [month, setMonth]           = useState(currentMonth)
+  const [entries, setEntries]       = useState([])
+  const [orders, setOrders]         = useState([])
+  const [products, setProducts]     = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [showForm, setShowForm]     = useState(false)
   const [editingEntry, setEditingEntry] = useState(null)
-  const [form, setForm] = useState(defaultForm)
-  const [saving, setSaving] = useState(false)
+  const [form, setForm]             = useState(defaultForm)
+  const [saving, setSaving]         = useState(false)
   const [deletingId, setDeletingId] = useState(null)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState(null)
+  const [syncing, setSyncing]       = useState(false)
+  const [syncMsg, setSyncMsg]       = useState(null)
 
   const fetchData = async (m) => {
     setLoading(true)
@@ -50,6 +191,10 @@ export default function AdSpendPage() {
     if (Array.isArray(ordersData)) setOrders(ordersData)
     setLoading(false)
   }
+
+  useEffect(() => {
+    fetch('/api/products').then(r => r.json()).then(d => { if (Array.isArray(d)) setProducts(d) })
+  }, [])
 
   useEffect(() => { fetchData(month) }, [month])
 
@@ -72,7 +217,7 @@ export default function AdSpendPage() {
   const handleSave = async (ev) => {
     ev.preventDefault()
     setSaving(true)
-    const method = editingEntry ? 'PATCH' : 'POST'
+    const method  = editingEntry ? 'PATCH' : 'POST'
     const payload = { ...form, ...(editingEntry ? { id: editingEntry.id } : {}) }
     await fetch('/api/ad-spend', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     setShowForm(false)
@@ -108,11 +253,11 @@ export default function AdSpendPage() {
     setDeletingId(null)
   }
 
-  const totalSpend = entries.reduce((s, e) => s + Number(e.spend || 0), 0)
-  const deliveredRevenue = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
-  const roas = totalSpend > 0 ? (deliveredRevenue / totalSpend).toFixed(2) : '—'
-  const totalPurchases = entries.reduce((s, e) => s + Number(e.purchases || 0), 0)
-  const cpa = totalPurchases > 0 ? (totalSpend / totalPurchases).toFixed(0) : '—'
+  const totalSpend        = entries.reduce((s, e) => s + Number(e.spend || 0), 0)
+  const deliveredRevenue  = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
+  const roas              = totalSpend > 0 ? (deliveredRevenue / totalSpend).toFixed(2) : '—'
+  const totalPurchases    = entries.reduce((s, e) => s + Number(e.purchases || 0), 0)
+  const cpa               = totalPurchases > 0 ? (totalSpend / totalPurchases).toFixed(0) : '—'
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -140,10 +285,10 @@ export default function AdSpendPage() {
       )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard title="Total Ad Spend" value={fmtINR(totalSpend)} color="red" />
-        <StatCard title="Delivered Revenue" value={fmtINR(deliveredRevenue)} color="green" />
-        <StatCard title="Est. ROAS" value={roas === '—' ? '—' : `${roas}×`} color={parseFloat(roas) >= 2 ? 'green' : 'red'} subtitle="revenue / spend" />
-        <StatCard title="Avg. CPA" value={cpa === '—' ? '—' : `₹${cpa}`} color="zinc" subtitle="cost per purchase" />
+        <StatCard title="Total Ad Spend"     value={fmtINR(totalSpend)}                                    color="red"   />
+        <StatCard title="Delivered Revenue"  value={fmtINR(deliveredRevenue)}                              color="green" />
+        <StatCard title="Est. ROAS"          value={roas === '—' ? '—' : `${roas}×`}                      color={parseFloat(roas) >= 2 ? 'green' : 'red'} subtitle="revenue / spend" />
+        <StatCard title="Avg. CPA"           value={cpa === '—' ? '—' : `₹${cpa}`}                       color="zinc"  subtitle="cost per purchase" />
       </div>
 
       {showForm && (
@@ -208,8 +353,8 @@ export default function AdSpendPage() {
                 {entries.length === 0 ? (
                   <tr><td colSpan={10} className="px-4 py-8 text-center text-zinc-500">No ad spend entries this month.</td></tr>
                 ) : entries.map((e) => {
-                  const cpl = e.clicks > 0 ? (e.spend / e.clicks).toFixed(2) : '—'
-                  const entryCA = e.purchases > 0 ? (e.spend / e.purchases).toFixed(0) : '—'
+                  const cpl      = e.clicks > 0    ? (e.spend / e.clicks).toFixed(2)    : '—'
+                  const entryCA  = e.purchases > 0 ? (e.spend / e.purchases).toFixed(0) : '—'
                   return (
                     <tr key={e.id} className="hover:bg-zinc-800/60">
                       <td className="px-4 py-3 text-zinc-300 text-xs whitespace-nowrap">{new Date(e.spend_date).toLocaleDateString('en-IN')}</td>
@@ -237,6 +382,8 @@ export default function AdSpendPage() {
           </div>
         </div>
       )}
+
+      <CampaignAttributionPanel products={products} />
     </div>
   )
 }

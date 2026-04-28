@@ -72,35 +72,47 @@ function CostBreakdownTab({ costByHead }) {
 
 function BySkuTab({ bySku }) {
   if (!bySku?.length) return <p className="text-sm text-zinc-500 py-4">No SKU data. Add products and ensure line items have SKUs.</p>
+  const hasMetaAttribution = bySku.some(s => s.meta_spend > 0)
   return (
-    <div className="rounded-xl border border-zinc-700 overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
-            <th className="px-4 py-3 text-left">SKU / Product</th>
-            <th className="px-4 py-3 text-right">Units</th>
-            <th className="px-4 py-3 text-right">Revenue (net)</th>
-            <th className="px-4 py-3 text-right">COGS</th>
-            <th className="px-4 py-3 text-right">Gross Profit</th>
-            <th className="px-4 py-3 text-right">Margin</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-zinc-800">
-          {bySku.map(s => (
-            <tr key={s.sku} className="hover:bg-zinc-800/40">
-              <td className="px-4 py-3">
-                <p className="text-zinc-100">{s.name}</p>
-                <p className="text-xs text-zinc-500 font-mono">{s.sku}</p>
-              </td>
-              <td className="px-4 py-3 text-right text-zinc-300">{s.units}</td>
-              <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(s.revenue_net)}</td>
-              <td className="px-4 py-3 text-right text-red-400">{fmtINR(s.cogs)}</td>
-              <td className={`px-4 py-3 text-right font-medium ${s.gross_profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(s.gross_profit)}</td>
-              <td className="px-4 py-3 text-right"><MarginBadge pct={s.margin_pct} /></td>
+    <div className="space-y-2">
+      {!hasMetaAttribution && (
+        <p className="text-xs text-yellow-500/80 px-1">
+          No Meta spend is linked to SKUs yet — net margin excludes ad spend. Link campaigns on the Ad Spend page.
+        </p>
+      )}
+      <div className="rounded-xl border border-zinc-700 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+              <th className="px-4 py-3 text-left">SKU / Product</th>
+              <th className="px-4 py-3 text-right">Units</th>
+              <th className="px-4 py-3 text-right">Revenue (net)</th>
+              <th className="px-4 py-3 text-right">COGS</th>
+              <th className="px-4 py-3 text-right">Gross Profit</th>
+              <th className="px-4 py-3 text-right">Gross Margin</th>
+              <th className="px-4 py-3 text-right">Net Profit</th>
+              <th className="px-4 py-3 text-right">Net Margin</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y divide-zinc-800">
+            {bySku.map(s => (
+              <tr key={s.sku} className="hover:bg-zinc-800/40">
+                <td className="px-4 py-3">
+                  <p className="text-zinc-100">{s.name}</p>
+                  <p className="text-xs text-zinc-500 font-mono">{s.sku}</p>
+                </td>
+                <td className="px-4 py-3 text-right text-zinc-300">{s.units}</td>
+                <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(s.revenue_net)}</td>
+                <td className="px-4 py-3 text-right text-red-400">{fmtINR(s.cogs)}</td>
+                <td className={`px-4 py-3 text-right font-medium ${s.gross_profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(s.gross_profit)}</td>
+                <td className="px-4 py-3 text-right"><MarginBadge pct={s.margin_pct} /></td>
+                <td className={`px-4 py-3 text-right font-medium ${s.net_profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(s.net_profit)}</td>
+                <td className="px-4 py-3 text-right"><MarginBadge pct={s.net_margin_pct} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
