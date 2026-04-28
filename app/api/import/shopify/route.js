@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { mapShopifyStatus } from '@/lib/shopify'
 
 // ---------------------------------------------------------------------------
 // CSV helpers
@@ -160,8 +161,10 @@ export async function POST(request) {
       unknownPaymentRaws.push(rawPayment)
     }
 
-    const financialStatus = (meta.financial_status || '').toLowerCase().trim()
-    const initialStatus = financialStatus === 'voided' ? 'voided' : 'active'
+    const financialStatus   = (meta.financial_status  || '').toLowerCase().trim()
+    const fulfillmentStatus = (meta.fulfillment_status || '').toLowerCase().trim()
+    const cancelledAt       = meta.cancelled_at?.trim() || null
+    const initialStatus     = mapShopifyStatus(financialStatus, fulfillmentStatus, cancelledAt)
 
     allOrderRows.push({
       shopify_order_name: name,
