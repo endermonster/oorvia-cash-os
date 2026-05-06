@@ -64,6 +64,15 @@ export async function GET(request) {
     .lte('spend_date', end)
   if (mktErr) return Response.json({ error: mktErr.message }, { status: 500 })
 
+  // Fetch vFulfill wallet-level GST (sourcing imports, inward fees, wallet service charges)
+  const { data: vfWallet } = await supabase
+    .from('wallet_transactions')
+    .select('gst_amt')
+    .eq('wallet', 'vfulfill')
+    .in('type', ['sourcing', 'service_fee'])
+    .gte('date', start)
+    .lte('date', end)
+
   // Fetch manual GST entries — soft error: gst_entries may not exist in all schema versions
   let manualEntries = []
   const { data: manualData } = await supabase
@@ -109,8 +118,9 @@ export async function GET(request) {
   const itcCheckout = r2(costRows.filter(c => c.source === 'fastrr').reduce((s, c) => s + Number(c.gst_amt), 0))
   const itcCashfree = r2(costRows.filter(c => c.source === 'cashfree').reduce((s, c) => s + Number(c.gst_amt), 0))
   const itcMetaAds  = r2((marketing || []).reduce((s, m) => s + Number(m.spend) * 0.18, 0))
+  const itcVfWallet = r2((vfWallet || []).reduce((s, w) => s + Number(w.gst_amt || 0), 0))
   const itcManual   = r2(manualEntries.filter(e => e.type === 'itc').reduce((s, e) => s + Number(e.gst_amount), 0))
-  const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcManual)
+  const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcVfWallet + itcManual)
   const netLiability = r2(totalOTC + manualOTC - totalITC)
 
   const adSpendTotal = r2((marketing || []).reduce((s, m) => s + Number(m.spend), 0))
@@ -131,6 +141,7 @@ export async function GET(request) {
       from_checkout:   itcCheckout,
       from_payment_gw: itcCashfree,
       from_meta_ads:   itcMetaAds,
+      from_vf_wallet:  itcVfWallet,
       from_manual:     itcManual,
       total:           totalITC,
     },

@@ -86,6 +86,7 @@ function classifyHead(head) {
   if (h === 'wallet recharge service fee')     return 'wallet'
   if (h === 'client sourcing request')         return 'wallet'
   if (h === 'inward fees')                     return 'wallet'
+  if (h === 'storage charges')                 return 'wallet'
   return 'skip' // unknown head — stored nowhere, surfaced in warnings
 }
 
@@ -97,6 +98,7 @@ function walletType(head) {
   if (h === 'wallet recharge service fee')  return 'service_fee'
   if (h === 'client sourcing request')      return 'sourcing'
   if (h === 'inward fees')                  return 'service_fee'
+  if (h === 'storage charges')              return 'service_fee'
   return null
 }
 
@@ -302,9 +304,11 @@ export async function POST(request) {
       vf_transaction_id: r.transaction_id,
       wallet:            'vfulfill',
       type,
-      amount:            total,   // store gross; gst = total - taxable for ITC
+      amount:            total,
+      taxable_amt:       taxable,
+      gst_amt:           r2(total - taxable),
       date:              vfDate(r.transaction_date),
-      note:              `${r.transaction_head} | taxable: ${taxable} | gst: ${r2(total - taxable)}`,
+      note:              r.transaction_head,
     })
   }
 

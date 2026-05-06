@@ -123,6 +123,7 @@ export default function GSTPage() {
     { label: 'Checkout Service Fees', amount: data.itc.from_checkout, note: '18/118 of checkout fee (GST-inclusive)' },
     { label: 'Payment Gateway Fees (Prepaid)', amount: data.itc.from_payment_gw, note: '18% on PG fees' },
     { label: 'Meta Ads (IGST)', amount: data.itc.from_meta_ads, note: `18% on ${fmtINR(data.ad_spend_total)} ad spend` },
+    { label: 'vFulfill Sourcing & Platform Fees', amount: data.itc.from_vf_wallet, note: 'GST on import/sourcing orders, inward fees, wallet service charges' },
     { label: 'Manual Entries (Shopify RCM, etc.)', amount: data.itc.from_manual, note: 'From entries below' },
   ] : []
 
