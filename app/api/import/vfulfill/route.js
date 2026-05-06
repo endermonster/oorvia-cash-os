@@ -315,7 +315,7 @@ export async function POST(request) {
   if (walletInserts.length > 0) {
     const { error } = await supabase
       .from('wallet_transactions')
-      .upsert(walletInserts, { onConflict: 'vf_transaction_id', ignoreDuplicates: true })
+      .upsert(walletInserts, { onConflict: 'vf_transaction_id', ignoreDuplicates: false })
     if (error) errors.push({ row: 'wallet_transactions', message: error.message })
   }
 
