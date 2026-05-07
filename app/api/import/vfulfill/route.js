@@ -189,7 +189,7 @@ export async function POST(request) {
     }
     if (headLower.includes('cod remittance')) {
       g.hasCodRemittance = true
-      if (txDate && !g.deliveredAt) g.deliveredAt = txDate
+      // deliberate: remittance date is settlement, not delivery — never use it as delivered_at
     }
 
     // Use total_amt − taxable_amt for gst_amt — vFulfill's gst_amt column has
