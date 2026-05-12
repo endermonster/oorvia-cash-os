@@ -123,6 +123,37 @@ export async function GET(request) {
   const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcVfWallet + itcManual)
   const netLiability = r2(totalOTC + manualOTC - totalITC)
 
+  // ── Carry-Forward Calculation ──────────────────────────────────────────────
+  let openingCF = 0
+  let cfIsSeeded = false
+  const { data: cfRow } = await supabase
+    .from('gst_credit_ledger')
+    .select('opening_balance, is_manual')
+    .eq('month', month)
+    .maybeSingle()
+  if (cfRow) {
+    openingCF = Number(cfRow.opening_balance || 0)
+    cfIsSeeded = true
+  }
+
+  const adjustedNet  = r2(netLiability - openingCF)
+  const taxPayable   = r2(Math.max(0, adjustedNet))
+  const closingCF    = r2(Math.max(0, -adjustedNet))
+
+  // Auto-propagate closing balance → next month's opening (skip if next month has a manual seed)
+  const nm1 = m === 12 ? 1 : m + 1
+  const ny1 = m === 12 ? y + 1 : y
+  const nextMonth = `${ny1}-${String(nm1).padStart(2, '0')}`
+  const { data: nextCfRow } = await supabase
+    .from('gst_credit_ledger')
+    .select('is_manual')
+    .eq('month', nextMonth)
+    .maybeSingle()
+  if (!nextCfRow?.is_manual) {
+    await supabase.from('gst_credit_ledger')
+      .upsert({ month: nextMonth, opening_balance: closingCF, is_manual: false }, { onConflict: 'month' })
+  }
+
   const adSpendTotal = r2((marketing || []).reduce((s, m) => s + Number(m.spend), 0))
 
   return Response.json({
@@ -146,6 +177,12 @@ export async function GET(request) {
       total:           totalITC,
     },
     net_liability:  netLiability,
+    carry_forward: {
+      opening:    openingCF,
+      closing:    closingCF,
+      tax_payable: taxPayable,
+      is_seeded:  cfIsSeeded,
+    },
     manual_entries: manualEntries,
     ad_spend_total: adSpendTotal,
     order_count:    deliveredOrders.length,

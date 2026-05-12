@@ -65,6 +65,9 @@ export default function GSTPage() {
   const [entryForm, setEntryForm] = useState(defaultEntryForm)
   const [savingEntry, setSavingEntry] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
+  const [showSeedForm, setShowSeedForm] = useState(false)
+  const [seedAmount, setSeedAmount] = useState('')
+  const [savingSeed, setSavingSeed] = useState(false)
 
   const fetchGST = async (m) => {
     setLoading(true)
@@ -111,11 +114,29 @@ export default function GSTPage() {
     setDeletingId(null)
   }
 
+  const handleSetSeed = async (e) => {
+    e.preventDefault()
+    setSavingSeed(true)
+    await fetch('/api/gst/credit-balance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ month, opening_balance: parseFloat(seedAmount) || 0 }),
+    })
+    setSavingSeed(false)
+    setShowSeedForm(false)
+    setSeedAmount('')
+    fetchGST(month)
+  }
+
   // Derived
-  const otcTotal = data?.otc?.total || 0
-  const itcTotal = data?.itc?.total || 0
-  const netLiability = data?.net_liability || 0
-  const isPayable = netLiability > 0
+  const otcTotal      = data?.otc?.total || 0
+  const itcTotal      = data?.itc?.total || 0
+  const netLiability  = data?.net_liability || 0
+  const openingCF     = data?.carry_forward?.opening ?? 0
+  const closingCF     = data?.carry_forward?.closing ?? 0
+  const taxPayable    = data?.carry_forward?.tax_payable ?? Math.max(0, netLiability)
+  const cfIsSeeded    = data?.carry_forward?.is_seeded ?? false
+  const isPayable     = taxPayable > 0
 
   // ITC breakdown rows
   const itcBreakdown = data ? [
@@ -166,11 +187,90 @@ export default function GSTPage() {
               color="green"
             />
             <StatCard
-              title={isPayable ? 'Net GST Payable' : 'Net ITC Credit'}
-              value={fmtINR(Math.abs(netLiability))}
-              subtitle={isPayable ? 'OTC − ITC — pay to government' : 'ITC > OTC — carries forward'}
+              title={isPayable ? 'Net GST Payable' : 'ITC Closing Balance'}
+              value={fmtINR(isPayable ? taxPayable : closingCF)}
+              subtitle={isPayable ? 'After carry-forward — pay to govt' : 'Carries forward to next month'}
               color={isPayable ? 'red' : 'green'}
             />
+          </div>
+
+          {/* ITC Carry-Forward panel */}
+          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
+              <h3 className="text-sm font-semibold text-zinc-100">ITC Carry-Forward</h3>
+              <button
+                onClick={() => { setShowSeedForm(s => !s); setSeedAmount(String(openingCF || '')) }}
+                className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded-lg px-3 py-1.5 hover:bg-zinc-800 transition-colors"
+              >
+                {cfIsSeeded ? 'Edit Opening Balance' : 'Set Opening Balance'}
+              </button>
+            </div>
+            <div className="grid grid-cols-3 divide-x divide-zinc-800">
+              <div className="px-5 py-4">
+                <p className="text-xs text-zinc-500 mb-1">Opening Balance</p>
+                <p className={`text-xl font-bold ${openingCF > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                  {fmtINR(openingCF)}
+                </p>
+                <p className="text-xs text-zinc-600 mt-1">
+                  {cfIsSeeded ? 'carried from prior month' : 'none set — add a seed below'}
+                </p>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-xs text-zinc-500 mb-1">This Month (OTC − ITC)</p>
+                <p className={`text-xl font-bold ${netLiability >= 0 ? 'text-zinc-200' : 'text-green-400'}`}>
+                  {netLiability >= 0 ? '' : '+'}{fmtINR(Math.abs(netLiability))}
+                  <span className="text-xs font-normal text-zinc-500 ml-1">
+                    {netLiability >= 0 ? 'payable' : 'credit'}
+                  </span>
+                </p>
+                {openingCF > 0 && (
+                  <p className="text-xs text-zinc-600 mt-1">
+                    − {fmtINR(openingCF)} carry-forward = {fmtINR(Math.abs(taxPayable || closingCF))} {isPayable ? 'due' : 'new credit'}
+                  </p>
+                )}
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-xs text-zinc-500 mb-1">Closing Balance →</p>
+                <p className={`text-xl font-bold ${closingCF > 0 ? 'text-green-400' : 'text-zinc-600'}`}>
+                  {fmtINR(closingCF)}
+                </p>
+                <p className="text-xs text-zinc-600 mt-1">auto-propagated to next month</p>
+              </div>
+            </div>
+            {showSeedForm && (
+              <form onSubmit={handleSetSeed} className="border-t border-zinc-800 px-5 py-4 flex items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-zinc-400 mb-1">
+                    Opening ITC balance for {month}
+                  </label>
+                  <input
+                    type="number"
+                    value={seedAmount}
+                    onChange={e => setSeedAmount(e.target.value)}
+                    placeholder="0.00"
+                    min="0"
+                    step="0.01"
+                    required
+                    className={inputCls}
+                    style={{ width: 180 }}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={savingSeed}
+                  className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {savingSeed ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSeedForm(false)}
+                  className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                >
+                  Cancel
+                </button>
+              </form>
+            )}
           </div>
 
           {/* GST Summary bar */}
@@ -178,7 +278,9 @@ export default function GSTPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-zinc-100">GST Position</h3>
               <span className={`text-xs font-bold px-3 py-1 rounded-full ${isPayable ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
-                {isPayable ? `₹${Math.abs(netLiability).toLocaleString('en-IN')} PAYABLE` : `₹${Math.abs(netLiability).toLocaleString('en-IN')} CREDIT`}
+                {isPayable
+                  ? `₹${taxPayable.toLocaleString('en-IN')} PAYABLE`
+                  : `₹${closingCF.toLocaleString('en-IN')} CREDIT`}
               </span>
             </div>
             <div className="flex items-center gap-3 text-xs">
@@ -204,11 +306,28 @@ export default function GSTPage() {
                   />
                 </div>
               </div>
+              {openingCF > 0 && (
+                <>
+                  <span className="text-zinc-600 shrink-0">−</span>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-zinc-400">Carry-Forward</span>
+                      <span className="text-amber-400 font-semibold">{fmtINR(openingCF)}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-zinc-800 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-amber-600"
+                        style={{ width: `${Math.min(100, otcTotal > 0 ? (openingCF / otcTotal) * 100 : 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
               <span className="text-zinc-600 shrink-0">=</span>
               <div className="shrink-0 text-right">
                 <p className="text-zinc-400 mb-1">Net</p>
                 <p className={`font-bold text-base ${isPayable ? 'text-red-400' : 'text-green-400'}`}>
-                  {isPayable ? '+' : '−'}{fmtINR(Math.abs(netLiability))}
+                  {isPayable ? '+' : '−'}{fmtINR(isPayable ? taxPayable : closingCF)}
                 </p>
               </div>
             </div>
@@ -416,6 +535,7 @@ export default function GSTPage() {
             <p>• <strong>Payment GW ITC</strong>: 18% on payment gateway fee (prepaid orders only).</p>
             <p>• <strong>Meta Ads ITC</strong>: 18% IGST on ad spend (import of service).</p>
             <p>• Manual entries are for Shopify RCM, vFulfill membership, and any other taxed expense not auto-captured above.</p>
+            <p>• <strong>Carry-Forward</strong>: when ITC &gt; OTC in a month, the surplus reduces next month's liability automatically. Use "Set Opening Balance" to seed the first month if you had a prior credit balance. Re-view earlier months after data changes to re-propagate the chain.</p>
             <p>• This is a <strong>summary tool</strong>, not a substitute for professional GST filing. Verify with your CA before filing GSTR-3B.</p>
           </div>
         </>
