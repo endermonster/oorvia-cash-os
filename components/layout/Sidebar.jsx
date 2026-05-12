@@ -124,36 +124,39 @@ export default function Sidebar() {
     href === '/pnl' ? pathname === '/pnl' || pathname === '/' : pathname.startsWith(href)
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
+    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-[#1e1e2e] bg-[#0c0c16]">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-5 py-5 border-b border-zinc-800">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="white">
-            <path d="M8 1L1 5l7 4 7-4-7-4zM1 9l7 4 7-4M1 13l7 4 7-4" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+      <div className="flex items-center gap-2.5 px-5 py-5 border-b border-[#1e1e2e]">
+        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-600">
+          <svg width="14" height="14" viewBox="0 0 16 16" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 1L1 5l7 4 7-4-7-4zM1 9l7 4 7-4M1 13l7 4 7-4" />
           </svg>
         </div>
         <div>
-          <p className="text-sm font-semibold text-zinc-100 leading-none">Oorvia</p>
-          <p className="text-[10px] text-zinc-500 leading-none mt-0.5">Cash OS</p>
+          <p className="text-sm font-semibold text-zinc-100 leading-none tracking-tight">Oorvia</p>
+          <p className="text-[10px] text-zinc-500 leading-none mt-0.5 tracking-wide uppercase">Cash OS</p>
         </div>
       </div>
 
       {/* Main nav */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+        <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-600">
           Accounting
         </p>
         {NAV.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
+            className={`relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors ${
               isActive(item.href)
-                ? 'bg-zinc-800 text-zinc-100'
-                : 'text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200'
+                ? 'bg-teal-500/10 text-zinc-100'
+                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200'
             }`}
           >
-            <span className={isActive(item.href) ? 'text-blue-400' : 'text-zinc-500'}>
+            {isActive(item.href) && (
+              <span className="absolute left-0 inset-y-2 w-0.5 rounded-full bg-teal-500" />
+            )}
+            <span className={isActive(item.href) ? 'text-teal-400' : 'text-zinc-500'}>
               {item.icon}
             </span>
             {item.label}
