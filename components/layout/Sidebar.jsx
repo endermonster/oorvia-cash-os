@@ -115,6 +115,16 @@ const NAV = [
       </svg>
     ),
   },
+  {
+    label: 'Forecast',
+    href: '/forecast',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 13 5 8l3 3 3-4 3-3" />
+        <path d="M11 4h4v4" />
+      </svg>
+    ),
+  },
 ]
 
 export default function Sidebar() {
