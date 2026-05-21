@@ -44,7 +44,7 @@ function EmptyRow({ cols, msg }) {
 // Fixed Costs tab
 // ---------------------------------------------------------------------------
 
-const blankFC = { name: '', amount: '', frequency: 'monthly', start_date: '', end_date: '', category: '', gst_inclusive: false }
+const blankFC = { name: '', currency: 'INR', amount: '', usd_amount: '149', frequency: 'monthly', start_date: '', end_date: '', category: '', gst_inclusive: false }
 
 function FixedCostsTab() {
   const [rows, setRows]       = useState([])
@@ -58,12 +58,19 @@ function FixedCostsTab() {
   useEffect(() => { load() }, [])
 
   const openAdd  = () => { setForm(blankFC); setEditing(null); setErr(null); setShow(true) }
-  const openEdit = (r) => { setForm({ name: r.name, amount: r.amount, frequency: r.frequency, start_date: r.start_date, end_date: r.end_date ?? '', category: r.category ?? '', gst_inclusive: r.gst_inclusive }); setEditing(r); setErr(null); setShow(true) }
+  const openEdit = (r) => { setForm({ name: r.name, currency: r.usd_amount ? 'USD' : 'INR', amount: r.amount, usd_amount: r.usd_amount ?? '149', frequency: r.frequency, start_date: r.start_date, end_date: r.end_date ?? '', category: r.category ?? '', gst_inclusive: r.gst_inclusive }); setEditing(r); setErr(null); setShow(true) }
 
   const save = async (e) => {
     e.preventDefault(); setSaving(true); setErr(null)
+    const payload = { ...form }
+    if (form.currency === 'USD') {
+      if (!parseFloat(form.usd_amount)) { setErr('Enter a USD amount'); setSaving(false); return }
+      payload.usd_amount = parseFloat(form.usd_amount)
+    } else {
+      payload.usd_amount = null
+    }
     const method = editing ? 'PATCH' : 'POST'
-    const body   = editing ? { id: editing.id, ...form } : form
+    const body   = editing ? { id: editing.id, ...payload } : payload
     const res    = await fetch('/api/fixed-costs', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const data   = await res.json()
     if (!res.ok) { setErr(data.error || 'Failed'); setSaving(false); return }
@@ -101,7 +108,10 @@ function FixedCostsTab() {
               <tr key={r.id} className="hover:bg-zinc-800/40">
                 <td className="px-4 py-3 text-zinc-100">{r.name}</td>
                 <td className="px-4 py-3 text-zinc-400">{r.category || '—'}</td>
-                <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(r.amount)}</td>
+                <td className="px-4 py-3 text-right text-zinc-100 font-medium">
+                  {fmtINR(r.amount)}
+                  {r.usd_amount && <span className="block text-xs text-zinc-500">${r.usd_amount} · live rate</span>}
+                </td>
                 <td className="px-4 py-3 text-zinc-400 capitalize">{r.frequency}</td>
                 <td className="px-4 py-3 text-zinc-400 text-xs">{r.start_date} → {r.end_date || '∞'}</td>
                 <td className="px-4 py-3 text-right text-zinc-400">{r.gst_inclusive ? 'Yes' : 'No'}</td>
@@ -126,8 +136,11 @@ function FixedCostsTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Amount (₹) *</label>
-                <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
+                <label className="block text-xs text-zinc-400 mb-1">Currency</label>
+                <select className={sel} value={form.currency} onChange={f('currency')}>
+                  <option value="INR">INR (₹)</option>
+                  <option value="USD">USD ($)</option>
+                </select>
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Frequency *</label>
@@ -138,6 +151,20 @@ function FixedCostsTab() {
                 </select>
               </div>
             </div>
+            {form.currency === 'USD' ? (
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">USD Amount *</label>
+                  <input className={inp} type="number" step="0.01" required value={form.usd_amount} onChange={f('usd_amount')} placeholder="149" />
+                </div>
+                <p className="text-xs text-zinc-500">INR equivalent is fetched automatically at the live rate each time P&L is computed.</p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Amount (₹) *</label>
+                <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1">Start Date *</label>

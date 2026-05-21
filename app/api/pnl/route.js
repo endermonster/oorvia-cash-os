@@ -9,12 +9,12 @@ function cogsAt(sku, date, history, productMap) {
   return match ? Number(match.cogs) : Number(productMap[sku]?.current_cogs ?? 0)
 }
 
-function prorateFixedCost(fc, from, to) {
+function prorateFixedCost(fc, from, to, usdInrRate) {
   const overlapStart = fc.start_date > from ? fc.start_date : from
   const overlapEnd   = (!fc.end_date || fc.end_date > to) ? to : fc.end_date
   if (overlapStart > overlapEnd) return 0
   const days   = (new Date(overlapEnd) - new Date(overlapStart)) / 86400000 + 1
-  let amount   = Number(fc.amount)
+  let amount   = fc.usd_amount && usdInrRate ? r2(Number(fc.usd_amount) * usdInrRate) : Number(fc.amount)
   if (fc.gst_inclusive) amount = r2(amount / 1.18)
   if (fc.frequency === 'one-time') return fc.start_date >= from && fc.start_date <= to ? amount : 0
   if (fc.frequency === 'monthly')  return r2(amount * days / 30)
@@ -85,6 +85,31 @@ export async function GET(request) {
   const { data: allFixed } = await supabase.from('fixed_costs').select('*')
   const fixedCosts = (allFixed || []).filter(fc => fc.start_date <= to && (!fc.end_date || fc.end_date >= from))
 
+  let usdInrRate = null
+  if (fixedCosts.some(fc => fc.usd_amount)) {
+    const month        = from.slice(0, 7)
+    const now          = new Date()
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+
+    const { data: locked } = await supabase.from('usd_inr_rates').select('rate').eq('month', month).single()
+    if (locked) {
+      usdInrRate = Number(locked.rate)
+    } else {
+      try {
+        const lastDayOfMonth = new Date(parseInt(month.slice(0, 4)), parseInt(month.slice(5, 7)), 0).getDate()
+        const chargeDate     = `${month}-${String(Math.min(30, lastDayOfMonth)).padStart(2, '0')}`
+        const fxRes          = await fetch(`https://api.frankfurter.app/${chargeDate}?from=USD&to=INR`)
+        const fxData         = await fxRes.json()
+        usdInrRate           = fxData.rates?.INR || 84
+      } catch {
+        usdInrRate = 84
+      }
+      if (month < currentMonth) {
+        await supabase.from('usd_inr_rates').upsert({ month, rate: usdInrRate })
+      }
+    }
+  }
+
   const [marketingRes, campaignMapRes] = await Promise.all([
     supabase.from('ad_spend').select('spend, spend_date, campaign_id').gte('spend_date', from).lte('spend_date', to),
     supabase.from('campaign_sku_map').select('campaign_id, sku'),
@@ -114,7 +139,7 @@ export async function GET(request) {
   }
   total_cogs = r2(total_cogs)
 
-  const fixed_costs_prorated = r2(fixedCosts.reduce((s, fc) => s + prorateFixedCost(fc, from, to), 0))
+  const fixed_costs_prorated = r2(fixedCosts.reduce((s, fc) => s + prorateFixedCost(fc, from, to, usdInrRate), 0))
   const marketing_net        = r2(marketing.reduce((s, m) => s + Number(m.spend || 0), 0))
   const marketing_gst        = r2(marketing.reduce((s, m) => s + Number(m.spend || 0) * 0.18, 0))
   const net_profit           = r2(revenue_net - variable_costs - total_cogs - fixed_costs_prorated - marketing_net)
