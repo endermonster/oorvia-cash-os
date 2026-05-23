@@ -118,7 +118,8 @@ export async function GET(request) {
   const campaignSkuMap  = Object.fromEntries((campaignMapRes.data || []).map(m => [m.campaign_id, m.sku]))
 
   // ── Revenue ──
-  const revenue_net = r2(deliveredOrders.reduce((s, o) => s + Number(o.order_value) / 1.18, 0))
+  const revenue_gross = r2(deliveredOrders.reduce((s, o) => s + Number(o.order_value), 0))
+  const revenue_net   = r2(revenue_gross / 1.18)
 
   // ── Variable costs ──
   const costByHead = {}
@@ -256,7 +257,7 @@ export async function GET(request) {
 
   return Response.json({
     from, to,
-    revenue_net, variable_costs, cogs: total_cogs,
+    revenue_gross, revenue_net, variable_costs, cogs: total_cogs,
     fixed_costs_prorated, marketing_net, net_profit, margin_pct, total_itc,
     orders: {
       total:     allOrders.length,

@@ -291,6 +291,15 @@ export default function PnLPage() {
 
       {pnl && (
         <>
+          {/* Gross revenue hero card */}
+          <div className="rounded-2xl border border-blue-700/40 bg-blue-950/30 px-6 py-5">
+            <p className="text-xs text-blue-400 uppercase tracking-wider mb-1">Gross Revenue (incl. GST)</p>
+            <p className="text-4xl font-bold text-white">{fmtINR(pnl.revenue_gross)}</p>
+            <p className="text-xs text-zinc-500 mt-1.5">
+              {pnl.orders.delivered} delivered orders · GST collected: {fmtINR(pnl.revenue_gross - pnl.revenue_net)}
+            </p>
+          </div>
+
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <StatCard title="Revenue (net GST)"   value={fmtINR(pnl.revenue_net)}     subtitle={`${pnl.orders.delivered} delivered orders`} color="blue" />
