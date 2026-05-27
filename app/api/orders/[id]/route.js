@@ -25,7 +25,9 @@ export async function PATCH(request, context) {
   if (status       !== undefined) updates.status        = status
   if (order_value  !== undefined) updates.order_value   = parseFloat(order_value)
   if (payment_mode !== undefined) {
-    updates.payment_type = payment_mode === 'cod' ? 'cash_on_delivery' : 'prepaid_cashfree'
+    if (payment_mode === 'cod') updates.payment_type = 'cash_on_delivery'
+    else if (payment_mode === 'razorpay' || payment_mode === 'prepaid_razorpay') updates.payment_type = 'prepaid_razorpay'
+    else updates.payment_type = 'prepaid_cashfree'
   }
 
   const { data, error } = await supabase
