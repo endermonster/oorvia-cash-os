@@ -208,9 +208,9 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const YEAR_OPTIONS = Array.from({ length: now.getFullYear() - 2022 + 1 }, (_, i) => 2022 + i)
 
 function monthRange(year, month) {
-  const from = new Date(year, month - 1, 1).toISOString().slice(0, 10)
-  const to   = new Date(year, month, 0).toISOString().slice(0, 10)
-  return { from, to }
+  const pad = n => String(n).padStart(2, '0')
+  const lastDay = new Date(year, month, 0).getDate()
+  return { from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(lastDay)}` }
 }
 
 export default function PnLPage() {
