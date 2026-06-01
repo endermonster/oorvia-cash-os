@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -76,7 +76,7 @@ export default function OrdersPage() {
   const rtoRate = total > 0 ? ((rtoCount / total) * 100).toFixed(1) : '0.0'
   const grossRevenue = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
 
-  const inputCls = 'rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const inputCls = 'rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -89,7 +89,7 @@ export default function OrdersPage() {
             <ImportButton importType="orders" onDone={() => fetchOrders(month, statusFilter, modeFilter)} />
             <button
               onClick={() => { setShowForm(true); setEditingOrder(null) }}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 transition-colors"
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
             >
               + Add Order
             </button>
@@ -131,12 +131,12 @@ export default function OrdersPage() {
           <option value="prepaid">Prepaid</option>
           <option value="cod">COD</option>
         </select>
-        <span className="text-sm text-zinc-500">Gross: <span className="text-zinc-200 font-medium">{fmtINR(grossRevenue)}</span></span>
+        <span className="text-sm text-slate-500">Gross: <span className="text-slate-200 font-medium">{fmtINR(grossRevenue)}</span></span>
       </div>
 
       {/* Table */}
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-slate-400">Loading…</p>
       ) : error ? (
         <p className="text-sm text-red-400">{error}</p>
       ) : (

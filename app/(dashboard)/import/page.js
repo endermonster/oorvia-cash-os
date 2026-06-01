@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useRef, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -41,22 +41,22 @@ function ShopifySyncCard() {
     }
   }
 
-  const inputCls = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  const inputCls = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
   return (
-    <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 flex flex-col gap-4 md:col-span-2">
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6 flex flex-col gap-4 md:col-span-2">
       <div>
-        <p className="text-base font-semibold text-zinc-100">Sync Shopify Orders via API</p>
-        <p className="text-sm text-zinc-400 mt-0.5">Pulls paid + fulfilled orders directly from the Shopify Admin API — no CSV needed.</p>
+        <p className="text-base font-semibold text-slate-100">Sync Shopify Orders via API</p>
+        <p className="text-sm text-slate-400 mt-0.5">Pulls paid + fulfilled orders directly from the Shopify Admin API — no CSV needed.</p>
       </div>
 
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-400">From</label>
+          <label className="text-xs font-medium text-slate-400">From</label>
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className={inputCls} style={{ width: '160px' }} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-zinc-400">To</label>
+          <label className="text-xs font-medium text-slate-400">To</label>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className={inputCls} style={{ width: '160px' }} />
         </div>
         <button
@@ -80,7 +80,7 @@ function ShopifySyncCard() {
           {result.inserted !== undefined && <p>Inserted: <strong>{result.inserted}</strong></p>}
           {result.updated  !== undefined && <p>Updated: <strong>{result.updated}</strong></p>}
           {result.line_items_created !== undefined && <p>Line items: <strong>{result.line_items_created}</strong></p>}
-          {result.message && <p className="text-zinc-400">{result.message}</p>}
+          {result.message && <p className="text-slate-400">{result.message}</p>}
           {result.warnings?.map((w, i) => <p key={i} className="text-yellow-400">⚠ {w}</p>)}
           {result.errors?.length > 0 && result.errors.map((e, i) => (
             <p key={i} className="text-red-400">Error: {JSON.stringify(e)}</p>
@@ -123,23 +123,23 @@ function UploadCard({ title, subtitle, endpoint, onDone }) {
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 flex flex-col gap-4">
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 p-6 flex flex-col gap-4">
       <div>
-        <p className="text-base font-semibold text-zinc-100">{title}</p>
-        <p className="text-sm text-zinc-400 mt-0.5">{subtitle}</p>
+        <p className="text-base font-semibold text-slate-100">{title}</p>
+        <p className="text-sm text-slate-400 mt-0.5">{subtitle}</p>
       </div>
 
       {/* Drop zone */}
       <button
         onClick={pick}
-        className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-800/50 py-8 text-sm text-zinc-400 transition hover:border-blue-500 hover:text-zinc-200 hover:bg-zinc-800"
+        className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-700 bg-slate-800/50 py-8 text-sm text-slate-400 transition hover:border-blue-500 hover:text-slate-200 hover:bg-slate-800"
       >
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="17 8 12 3 7 8" />
           <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
-        {file ? <span className="text-zinc-200 font-medium">{file.name}</span> : <span>Click to select CSV</span>}
+        {file ? <span className="text-slate-200 font-medium">{file.name}</span> : <span>Click to select CSV</span>}
       </button>
       <input
         ref={inputRef}
@@ -153,7 +153,7 @@ function UploadCard({ title, subtitle, endpoint, onDone }) {
       <button
         onClick={upload}
         disabled={!file || loading}
-        className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed"
+        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {loading ? 'Uploading…' : 'Upload'}
       </button>
@@ -171,8 +171,8 @@ function UploadCard({ title, subtitle, endpoint, onDone }) {
           {result.orders_affected !== undefined && <p>Orders affected: <strong>{result.orders_affected}</strong></p>}
           {result.cost_rows_inserted !== undefined && <p>Cost rows: <strong>{result.cost_rows_inserted}</strong></p>}
           {result.wallet_rows  !== undefined && <p>Wallet entries: <strong>{result.wallet_rows}</strong></p>}
-          {result.skipped      !== undefined && <p className="text-zinc-400">Skipped: {result.skipped}</p>}
-          {result.declined_skipped !== undefined && <p className="text-zinc-400">Declined skipped: {result.declined_skipped}</p>}
+          {result.skipped      !== undefined && <p className="text-slate-400">Skipped: {result.skipped}</p>}
+          {result.declined_skipped !== undefined && <p className="text-slate-400">Declined skipped: {result.declined_skipped}</p>}
           {result.warnings?.map((w, i) => (
             <p key={i} className="text-yellow-400">⚠ {w}</p>
           ))}

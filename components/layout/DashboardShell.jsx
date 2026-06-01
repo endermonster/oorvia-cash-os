@@ -13,11 +13,11 @@ export default function DashboardShell({ children }) {
   }, [pathname])
 
   return (
-    <div className="flex h-screen bg-[#08080f] overflow-hidden">
+    <div className="flex h-screen bg-[#020617] overflow-hidden">
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm md:hidden"
+          className="fixed inset-0 z-40 bg-black/80 backdrop-blur-sm md:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -34,10 +34,10 @@ export default function DashboardShell({ children }) {
       {/* Main area */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Mobile top bar */}
-        <div className="md:hidden flex items-center gap-3 px-4 h-12 border-b border-[#1e1e2e] bg-[#0c0c16] shrink-0">
+        <div className="md:hidden flex items-center gap-3 px-4 h-12 border-b border-slate-800/60 bg-[#060d1b] shrink-0">
           <button
             onClick={() => setMobileOpen(true)}
-            className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-white/5 transition-colors"
+            className="p-1.5 rounded-md text-slate-500 hover:text-slate-100 hover:bg-slate-800/60 transition-colors cursor-pointer"
             aria-label="Open navigation"
           >
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -45,12 +45,12 @@ export default function DashboardShell({ children }) {
             </svg>
           </button>
           <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-teal-600">
-              <svg width="10" height="10" viewBox="0 0 16 16" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <div className="flex h-5 w-5 items-center justify-center rounded bg-emerald-950 border border-emerald-800/60">
+              <svg width="9" height="9" viewBox="0 0 16 16" stroke="#34d399" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M8 1L1 5l7 4 7-4-7-4zM1 9l7 4 7-4" />
               </svg>
             </div>
-            <span className="text-sm font-semibold text-zinc-100 tracking-tight">Oorvia Cash OS</span>
+            <span className="text-sm font-semibold text-slate-100 tracking-tight">Oorvia Cash OS</span>
           </div>
         </div>
 

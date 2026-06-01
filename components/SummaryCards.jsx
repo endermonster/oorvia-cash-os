@@ -14,17 +14,20 @@ export default function SummaryCards({ transactions }) {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      <div className="rounded-2xl border border-green-800 bg-green-950 p-5">
-        <p className="text-sm font-medium text-green-400">Total Income</p>
-        <p className="mt-1 text-2xl font-bold text-green-300">{fmt(income)}</p>
+      <div className="relative rounded-xl border border-slate-800 bg-slate-900/60 p-5 overflow-hidden">
+        <div className="absolute left-0 inset-y-0 w-0.5 rounded-full bg-emerald-500" />
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Income</p>
+        <p className="text-2xl font-bold font-mono tabular-nums text-emerald-400">{fmt(income)}</p>
       </div>
-      <div className="rounded-2xl border border-red-800 bg-red-950 p-5">
-        <p className="text-sm font-medium text-red-400">Total Expenses</p>
-        <p className="mt-1 text-2xl font-bold text-red-300">{fmt(expenses)}</p>
+      <div className="relative rounded-xl border border-slate-800 bg-slate-900/60 p-5 overflow-hidden">
+        <div className="absolute left-0 inset-y-0 w-0.5 rounded-full bg-red-500" />
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Total Expenses</p>
+        <p className="text-2xl font-bold font-mono tabular-nums text-red-400">{fmt(expenses)}</p>
       </div>
-      <div className="rounded-2xl border border-blue-800 bg-blue-950 p-5">
-        <p className="text-sm font-medium text-blue-400">Net Cash</p>
-        <p className={`mt-1 text-2xl font-bold ${net >= 0 ? 'text-blue-300' : 'text-red-300'}`}>
+      <div className="relative rounded-xl border border-slate-800 bg-slate-900/60 p-5 overflow-hidden">
+        <div className="absolute left-0 inset-y-0 w-0.5 rounded-full bg-sky-500" />
+        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Net Cash</p>
+        <p className={`text-2xl font-bold font-mono tabular-nums ${net >= 0 ? 'text-sky-400' : 'text-red-400'}`}>
           {fmt(net)}
         </p>
       </div>

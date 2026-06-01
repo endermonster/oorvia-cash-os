@@ -1,14 +1,14 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import { fmtINR } from '@/lib/pnl'
 
 const inputCls =
-  'rounded border border-zinc-600 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-blue-500'
+  'rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500'
 
 function SectionHeading({ children }) {
   return (
-    <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+    <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
       {children}
     </p>
   )
@@ -16,22 +16,22 @@ function SectionHeading({ children }) {
 
 function WalletCard({ title, value, subtitle, highlight, asOf, onEdit, children }) {
   const borderCls = highlight
-    ? 'border-blue-900/60 bg-blue-950/30'
-    : 'border-zinc-700 bg-zinc-900'
-  const titleCls  = highlight ? 'text-blue-400' : 'text-zinc-500'
-  const valueCls  = highlight ? 'text-blue-200' : 'text-zinc-100'
+    ? 'border-slate-700/60 bg-slate-900/60'
+    : 'border-slate-700 bg-slate-900'
+  const titleCls  = highlight ? 'text-blue-400' : 'text-slate-500'
+  const valueCls  = highlight ? 'text-slate-200' : 'text-slate-100'
 
   return (
     <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${borderCls}`}>
       <p className={`text-xs ${titleCls}`}>{title}</p>
       <p className={`text-2xl font-semibold tabular-nums ${valueCls}`}>{fmtINR(value)}</p>
-      {asOf  && <p className="text-[10px] text-zinc-600">as of {asOf}</p>}
-      {subtitle && !asOf && <p className={`text-[10px] ${highlight ? 'text-blue-600' : 'text-zinc-600'}`}>{subtitle}</p>}
+      {asOf  && <p className="text-[10px] text-slate-600">as of {asOf}</p>}
+      {subtitle && !asOf && <p className={`text-[10px] ${highlight ? 'text-blue-600' : 'text-slate-600'}`}>{subtitle}</p>}
       {children}
       {onEdit && (
         <button
           onClick={onEdit}
-          className="mt-1 self-start text-[10px] text-blue-500 hover:text-blue-400"
+          className="mt-1 self-start text-[10px] text-emerald-500 hover:text-emerald-400"
         >
           Update balance
         </button>
@@ -81,7 +81,7 @@ export default function CashPage() {
     setBalanceInput(String(currentVal || ''))
   }
 
-  if (loading) return <p className="text-sm text-zinc-400 p-6">Loading…</p>
+  if (loading) return <p className="text-sm text-slate-400 p-6">Loading…</p>
   if (!data)   return null
 
   const { wallets, total_liquid, cod_float, cod_active_count, partners, loans } = data
@@ -95,12 +95,12 @@ export default function CashPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-zinc-100">Cash Position</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">As of {data.today}</p>
+          <h1 className="text-xl font-semibold text-slate-100">Cash Position</h1>
+          <p className="text-sm text-slate-500 mt-0.5">As of {data.today}</p>
         </div>
         <button
           onClick={fetchData}
-          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+          className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
         >
           Refresh
         </button>
@@ -112,12 +112,12 @@ export default function CashPage() {
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
 
           {/* Bank */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-4 flex flex-col gap-1">
-            <p className="text-xs text-zinc-500">Bank Balance</p>
-            <p className="text-2xl font-semibold tabular-nums text-zinc-100">{fmtINR(wallets.bank)}</p>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-1">
+            <p className="text-xs text-slate-500">Bank Balance</p>
+            <p className="text-2xl font-semibold tabular-nums text-slate-100">{fmtINR(wallets.bank)}</p>
             {wallets.bank_as_of
-              ? <p className="text-[10px] text-zinc-600">as of {wallets.bank_as_of}</p>
-              : <p className="text-[10px] text-zinc-600">not set</p>
+              ? <p className="text-[10px] text-slate-600">as of {wallets.bank_as_of}</p>
+              : <p className="text-[10px] text-slate-600">not set</p>
             }
             {editingWallet === 'bank' ? (
               <div className="mt-2 flex gap-1">
@@ -132,13 +132,13 @@ export default function CashPage() {
                 <button
                   disabled={saving}
                   onClick={() => handleSetBalance('bank')}
-                  className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   Set
                 </button>
                 <button
                   onClick={() => setEditingWallet(null)}
-                  className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+                  className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
                 >
                   ✕
                 </button>
@@ -146,7 +146,7 @@ export default function CashPage() {
             ) : (
               <button
                 onClick={() => openEdit('bank', wallets.bank)}
-                className="mt-1 self-start text-[10px] text-blue-500 hover:text-blue-400"
+                className="mt-1 self-start text-[10px] text-emerald-500 hover:text-emerald-400"
               >
                 Update balance
               </button>
@@ -154,21 +154,21 @@ export default function CashPage() {
           </div>
 
           {/* vFulfill */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-4 flex flex-col gap-1">
-            <p className="text-xs text-zinc-500">vFulfill Wallet</p>
-            <p className={`text-2xl font-semibold tabular-nums ${wallets.vfulfill >= 0 ? 'text-zinc-100' : 'text-red-400'}`}>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-1">
+            <p className="text-xs text-slate-500">vFulfill Wallet</p>
+            <p className={`text-2xl font-semibold tabular-nums ${wallets.vfulfill >= 0 ? 'text-slate-100' : 'text-red-400'}`}>
               {fmtINR(wallets.vfulfill)}
             </p>
-            <p className="text-[10px] text-zinc-600">auto-computed from imports</p>
+            <p className="text-[10px] text-slate-600">auto-computed from imports</p>
           </div>
 
           {/* Cashfree */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-4 flex flex-col gap-1">
-            <p className="text-xs text-zinc-500">Cashfree Pending</p>
-            <p className="text-2xl font-semibold tabular-nums text-zinc-100">{fmtINR(wallets.cashfree)}</p>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-4 flex flex-col gap-1">
+            <p className="text-xs text-slate-500">Cashfree Pending</p>
+            <p className="text-2xl font-semibold tabular-nums text-slate-100">{fmtINR(wallets.cashfree)}</p>
             {wallets.cashfree_as_of
-              ? <p className="text-[10px] text-zinc-600">as of {wallets.cashfree_as_of}</p>
-              : <p className="text-[10px] text-zinc-600">not set</p>
+              ? <p className="text-[10px] text-slate-600">as of {wallets.cashfree_as_of}</p>
+              : <p className="text-[10px] text-slate-600">not set</p>
             }
             {editingWallet === 'cashfree' ? (
               <div className="mt-2 flex gap-1">
@@ -183,13 +183,13 @@ export default function CashPage() {
                 <button
                   disabled={saving}
                   onClick={() => handleSetBalance('cashfree')}
-                  className="rounded bg-blue-600 px-2 py-1 text-xs text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   Set
                 </button>
                 <button
                   onClick={() => setEditingWallet(null)}
-                  className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800"
+                  className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800"
                 >
                   ✕
                 </button>
@@ -197,7 +197,7 @@ export default function CashPage() {
             ) : (
               <button
                 onClick={() => openEdit('cashfree', wallets.cashfree)}
-                className="mt-1 self-start text-[10px] text-blue-500 hover:text-blue-400"
+                className="mt-1 self-start text-[10px] text-emerald-500 hover:text-emerald-400"
               >
                 Update balance
               </button>
@@ -205,28 +205,28 @@ export default function CashPage() {
           </div>
 
           {/* Total */}
-          <div className="rounded-2xl border border-blue-900/60 bg-blue-950/30 p-4 flex flex-col gap-1">
+          <div className="rounded-2xl border border-slate-700/60 bg-slate-900/60 p-4 flex flex-col gap-1">
             <p className="text-xs text-blue-400">Total Liquid</p>
-            <p className="text-2xl font-semibold tabular-nums text-blue-200">{fmtINR(total_liquid)}</p>
-            <p className="text-[10px] text-blue-700">bank + vFulfill + Cashfree</p>
+            <p className="text-2xl font-semibold tabular-nums text-slate-200">{fmtINR(total_liquid)}</p>
+            <p className="text-[10px] text-slate-600">bank + vFulfill + Cashfree</p>
           </div>
 
         </div>
       </div>
 
       {/* ── COD Float ── */}
-      <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5 flex items-center justify-between gap-4">
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5 flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">COD Float</p>
-          <p className="text-2xl font-semibold tabular-nums text-zinc-100 mt-1">{fmtINR(cod_float)}</p>
-          <p className="text-sm text-zinc-500 mt-0.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">COD Float</p>
+          <p className="text-2xl font-semibold tabular-nums text-slate-100 mt-1">{fmtINR(cod_float)}</p>
+          <p className="text-sm text-slate-500 mt-0.5">
             {cod_active_count} active COD {cod_active_count === 1 ? 'order' : 'orders'} in transit
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xs text-zinc-600">Cash held by courier</p>
-          <p className="text-xs text-zinc-600">arrives in vFulfill wallet</p>
-          <p className="text-xs text-zinc-600">after delivery + remittance</p>
+          <p className="text-xs text-slate-600">Cash held by courier</p>
+          <p className="text-xs text-slate-600">arrives in vFulfill wallet</p>
+          <p className="text-xs text-slate-600">after delivery + remittance</p>
         </div>
       </div>
 
@@ -234,9 +234,9 @@ export default function CashPage() {
       {partners.length > 0 && (
         <div>
           <SectionHeading>Partner Capital</SectionHeading>
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
             <table className="min-w-full text-sm">
-              <thead className="bg-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              <thead className="bg-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 <tr>
                   <th className="px-4 py-3 text-left">Partner</th>
                   <th className="px-4 py-3 text-left">Date</th>
@@ -245,24 +245,24 @@ export default function CashPage() {
                   <th className="px-4 py-3 text-right">Outstanding</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-slate-800">
                 {partners.map(p => (
-                  <tr key={p.id} className="hover:bg-zinc-800/60">
+                  <tr key={p.id} className="hover:bg-slate-800/60">
                     <td className="px-4 py-3">
-                      <p className="text-zinc-100 font-medium">{p.name}</p>
-                      {p.note && <p className="text-xs text-zinc-500 mt-0.5">{p.note}</p>}
+                      <p className="text-slate-100 font-medium">{p.name}</p>
+                      {p.note && <p className="text-xs text-slate-500 mt-0.5">{p.note}</p>}
                     </td>
-                    <td className="px-4 py-3 text-zinc-400 text-xs">{p.date}</td>
-                    <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">{fmtINR(p.principal)}</td>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{p.date}</td>
+                    <td className="px-4 py-3 text-right text-slate-300 tabular-nums">{fmtINR(p.principal)}</td>
                     <td className="px-4 py-3 text-right text-green-400 tabular-nums">{fmtINR(p.repaid)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-zinc-100 tabular-nums">{fmtINR(p.outstanding)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-slate-100 tabular-nums">{fmtINR(p.outstanding)}</td>
                   </tr>
                 ))}
-                <tr className="bg-zinc-800/40">
-                  <td colSpan={4} className="px-4 py-2 text-xs text-zinc-500 text-right font-semibold">
+                <tr className="bg-slate-800/40">
+                  <td colSpan={4} className="px-4 py-2 text-xs text-slate-500 text-right font-semibold">
                     Total outstanding
                   </td>
-                  <td className="px-4 py-2 text-right font-semibold text-zinc-100 tabular-nums">
+                  <td className="px-4 py-2 text-right font-semibold text-slate-100 tabular-nums">
                     {fmtINR(partnerTotal)}
                   </td>
                 </tr>
@@ -276,10 +276,10 @@ export default function CashPage() {
       {loans.length > 0 && (
         <div>
           <SectionHeading>Loans Outstanding</SectionHeading>
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="bg-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+                <thead className="bg-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   <tr>
                     <th className="px-4 py-3 text-left">Lender</th>
                     <th className="px-4 py-3 text-right">Principal</th>
@@ -291,38 +291,38 @@ export default function CashPage() {
                     <th className="px-4 py-3 text-left">Due Date</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-800">
+                <tbody className="divide-y divide-slate-800">
                   {loans.map(l => {
                     const overdue = l.repayment_due && l.repayment_due < data.today
                     return (
-                      <tr key={l.id} className="hover:bg-zinc-800/60">
+                      <tr key={l.id} className="hover:bg-slate-800/60">
                         <td className="px-4 py-3">
-                          <p className="text-zinc-100 font-medium">{l.name}</p>
-                          {l.note && <p className="text-xs text-zinc-500 mt-0.5">{l.note}</p>}
+                          <p className="text-slate-100 font-medium">{l.name}</p>
+                          {l.note && <p className="text-xs text-slate-500 mt-0.5">{l.note}</p>}
                         </td>
-                        <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">{fmtINR(l.principal)}</td>
+                        <td className="px-4 py-3 text-right text-slate-300 tabular-nums">{fmtINR(l.principal)}</td>
                         <td className="px-4 py-3 text-right text-green-400 tabular-nums">{fmtINR(l.repaid)}</td>
-                        <td className="px-4 py-3 text-right text-zinc-400">{l.interest_rate_pct}%</td>
-                        <td className="px-4 py-3 text-right text-zinc-400 tabular-nums">{l.days_elapsed}</td>
+                        <td className="px-4 py-3 text-right text-slate-400">{l.interest_rate_pct}%</td>
+                        <td className="px-4 py-3 text-right text-slate-400 tabular-nums">{l.days_elapsed}</td>
                         <td className="px-4 py-3 text-right text-orange-400 tabular-nums">{fmtINR(l.interest_accrued)}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-zinc-100 tabular-nums">{fmtINR(l.total_due)}</td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-100 tabular-nums">{fmtINR(l.total_due)}</td>
                         <td className="px-4 py-3 text-xs">
                           {l.repayment_due ? (
-                            <span className={overdue ? 'text-red-400 font-medium' : 'text-zinc-400'}>
+                            <span className={overdue ? 'text-red-400 font-medium' : 'text-slate-400'}>
                               {l.repayment_due}{overdue ? ' — overdue' : ''}
                             </span>
                           ) : (
-                            <span className="text-zinc-600">—</span>
+                            <span className="text-slate-600">—</span>
                           )}
                         </td>
                       </tr>
                     )
                   })}
-                  <tr className="bg-zinc-800/40">
-                    <td colSpan={6} className="px-4 py-2 text-xs text-zinc-500 text-right font-semibold">
+                  <tr className="bg-slate-800/40">
+                    <td colSpan={6} className="px-4 py-2 text-xs text-slate-500 text-right font-semibold">
                       Total due
                     </td>
-                    <td className="px-4 py-2 text-right font-semibold text-zinc-100 tabular-nums">
+                    <td className="px-4 py-2 text-right font-semibold text-slate-100 tabular-nums">
                       {fmtINR(loanTotalDue)}
                     </td>
                     <td />
@@ -336,9 +336,9 @@ export default function CashPage() {
 
       {/* Empty state */}
       {partners.length === 0 && loans.length === 0 && (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 text-center">
-          <p className="text-sm text-zinc-500">No capital or loan entries yet.</p>
-          <p className="text-xs text-zinc-600 mt-1">Add them in Data → Capital &amp; Loans.</p>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-8 text-center">
+          <p className="text-sm text-slate-500">No capital or loan entries yet.</p>
+          <p className="text-xs text-slate-600 mt-1">Add them in Data → Capital &amp; Loans.</p>
         </div>
       )}
 

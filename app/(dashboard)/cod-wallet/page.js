@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -12,12 +12,12 @@ function currentMonth() {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 const TYPE_STYLES = {
-  credit:     'bg-green-900 text-green-300',
-  add_funds:  'bg-blue-900 text-blue-300',
-  debit:      'bg-red-900 text-red-300',
+  credit:     'bg-emerald-950 text-emerald-400',
+  add_funds:  'bg-sky-950 text-sky-400 border border-sky-800/50',
+  debit:      'bg-red-950 text-red-400',
   withdrawal: 'bg-orange-900 text-orange-300',
 }
 
@@ -76,7 +76,7 @@ export default function CodWalletPage() {
         actions={
           <>
             <MonthPicker monthStr={month} onChange={setMonth} />
-            <button onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500">
+            <button onClick={() => setShowForm((s) => !s)} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500">
               + Add Entry
             </button>
           </>
@@ -91,15 +91,15 @@ export default function CodWalletPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleAdd} className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
-          <h3 className="text-sm font-semibold text-zinc-100 mb-3">Add Wallet Entry</h3>
+        <form onSubmit={handleAdd} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+          <h3 className="text-sm font-semibold text-slate-100 mb-3">Add Wallet Entry</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Date</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
               <input type="date" value={form.entry_date} onChange={(e) => setForm((p) => ({ ...p, entry_date: e.target.value }))} required className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Type</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Type</label>
               <select value={form.entry_type} onChange={(e) => setForm((p) => ({ ...p, entry_type: e.target.value }))} className={inputCls}>
                 <option value="credit">Credit (COD remittance)</option>
                 <option value="add_funds">Add Funds (wire / Razorpay)</option>
@@ -108,21 +108,21 @@ export default function CodWalletPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Amount ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Amount ₹</label>
               <input type="number" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0" min="0" step="0.01" required className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Reference</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Reference</label>
               <input type="text" value={form.reference} onChange={(e) => setForm((p) => ({ ...p, reference: e.target.value }))} placeholder="vFulfill ref #" className={inputCls} />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Notes</label>
               <input type="text" value={form.notes} onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Optional" className={inputCls} />
             </div>
           </div>
           <div className="flex gap-2 mt-3">
-            <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700">Cancel</button>
-            <button type="submit" disabled={saving} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50">
+            <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700">Cancel</button>
+            <button type="submit" disabled={saving} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {saving ? 'Saving…' : 'Add Entry'}
             </button>
           </div>
@@ -130,12 +130,12 @@ export default function CodWalletPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-slate-400">Loading…</p>
       ) : (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              <thead className="bg-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Type</th>
@@ -145,25 +145,25 @@ export default function CodWalletPage() {
                   <th className="px-4 py-3 text-left">Notes</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-slate-800">
                 {entries.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-zinc-500">No wallet entries this month.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No wallet entries this month.</td></tr>
                 ) : [...entries].reverse().map((e) => (
-                  <tr key={e.id} className="hover:bg-zinc-800/60">
-                    <td className="px-4 py-3 text-zinc-300 text-xs whitespace-nowrap">{new Date(e.entry_date).toLocaleDateString('en-IN')}</td>
+                  <tr key={e.id} className="hover:bg-slate-800/60">
+                    <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{new Date(e.entry_date).toLocaleDateString('en-IN')}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[e.entry_type] || 'bg-zinc-700 text-zinc-400'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[e.entry_type] || 'bg-slate-700 text-slate-400'}`}>
                         {TYPE_LABELS[e.entry_type] || e.entry_type}
                       </span>
                     </td>
                     <td className={`px-4 py-3 text-right font-semibold ${IS_INFLOW[e.entry_type] ? 'text-green-400' : 'text-red-400'}`}>
                       {IS_INFLOW[e.entry_type] ? '+' : '−'}{fmtINR(e.amount)}
                     </td>
-                    <td className="px-4 py-3 text-zinc-400 text-xs">{e.reference || '—'}</td>
-                    <td className={`px-4 py-3 text-right font-semibold ${e.running_balance >= 0 ? 'text-zinc-200' : 'text-red-400'}`}>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{e.reference || '—'}</td>
+                    <td className={`px-4 py-3 text-right font-semibold ${e.running_balance >= 0 ? 'text-slate-200' : 'text-red-400'}`}>
                       {fmtINR(e.running_balance)}
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 text-xs max-w-[160px] truncate">{e.notes || '—'}</td>
+                    <td className="px-4 py-3 text-slate-500 text-xs max-w-[160px] truncate">{e.notes || '—'}</td>
                   </tr>
                 ))}
               </tbody>

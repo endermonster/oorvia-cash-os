@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import { fmtINR } from '@/lib/pnl'
 
-const inp = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const inp = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 const btn = 'rounded-lg px-3 py-1.5 text-sm font-medium transition'
 
 const blank = { sku: '', name: '', current_cogs: '', default_selling_price: '', hsn_code: '', gst_percentage: '18' }
@@ -12,10 +12,10 @@ const blank = { sku: '', name: '', current_cogs: '', default_selling_price: '', 
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
         <div className="flex items-center justify-between mb-5">
-          <p className="text-base font-semibold text-zinc-100">{title}</p>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200">
+          <p className="text-base font-semibold text-slate-100">{title}</p>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4l10 10M14 4L4 14"/></svg>
           </button>
         </div>
@@ -54,35 +54,35 @@ function CogsHistoryPanel({ sku, onClose }) {
       <form onSubmit={save} className="space-y-3 mb-5">
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">New COGS (₹)</label>
+            <label className="block text-xs text-slate-400 mb-1">New COGS (₹)</label>
             <input className={inp} name="cogs" type="number" step="0.01" required value={form.cogs} onChange={(e) => setForm({ ...form, cogs: e.target.value })} />
           </div>
           <div>
-            <label className="block text-xs text-zinc-400 mb-1">Effective From</label>
+            <label className="block text-xs text-slate-400 mb-1">Effective From</label>
             <input className={inp} name="effective_from" type="date" required value={form.effective_from} onChange={(e) => setForm({ ...form, effective_from: e.target.value })} />
           </div>
         </div>
         <div>
-          <label className="block text-xs text-zinc-400 mb-1">Note (optional)</label>
+          <label className="block text-xs text-slate-400 mb-1">Note (optional)</label>
           <input className={inp} name="note" placeholder="e.g. Supplier price revision" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
         </div>
         {err && <p className="text-sm text-red-400">{err}</p>}
-        <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+        <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
           {saving ? 'Saving…' : 'Add Entry (closes previous)'}
         </button>
       </form>
 
       {history.length === 0 ? (
-        <p className="text-sm text-zinc-500 text-center py-4">No history yet.</p>
+        <p className="text-sm text-slate-500 text-center py-4">No history yet.</p>
       ) : (
         <div className="space-y-1 max-h-56 overflow-y-auto">
           {history.map((h) => (
-            <div key={h.id} className="flex items-center justify-between rounded-lg bg-zinc-800 px-3 py-2 text-sm">
+            <div key={h.id} className="flex items-center justify-between rounded-lg bg-slate-800 px-3 py-2 text-sm">
               <div>
-                <span className="text-zinc-100 font-medium">{fmtINR(h.cogs)}</span>
-                {h.note && <span className="text-zinc-500 ml-2 text-xs">{h.note}</span>}
+                <span className="text-slate-100 font-medium">{fmtINR(h.cogs)}</span>
+                {h.note && <span className="text-slate-500 ml-2 text-xs">{h.note}</span>}
               </div>
-              <div className="text-zinc-500 text-xs text-right">
+              <div className="text-slate-500 text-xs text-right">
                 {h.effective_from} → {h.effective_to ?? '∞'}
               </div>
             </div>
@@ -148,21 +148,21 @@ export default function ProductsPage() {
         title="Products"
         subtitle="Product catalog and COGS history"
         actions={
-          <button onClick={openAdd} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white px-4 py-2`}>
+          <button onClick={openAdd} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2`}>
             + Add Product
           </button>
         }
       />
 
       {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
+        <p className="text-sm text-slate-500">Loading…</p>
       ) : products.length === 0 ? (
-        <p className="text-sm text-zinc-500">No products yet. Add one above.</p>
+        <p className="text-sm text-slate-500">No products yet. Add one above.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-700">
+        <div className="overflow-x-auto rounded-xl border border-slate-700">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+              <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
                 <th className="px-4 py-3 text-left">SKU</th>
                 <th className="px-4 py-3 text-left">Name</th>
                 <th className="px-4 py-3 text-right">Current COGS</th>
@@ -172,19 +172,19 @@ export default function ProductsPage() {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-800">
+            <tbody className="divide-y divide-slate-800">
               {products.map((p) => (
-                <tr key={p.sku} className="hover:bg-zinc-800/40 transition-colors">
-                  <td className="px-4 py-3 font-mono text-zinc-300 text-xs">{p.sku}</td>
-                  <td className="px-4 py-3 text-zinc-100">{p.name}</td>
-                  <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(p.current_cogs)}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">{p.default_selling_price ? fmtINR(p.default_selling_price) : '—'}</td>
-                  <td className="px-4 py-3 text-zinc-400 font-mono text-xs">{p.hsn_code || '—'}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">{p.gst_percentage}%</td>
+                <tr key={p.sku} className="hover:bg-slate-800/40 transition-colors">
+                  <td className="px-4 py-3 font-mono text-slate-300 text-xs">{p.sku}</td>
+                  <td className="px-4 py-3 text-slate-100">{p.name}</td>
+                  <td className="px-4 py-3 text-right text-slate-100 font-medium">{fmtINR(p.current_cogs)}</td>
+                  <td className="px-4 py-3 text-right text-slate-400">{p.default_selling_price ? fmtINR(p.default_selling_price) : '—'}</td>
+                  <td className="px-4 py-3 text-slate-400 font-mono text-xs">{p.hsn_code || '—'}</td>
+                  <td className="px-4 py-3 text-right text-slate-400">{p.gst_percentage}%</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setHistoryFor(p.sku)} className={`${btn} bg-zinc-700 hover:bg-zinc-600 text-zinc-200`}>History</button>
-                      <button onClick={() => openEdit(p)}          className={`${btn} bg-zinc-700 hover:bg-zinc-600 text-zinc-200`}>Edit</button>
+                      <button onClick={() => setHistoryFor(p.sku)} className={`${btn} bg-slate-700 hover:bg-slate-600 text-slate-200`}>History</button>
+                      <button onClick={() => openEdit(p)}          className={`${btn} bg-slate-700 hover:bg-slate-600 text-slate-200`}>Edit</button>
                       <button onClick={() => handleDelete(p.sku)}  className={`${btn} bg-red-900/60 hover:bg-red-800 text-red-300`}>Delete</button>
                     </div>
                   </td>
@@ -200,36 +200,36 @@ export default function ProductsPage() {
           <form onSubmit={handleSave} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">SKU *</label>
+                <label className="block text-xs text-slate-400 mb-1">SKU *</label>
                 <input className={inp} name="sku" required value={form.sku} onChange={f('sku')} disabled={!!editing} placeholder="e.g. YB31" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">GST %</label>
+                <label className="block text-xs text-slate-400 mb-1">GST %</label>
                 <input className={inp} name="gst_percentage" type="number" step="0.01" value={form.gst_percentage} onChange={f('gst_percentage')} />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Name *</label>
+              <label className="block text-xs text-slate-400 mb-1">Name *</label>
               <input className={inp} name="name" required value={form.name} onChange={f('name')} placeholder="Product name" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">
+                <label className="block text-xs text-slate-400 mb-1">
                   {editing ? 'COGS — use History to change' : 'Opening COGS (₹)'}
                 </label>
                 <input className={inp} name="current_cogs" type="number" step="0.01" value={form.current_cogs} onChange={f('current_cogs')} disabled={!!editing} placeholder="0.00" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Default Selling Price (₹)</label>
+                <label className="block text-xs text-slate-400 mb-1">Default Selling Price (₹)</label>
                 <input className={inp} name="default_selling_price" type="number" step="0.01" value={form.default_selling_price} onChange={f('default_selling_price')} placeholder="0.00" />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">HSN Code</label>
+              <label className="block text-xs text-slate-400 mb-1">HSN Code</label>
               <input className={inp} name="hsn_code" value={form.hsn_code} onChange={f('hsn_code')} placeholder="e.g. 85176290" />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+            <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
               {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Product'}
             </button>
           </form>

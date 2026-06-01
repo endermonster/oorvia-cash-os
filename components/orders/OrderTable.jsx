@@ -20,7 +20,7 @@ function RowMenu({ onEdit, onDelete, deleting }) {
     <div ref={ref} className="relative flex justify-end">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="rounded-md p-1.5 text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 transition-colors"
+        className="rounded-md p-1.5 text-slate-600 hover:bg-slate-700 hover:text-slate-300 transition-colors cursor-pointer"
         aria-label="Row actions"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -30,10 +30,10 @@ function RowMenu({ onEdit, onDelete, deleting }) {
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-8 z-20 w-32 rounded-xl border border-zinc-700 bg-zinc-800 py-1 shadow-xl">
+        <div className="absolute right-0 top-8 z-20 w-32 rounded-xl border border-slate-700 bg-slate-800 py-1 shadow-xl shadow-black/40">
           <button
             onClick={() => { setOpen(false); onEdit() }}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-700"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-200 hover:bg-slate-700 cursor-pointer"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11.5 2.5a2.121 2.121 0 0 1 3 3L5 15H1v-4L11.5 2.5z" />
@@ -43,7 +43,7 @@ function RowMenu({ onEdit, onDelete, deleting }) {
           <button
             onClick={() => { setOpen(false); onDelete() }}
             disabled={deleting}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-zinc-700 disabled:opacity-40"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-red-400 hover:bg-slate-700 disabled:opacity-40 cursor-pointer"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="2 4 14 4" />
@@ -73,17 +73,17 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
 
   if (orders.length === 0) {
     return (
-      <div className="rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-12 text-center text-zinc-500 text-sm">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-12 text-center text-slate-500 text-sm">
         No orders found. Import a vFulfill transaction export to get started.
       </div>
     )
   }
 
   return (
-    <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+    <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+          <thead className="bg-slate-800/50 text-xs font-semibold text-slate-500 uppercase tracking-wide">
             <tr>
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Order ID</th>
@@ -96,7 +96,7 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
               <th className="px-4 py-3 w-10"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800/60">
             {slice.map((o) => {
               const net   = computeOrderNetProfit(o)
               const isRTO = o.status === 'rto'
@@ -104,18 +104,18 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
               const modeLabel = isCOD ? 'COD' : o.payment_type?.startsWith('prepaid') ? 'Prepaid' : (o.payment_type ?? '—').toUpperCase()
               const key   = o.shopify_order_name ?? o.id
               return (
-                <tr key={key} className="hover:bg-zinc-800/60">
-                  <td className="px-4 py-3 whitespace-nowrap text-zinc-300 text-xs">
+                <tr key={key} className="hover:bg-slate-800/40 transition-colors">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-400 text-xs tabular-nums">
                     {new Date(o.order_date).toLocaleDateString('en-IN')}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">
-                    {o.shopify_order_name || o.shopify_order_id || <span className="text-zinc-600">—</span>}
+                  <td className="px-4 py-3 text-slate-500 text-xs font-mono">
+                    {o.shopify_order_name || o.shopify_order_id || <span className="text-slate-700">—</span>}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400 text-xs">
-                    {o.ship_state || o.customer_state || <span className="text-zinc-600">—</span>}
+                  <td className="px-4 py-3 text-slate-500 text-xs">
+                    {o.ship_state || o.customer_state || <span className="text-slate-700">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isCOD ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isCOD ? 'bg-orange-950 text-orange-400 border border-orange-800/50' : 'bg-indigo-950 text-indigo-400 border border-indigo-800/50'}`}>
                       {modeLabel}
                     </span>
                   </td>
@@ -125,18 +125,18 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
                   <td className="px-4 py-3 text-xs">
                     {o.settlement_status ? (
                       <span className={`rounded-full px-2 py-0.5 font-medium ${
-                        o.settlement_status === 'settled'    ? 'bg-green-900 text-green-300' :
-                        o.settlement_status === 'in-transit' ? 'bg-yellow-900 text-yellow-300' :
-                                                               'bg-zinc-700 text-zinc-400'
+                        o.settlement_status === 'settled'    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' :
+                        o.settlement_status === 'in-transit' ? 'bg-yellow-950 text-yellow-400 border border-yellow-800/50' :
+                                                               'bg-slate-800 text-slate-500'
                       }`}>
                         {o.settlement_status}
                       </span>
-                    ) : <span className="text-zinc-600">—</span>}
+                    ) : <span className="text-slate-700">—</span>}
                   </td>
-                  <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${isRTO ? 'text-red-400 line-through' : 'text-zinc-200'}`}>
+                  <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap font-mono tabular-nums ${isRTO ? 'text-red-400 line-through' : 'text-slate-200'}`}>
                     {fmtINR(o.order_value)}
                   </td>
-                  <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap font-mono tabular-nums ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {net >= 0 ? '+' : ''}{fmtINR(net)}
                   </td>
                   <td className="px-4 py-3">
@@ -153,15 +153,15 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
         </table>
       </div>
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-zinc-700 px-4 py-3">
-          <span className="text-xs text-zinc-500">Page {page} of {totalPages} · {orders.length} orders</span>
+        <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
+          <span className="text-xs text-slate-600">Page {page} of {totalPages} · {orders.length} orders</span>
           <div className="flex gap-2">
             <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="rounded-lg border border-zinc-600 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
+              className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40 cursor-pointer">
               Prev
             </button>
             <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="rounded-lg border border-zinc-600 px-3 py-1 text-xs text-zinc-300 hover:bg-zinc-700 disabled:opacity-40">
+              className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40 cursor-pointer">
               Next
             </button>
           </div>

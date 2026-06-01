@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 import { computeOrderFees, computeOrderNetProfit, fmtINR } from '@/lib/pnl'
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 const defaultForm = {
   shopify_order_id: '',
@@ -109,10 +109,10 @@ export default function OrderForm({ onSaved, onClose, initial }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 overflow-y-auto">
-      <div className="w-full max-w-2xl rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl my-auto">
+      <div className="w-full max-w-2xl rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl my-auto">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-zinc-100">{isEdit ? 'Edit Order' : 'Add Order'}</h2>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors">
+          <h2 className="text-base font-semibold text-slate-100">{isEdit ? 'Edit Order' : 'Add Order'}</h2>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 transition-colors">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="2" y1="2" x2="14" y2="14" /><line x1="14" y1="2" x2="2" y2="14" />
             </svg>
@@ -123,18 +123,18 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           {/* Row 1: date, mode, status */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Order Date</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Order Date</label>
               <input type="date" name="order_date" value={form.order_date} onChange={handleChange} required className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Payment Mode</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Payment Mode</label>
               <select name="payment_mode" value={form.payment_mode} onChange={handleChange} className={inputCls}>
                 <option value="prepaid">Prepaid</option>
                 <option value="cod">COD</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Status</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Status</label>
               <select name="status" value={form.status} onChange={handleChange} className={inputCls}>
                 <option value="pending">Pending</option>
                 <option value="shipped">Shipped</option>
@@ -148,24 +148,24 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           {/* Row 2: shopify id + order value */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Shopify Order ID</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Shopify Order ID</label>
               <input type="text" name="shopify_order_id" value={form.shopify_order_id} onChange={handleChange} placeholder="e.g. #OV31139290" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Order Value ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Order Value ₹</label>
               <input type="number" name="order_value" value={form.order_value} onChange={handleChange} placeholder="0" min="0" step="0.01" required className={inputCls} />
             </div>
           </div>
 
           {/* Platform fees */}
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">Platform Fees (auto-computed — override if needed)</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">Platform Fees (auto-computed — override if needed)</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Checkout Fee ₹ (2%+GST)</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Checkout Fee ₹ (2%+GST)</label>
               <input type="number" name="checkout_fee" value={form.checkout_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1">
                 Cashfree Fee ₹ {form.payment_mode === 'cod' ? '(N/A for COD)' : '(2.5%)'}
               </label>
               <input
@@ -183,18 +183,18 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           </div>
 
           {/* vFulfill fees */}
-          <p className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-2">vFulfill Charges</p>
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wider mb-2">vFulfill Charges</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Order Mgmt Fee ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Order Mgmt Fee ₹</label>
               <input type="number" name="order_mgmt_fee" value={form.order_mgmt_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Platform Fee ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Platform Fee ₹</label>
               <input type="number" name="platform_fee" value={form.platform_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">
+              <label className="block text-xs font-medium text-slate-400 mb-1">
                 COD Fee ₹ {form.payment_mode === 'prepaid' ? '(N/A for prepaid)' : ''}
               </label>
               <input
@@ -212,15 +212,15 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 mb-3">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Forward Shipping ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Forward Shipping ₹</label>
               <input type="number" name="forward_shipping_fee" value={form.forward_shipping_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Fulfilment Fee ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Fulfilment Fee ₹</label>
               <input type="number" name="fulfillment_fee" value={form.fulfillment_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">RTO Fee ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">RTO Fee ₹</label>
               <input type="number" name="rto_fee" value={form.rto_fee} onChange={handleChange} placeholder="0" min="0" step="0.01" className={inputCls} />
             </div>
           </div>
@@ -228,18 +228,18 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           {/* Meta + notes */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 mb-4">
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Meta Ad Spend Attributed ₹</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Meta Ad Spend Attributed ₹</label>
               <input type="number" name="meta_ad_spend_attributed" value={form.meta_ad_spend_attributed} onChange={handleChange} placeholder="Optional" min="0" step="0.01" className={inputCls} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-zinc-400 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-slate-400 mb-1">Notes</label>
               <input type="text" name="notes" value={form.notes} onChange={handleChange} placeholder="Optional" className={inputCls} />
             </div>
           </div>
 
           {/* Live P&L preview */}
           <div className={`mb-4 rounded-xl border px-4 py-3 ${isPositive ? 'border-green-800 bg-green-900/20' : 'border-red-800 bg-red-900/20'}`}>
-            <span className="text-xs text-zinc-500">Net profit on this order: </span>
+            <span className="text-xs text-slate-500">Net profit on this order: </span>
             <span className={`text-sm font-bold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
               {isPositive ? '+' : ''}{fmtINR(netProfit)}
             </span>
@@ -248,10 +248,10 @@ export default function OrderForm({ onSaved, onClose, initial }) {
           {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700">
               Cancel
             </button>
-            <button type="submit" disabled={loading} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
               {loading ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Order'}
             </button>
           </div>

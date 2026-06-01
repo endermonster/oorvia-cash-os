@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -100,12 +100,12 @@ export default function RTOPage() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-slate-400">Loading…</p>
       ) : (
-        <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
+        <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-zinc-800 text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+              <thead className="bg-slate-800 text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 <tr>
                   <th className="px-4 py-3 text-left">Order Date</th>
                   <th className="px-4 py-3 text-left">Order ID</th>
@@ -116,9 +116,9 @@ export default function RTOPage() {
                   <th className="px-4 py-3 text-left">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-slate-800">
                 {rtoOrders.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-zinc-500">No RTO orders this month.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-500">No RTO orders this month.</td></tr>
                 ) : rtoOrders.map((o) => {
                   const isCOD     = o.payment_type === 'cash_on_delivery'
                   const modeLabel = isCOD ? 'COD' : o.payment_type?.startsWith('prepaid') ? 'Prepaid' : (o.payment_type ?? '—').toUpperCase()
@@ -126,11 +126,11 @@ export default function RTOPage() {
                   const rtoCost   = costsMap[key] ?? 0
                   const totalLoss = Number(o.order_value || 0) + rtoCost
                   return (
-                    <tr key={key} className="hover:bg-zinc-800/60">
-                      <td className="px-4 py-3 whitespace-nowrap text-zinc-300 text-xs">
+                    <tr key={key} className="hover:bg-slate-800/60">
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-300 text-xs">
                         {new Date(o.order_date).toLocaleDateString('en-IN')}
                       </td>
-                      <td className="px-4 py-3 text-zinc-400 text-xs">{key || '—'}</td>
+                      <td className="px-4 py-3 text-slate-400 text-xs">{key || '—'}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${isCOD ? 'bg-orange-900 text-orange-300' : 'bg-indigo-900 text-indigo-300'}`}>
                           {modeLabel}
@@ -143,7 +143,7 @@ export default function RTOPage() {
                         <button
                           onClick={() => markDelivered(o)}
                           disabled={markingId === key}
-                          className="text-xs text-green-400 hover:text-green-200 px-2 py-1 rounded border border-green-800 hover:bg-zinc-700 disabled:opacity-40"
+                          className="text-xs text-green-400 hover:text-green-200 px-2 py-1 rounded border border-green-800 hover:bg-slate-700 disabled:opacity-40"
                         >
                           {markingId === key ? 'Saving…' : 'Mark Delivered'}
                         </button>

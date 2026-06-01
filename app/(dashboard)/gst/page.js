@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -12,7 +12,7 @@ function currentMonth() {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 const GST_RATES = [0, 5, 12, 18, 28]
 
@@ -36,15 +36,15 @@ const defaultEntryForm = {
 
 function SectionCard({ title, badge, badgeColor = 'zinc', children }) {
   const badgeColors = {
-    green: 'bg-green-900 text-green-300',
-    red: 'bg-red-900 text-red-300',
-    blue: 'bg-blue-900 text-blue-300',
-    zinc: 'bg-zinc-700 text-zinc-300',
+    green: 'bg-emerald-950 text-emerald-400',
+    red: 'bg-red-950 text-red-400',
+    blue: 'bg-sky-950 text-sky-400 border border-sky-800/50',
+    zinc: 'bg-slate-700 text-slate-300',
   }
   return (
-    <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
-        <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+    <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+        <h3 className="text-sm font-semibold text-slate-100">{title}</h3>
         {badge !== undefined && (
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${badgeColors[badgeColor]}`}>
             {fmtINR(badge)}
@@ -158,7 +158,7 @@ export default function GSTPage() {
             <MonthPicker monthStr={month} onChange={setMonth} />
             <button
               onClick={() => setShowEntryForm((s) => !s)}
-              className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700 transition-colors"
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
             >
               + Manual Entry
             </button>
@@ -169,7 +169,7 @@ export default function GSTPage() {
       {error && <p className="text-sm text-red-400">{error}</p>}
 
       {loading ? (
-        <p className="text-sm text-zinc-400">Loading…</p>
+        <p className="text-sm text-slate-400">Loading…</p>
       ) : (
         <>
           {/* Summary cards */}
@@ -195,52 +195,52 @@ export default function GSTPage() {
           </div>
 
           {/* ITC Carry-Forward panel */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
-              <h3 className="text-sm font-semibold text-zinc-100">ITC Carry-Forward</h3>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+              <h3 className="text-sm font-semibold text-slate-100">ITC Carry-Forward</h3>
               <button
                 onClick={() => { setShowSeedForm(s => !s); setSeedAmount(String(openingCF || '')) }}
-                className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded-lg px-3 py-1.5 hover:bg-zinc-800 transition-colors"
+                className="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 hover:bg-slate-800 transition-colors"
               >
                 {cfIsSeeded ? 'Edit Opening Balance' : 'Set Opening Balance'}
               </button>
             </div>
-            <div className="grid grid-cols-3 divide-x divide-zinc-800">
+            <div className="grid grid-cols-3 divide-x divide-slate-800">
               <div className="px-5 py-4">
-                <p className="text-xs text-zinc-500 mb-1">Opening Balance</p>
-                <p className={`text-xl font-bold ${openingCF > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                <p className="text-xs text-slate-500 mb-1">Opening Balance</p>
+                <p className={`text-xl font-bold ${openingCF > 0 ? 'text-amber-400' : 'text-slate-600'}`}>
                   {fmtINR(openingCF)}
                 </p>
-                <p className="text-xs text-zinc-600 mt-1">
+                <p className="text-xs text-slate-600 mt-1">
                   {cfIsSeeded ? 'carried from prior month' : 'none set — add a seed below'}
                 </p>
               </div>
               <div className="px-5 py-4">
-                <p className="text-xs text-zinc-500 mb-1">This Month (OTC − ITC)</p>
-                <p className={`text-xl font-bold ${netLiability >= 0 ? 'text-zinc-200' : 'text-green-400'}`}>
+                <p className="text-xs text-slate-500 mb-1">This Month (OTC − ITC)</p>
+                <p className={`text-xl font-bold ${netLiability >= 0 ? 'text-slate-200' : 'text-green-400'}`}>
                   {netLiability >= 0 ? '' : '+'}{fmtINR(Math.abs(netLiability))}
-                  <span className="text-xs font-normal text-zinc-500 ml-1">
+                  <span className="text-xs font-normal text-slate-500 ml-1">
                     {netLiability >= 0 ? 'payable' : 'credit'}
                   </span>
                 </p>
                 {openingCF > 0 && (
-                  <p className="text-xs text-zinc-600 mt-1">
+                  <p className="text-xs text-slate-600 mt-1">
                     − {fmtINR(openingCF)} carry-forward = {fmtINR(Math.abs(taxPayable || closingCF))} {isPayable ? 'due' : 'new credit'}
                   </p>
                 )}
               </div>
               <div className="px-5 py-4">
-                <p className="text-xs text-zinc-500 mb-1">Closing Balance →</p>
-                <p className={`text-xl font-bold ${closingCF > 0 ? 'text-green-400' : 'text-zinc-600'}`}>
+                <p className="text-xs text-slate-500 mb-1">Closing Balance →</p>
+                <p className={`text-xl font-bold ${closingCF > 0 ? 'text-green-400' : 'text-slate-600'}`}>
                   {fmtINR(closingCF)}
                 </p>
-                <p className="text-xs text-zinc-600 mt-1">auto-propagated to next month</p>
+                <p className="text-xs text-slate-600 mt-1">auto-propagated to next month</p>
               </div>
             </div>
             {showSeedForm && (
-              <form onSubmit={handleSetSeed} className="border-t border-zinc-800 px-5 py-4 flex items-end gap-3">
+              <form onSubmit={handleSetSeed} className="border-t border-slate-800 px-5 py-4 flex items-end gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1">
+                  <label className="block text-xs font-medium text-slate-400 mb-1">
                     Opening ITC balance for {month}
                   </label>
                   <input
@@ -265,7 +265,7 @@ export default function GSTPage() {
                 <button
                   type="button"
                   onClick={() => setShowSeedForm(false)}
-                  className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700"
+                  className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700"
                 >
                   Cancel
                 </button>
@@ -274,10 +274,10 @@ export default function GSTPage() {
           </div>
 
           {/* GST Summary bar */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-zinc-100">GST Position</h3>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${isPayable ? 'bg-red-900 text-red-300' : 'bg-green-900 text-green-300'}`}>
+              <h3 className="text-sm font-semibold text-slate-100">GST Position</h3>
+              <span className={`text-xs font-bold px-3 py-1 rounded-full ${isPayable ? 'bg-red-950 text-red-400' : 'bg-emerald-950 text-emerald-400'}`}>
                 {isPayable
                   ? `₹${taxPayable.toLocaleString('en-IN')} PAYABLE`
                   : `₹${closingCF.toLocaleString('en-IN')} CREDIT`}
@@ -286,20 +286,20 @@ export default function GSTPage() {
             <div className="flex items-center gap-3 text-xs">
               <div className="flex-1">
                 <div className="flex justify-between mb-1">
-                  <span className="text-zinc-400">OTC (collected)</span>
+                  <span className="text-slate-400">OTC (collected)</span>
                   <span className="text-blue-400 font-semibold">{fmtINR(otcTotal)}</span>
                 </div>
-                <div className="h-3 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-blue-600" style={{ width: '100%' }} />
+                <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-emerald-600" style={{ width: '100%' }} />
                 </div>
               </div>
-              <span className="text-zinc-600 shrink-0">−</span>
+              <span className="text-slate-600 shrink-0">−</span>
               <div className="flex-1">
                 <div className="flex justify-between mb-1">
-                  <span className="text-zinc-400">ITC (claimable)</span>
+                  <span className="text-slate-400">ITC (claimable)</span>
                   <span className="text-green-400 font-semibold">{fmtINR(itcTotal)}</span>
                 </div>
-                <div className="h-3 rounded-full bg-zinc-800 overflow-hidden">
+                <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-green-600"
                     style={{ width: `${Math.min(100, otcTotal > 0 ? (itcTotal / otcTotal) * 100 : 100)}%` }}
@@ -308,13 +308,13 @@ export default function GSTPage() {
               </div>
               {openingCF > 0 && (
                 <>
-                  <span className="text-zinc-600 shrink-0">−</span>
+                  <span className="text-slate-600 shrink-0">−</span>
                   <div className="flex-1">
                     <div className="flex justify-between mb-1">
-                      <span className="text-zinc-400">Carry-Forward</span>
+                      <span className="text-slate-400">Carry-Forward</span>
                       <span className="text-amber-400 font-semibold">{fmtINR(openingCF)}</span>
                     </div>
-                    <div className="h-3 rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
                       <div
                         className="h-full rounded-full bg-amber-600"
                         style={{ width: `${Math.min(100, otcTotal > 0 ? (openingCF / otcTotal) * 100 : 100)}%` }}
@@ -323,9 +323,9 @@ export default function GSTPage() {
                   </div>
                 </>
               )}
-              <span className="text-zinc-600 shrink-0">=</span>
+              <span className="text-slate-600 shrink-0">=</span>
               <div className="shrink-0 text-right">
-                <p className="text-zinc-400 mb-1">Net</p>
+                <p className="text-slate-400 mb-1">Net</p>
                 <p className={`font-bold text-base ${isPayable ? 'text-red-400' : 'text-green-400'}`}>
                   {isPayable ? '+' : '−'}{fmtINR(isPayable ? taxPayable : closingCF)}
                 </p>
@@ -336,14 +336,14 @@ export default function GSTPage() {
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
             {/* ITC Breakdown */}
             <SectionCard title="ITC Breakdown — Input Tax Credit" badge={itcTotal} badgeColor="green">
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-slate-800">
                 {itcBreakdown.map(({ label, amount, note }) => (
                   <div key={label} className="flex items-start justify-between px-5 py-3">
                     <div className="min-w-0 flex-1 pr-4">
-                      <p className="text-sm text-zinc-200">{label}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">{note}</p>
+                      <p className="text-sm text-slate-200">{label}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{note}</p>
                     </div>
-                    <span className={`text-sm font-semibold shrink-0 ${amount > 0 ? 'text-green-400' : 'text-zinc-600'}`}>
+                    <span className={`text-sm font-semibold shrink-0 ${amount > 0 ? 'text-green-400' : 'text-slate-600'}`}>
                       {fmtINR(amount)}
                     </span>
                   </div>
@@ -354,26 +354,26 @@ export default function GSTPage() {
             {/* OTC Breakdown */}
             <SectionCard title="OTC Breakdown — Output Tax Collected" badge={otcTotal} badgeColor="blue">
               {/* IGST / CGST / SGST summary */}
-              <div className="grid grid-cols-3 divide-x divide-zinc-800 border-b border-zinc-800 text-xs">
+              <div className="grid grid-cols-3 divide-x divide-slate-800 border-b border-slate-800 text-xs">
                 <div className="px-4 py-2.5 text-center">
-                  <p className="text-zinc-500 mb-0.5">IGST (inter-state)</p>
+                  <p className="text-slate-500 mb-0.5">IGST (inter-state)</p>
                   <p className="text-blue-400 font-semibold">{fmtINR(data.otc.igst)}</p>
                 </div>
                 <div className="px-4 py-2.5 text-center">
-                  <p className="text-zinc-500 mb-0.5">CGST (MH, 9%)</p>
+                  <p className="text-slate-500 mb-0.5">CGST (MH, 9%)</p>
                   <p className="text-blue-400 font-semibold">{fmtINR(data.otc.cgst)}</p>
                 </div>
                 <div className="px-4 py-2.5 text-center">
-                  <p className="text-zinc-500 mb-0.5">SGST (MH, 9%)</p>
+                  <p className="text-slate-500 mb-0.5">SGST (MH, 9%)</p>
                   <p className="text-blue-400 font-semibold">{fmtINR(data.otc.sgst)}</p>
                 </div>
               </div>
               {data?.otc?.orders?.length === 0 ? (
-                <p className="px-5 py-8 text-sm text-zinc-500 text-center">No delivered orders this month.</p>
+                <p className="px-5 py-8 text-sm text-slate-500 text-center">No delivered orders this month.</p>
               ) : (
                 <div className="overflow-y-auto max-h-64">
                   <table className="min-w-full text-xs">
-                    <thead className="bg-zinc-800 text-zinc-500 uppercase tracking-wide sticky top-0">
+                    <thead className="bg-slate-800 text-slate-500 uppercase tracking-wide sticky top-0">
                       <tr>
                         <th className="px-4 py-2 text-left">Order</th>
                         <th className="px-4 py-2 text-left">State</th>
@@ -382,15 +382,15 @@ export default function GSTPage() {
                         <th className="px-4 py-2 text-right">GST</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-800">
+                    <tbody className="divide-y divide-slate-800">
                       {data.otc.orders.map((o) => {
                         const isIntra = o.cgst > 0
                         return (
-                          <tr key={o.order_id} className="hover:bg-zinc-800/40">
-                            <td className="px-4 py-2 text-zinc-400">{o.shopify_order_name || String(o.order_id ?? '').slice(-6) || '—'}</td>
-                            <td className="px-4 py-2 text-zinc-300 max-w-[80px] truncate">{o.ship_state || '—'}</td>
-                            <td className="px-4 py-2 text-right text-zinc-300">{fmtINR(o.order_value)}</td>
-                            <td className="px-4 py-2 text-right text-zinc-500">
+                          <tr key={o.order_id} className="hover:bg-slate-800/40">
+                            <td className="px-4 py-2 text-slate-400">{o.shopify_order_name || String(o.order_id ?? '').slice(-6) || '—'}</td>
+                            <td className="px-4 py-2 text-slate-300 max-w-[80px] truncate">{o.ship_state || '—'}</td>
+                            <td className="px-4 py-2 text-right text-slate-300">{fmtINR(o.order_value)}</td>
+                            <td className="px-4 py-2 text-right text-slate-500">
                               {isIntra ? 'CGST+SGST 9%+9%' : 'IGST 18%'}
                             </td>
                             <td className="px-4 py-2 text-right text-blue-400 font-semibold">{fmtINR(o.gst_amount)}</td>
@@ -398,9 +398,9 @@ export default function GSTPage() {
                         )
                       })}
                     </tbody>
-                    <tfoot className="bg-zinc-800/60 border-t border-zinc-700">
+                    <tfoot className="bg-slate-800/60 border-t border-slate-700">
                       <tr>
-                        <td colSpan={4} className="px-4 py-2 text-xs text-zinc-400 font-semibold">Total OTC</td>
+                        <td colSpan={4} className="px-4 py-2 text-xs text-slate-400 font-semibold">Total OTC</td>
                         <td className="px-4 py-2 text-right text-blue-400 font-bold">{fmtINR(data.otc.from_orders)}</td>
                       </tr>
                     </tfoot>
@@ -412,25 +412,25 @@ export default function GSTPage() {
 
           {/* Manual Entry Form */}
           {showEntryForm && (
-            <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
-              <h3 className="text-sm font-semibold text-zinc-100 mb-4">Add Manual GST Entry</h3>
+            <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+              <h3 className="text-sm font-semibold text-slate-100 mb-4">Add Manual GST Entry</h3>
               <form onSubmit={handleAddEntry}>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Type</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Type</label>
                     <select value={entryForm.type} onChange={(e) => setEntryForm((p) => ({ ...p, type: e.target.value }))} className={inputCls}>
                       <option value="itc">ITC (Input)</option>
                       <option value="otc">OTC (Output)</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Source</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Source</label>
                     <select value={entryForm.source} onChange={(e) => setEntryForm((p) => ({ ...p, source: e.target.value }))} className={inputCls}>
                       {MANUAL_SOURCES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Taxable Amount ₹</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Taxable Amount ₹</label>
                     <input
                       type="number"
                       value={entryForm.taxable_amount}
@@ -443,13 +443,13 @@ export default function GSTPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">GST Rate %</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">GST Rate %</label>
                     <select value={entryForm.gst_rate} onChange={(e) => setEntryForm((p) => ({ ...p, gst_rate: e.target.value }))} className={inputCls}>
                       {GST_RATES.map((r) => <option key={r} value={r}>{r}%</option>)}
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Description</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Description</label>
                     <input
                       type="text"
                       value={entryForm.description}
@@ -459,7 +459,7 @@ export default function GSTPage() {
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Notes</label>
+                    <label className="block text-xs font-medium text-slate-400 mb-1">Notes</label>
                     <input
                       type="text"
                       value={entryForm.notes}
@@ -471,7 +471,7 @@ export default function GSTPage() {
                 </div>
                 {/* Preview */}
                 {entryForm.taxable_amount && (
-                  <p className="text-xs text-zinc-400 mb-3">
+                  <p className="text-xs text-slate-400 mb-3">
                     GST amount:{' '}
                     <span className={entryForm.type === 'itc' ? 'text-green-400 font-semibold' : 'text-blue-400 font-semibold'}>
                       {fmtINR(parseFloat(entryForm.taxable_amount || 0) * parseFloat(entryForm.gst_rate) / 100)}
@@ -479,10 +479,10 @@ export default function GSTPage() {
                   </p>
                 )}
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowEntryForm(false)} className="rounded-lg border border-zinc-600 px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-700">
+                  <button type="button" onClick={() => setShowEntryForm(false)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700">
                     Cancel
                   </button>
-                  <button type="submit" disabled={savingEntry} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50">
+                  <button type="submit" disabled={savingEntry} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50">
                     {savingEntry ? 'Saving…' : 'Add Entry'}
                   </button>
                 </div>
@@ -493,20 +493,20 @@ export default function GSTPage() {
           {/* Manual entries list */}
           {data?.manual_entries?.length > 0 && (
             <SectionCard title="Manual Entries">
-              <div className="divide-y divide-zinc-800">
+              <div className="divide-y divide-slate-800">
                 {data.manual_entries.map((e) => (
                   <div key={e.id} className="flex items-center justify-between px-5 py-3 gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${e.type === 'itc' ? 'bg-green-900 text-green-300' : 'bg-blue-900 text-blue-300'}`}>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${e.type === 'itc' ? 'bg-emerald-950 text-emerald-400' : 'bg-sky-950 text-sky-400 border border-sky-800/50'}`}>
                           {e.type}
                         </span>
-                        <span className="text-sm text-zinc-200">{e.source}</span>
+                        <span className="text-sm text-slate-200">{e.source}</span>
                       </div>
-                      {e.description && <p className="text-xs text-zinc-500 mt-0.5">{e.description}</p>}
+                      {e.description && <p className="text-xs text-slate-500 mt-0.5">{e.description}</p>}
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-zinc-500">
+                      <p className="text-xs text-slate-500">
                         Taxable: {fmtINR(e.taxable_amount)} @ {e.gst_rate}%
                       </p>
                       <p className={`text-sm font-semibold ${e.type === 'itc' ? 'text-green-400' : 'text-blue-400'}`}>
@@ -516,7 +516,7 @@ export default function GSTPage() {
                     <button
                       onClick={() => handleDeleteEntry(e.id)}
                       disabled={deletingId === e.id}
-                      className="shrink-0 text-red-400 hover:text-red-200 text-xs px-2 py-1 rounded hover:bg-zinc-700 disabled:opacity-40"
+                      className="shrink-0 text-red-400 hover:text-red-200 text-xs px-2 py-1 rounded hover:bg-slate-700 disabled:opacity-40"
                     >
                       {deletingId === e.id ? '…' : 'Delete'}
                     </button>
@@ -527,8 +527,8 @@ export default function GSTPage() {
           )}
 
           {/* Footnote */}
-          <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-5 py-4 text-xs text-zinc-500 space-y-1">
-            <p className="font-semibold text-zinc-400">GST Computation Notes</p>
+          <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-5 py-4 text-xs text-slate-500 space-y-1">
+            <p className="font-semibold text-slate-400">GST Computation Notes</p>
             <p>• <strong>OTC</strong> is calculated only on <em>delivered</em> orders using product GST rate (default 18%). Formula: selling price × rate ÷ (100 + rate) — assumes GST-inclusive pricing.</p>
             <p>• <strong>3PL ITC</strong>: 18% on all 3PL charges including RTO return fees (vFulfill is GST-registered, charges CGST+SGST or IGST).</p>
             <p>• <strong>Checkout ITC</strong>: Checkout fee is 2% + 18% GST; ITC = fee × 18/118.</p>

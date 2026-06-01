@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState } from 'react'
 
@@ -22,7 +22,7 @@ const defaultForm = {
 }
 
 const inputCls =
-  'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+  'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 export default function TransactionForm({ onAdded }) {
   const [form, setForm] = useState(defaultForm)
@@ -58,15 +58,15 @@ export default function TransactionForm({ onAdded }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
-      <h2 className="mb-4 text-base font-semibold text-zinc-100">Add Transaction</h2>
+    <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
+      <h2 className="mb-4 text-base font-semibold text-slate-100">Add Transaction</h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Date</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Date</label>
           <input type="date" name="date" value={form.date} onChange={handleChange} required className={inputCls} />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Amount (₹)</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Amount (₹)</label>
           <input
             type="number"
             name="amount"
@@ -80,7 +80,7 @@ export default function TransactionForm({ onAdded }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Type</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Type</label>
           <select name="type" value={form.type} onChange={handleChange} className={inputCls}>
             <option value="income">Income</option>
             <option value="expense">Expense</option>
@@ -88,7 +88,7 @@ export default function TransactionForm({ onAdded }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Source</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Source</label>
           <select name="source" value={form.source} onChange={handleChange} className={inputCls}>
             {SOURCES.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -96,7 +96,7 @@ export default function TransactionForm({ onAdded }) {
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Category</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Category</label>
           <input
             type="text"
             name="category"
@@ -107,7 +107,7 @@ export default function TransactionForm({ onAdded }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-zinc-400 mb-1">Notes</label>
+          <label className="block text-xs font-medium text-slate-400 mb-1">Notes</label>
           <input
             type="text"
             name="notes"
@@ -122,7 +122,7 @@ export default function TransactionForm({ onAdded }) {
       <button
         type="submit"
         disabled={loading}
-        className="mt-4 rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        className="mt-4 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
       >
         {loading ? 'Saving…' : 'Add Transaction'}
       </button>

@@ -21,10 +21,10 @@ function fmtMonth(ym) { const [y, m] = ym.split('-'); return `${MONTHS[+m - 1]} 
 
 function Tabs({ tabs, active, onChange }) {
   return (
-    <div className="flex gap-1 border-b border-zinc-700 mb-5">
+    <div className="flex gap-1 border-b border-slate-800 mb-5">
       {tabs.map(t => (
         <button key={t} onClick={() => onChange(t)}
-          className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${active === t ? 'border-blue-500 text-zinc-100' : 'border-transparent text-zinc-400 hover:text-zinc-200'}`}>
+          className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px cursor-pointer ${active === t ? 'border-emerald-500 text-slate-100' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
           {t}
         </button>
       ))}
@@ -33,36 +33,36 @@ function Tabs({ tabs, active, onChange }) {
 }
 
 function MarginBadge({ pct }) {
-  const cls = pct >= 30 ? 'bg-green-900 text-green-300' : pct >= 10 ? 'bg-yellow-900 text-yellow-300' : 'bg-red-900 text-red-300'
+  const cls = pct >= 30 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/50' : pct >= 10 ? 'bg-yellow-950 text-yellow-400 border border-yellow-800/50' : 'bg-red-950 text-red-400 border border-red-800/50'
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{pct.toFixed(1)}%</span>
 }
 
 function CostBreakdownTab({ costByHead }) {
   const entries = Object.entries(costByHead || {}).sort((a, b) => b[1] - a[1])
   const total   = entries.reduce((s, [, v]) => s + v, 0)
-  if (entries.length === 0) return <p className="text-sm text-zinc-500 py-4">No cost data for this range.</p>
+  if (entries.length === 0) return <p className="text-sm text-slate-500 py-4">No cost data for this range.</p>
   return (
-    <div className="rounded-xl border border-zinc-700 overflow-hidden">
+    <div className="rounded-xl border border-slate-800 overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+          <tr className="border-b border-slate-800 text-xs text-slate-600 uppercase tracking-wider bg-slate-900/40">
             <th className="px-4 py-3 text-left">Transaction Head</th>
             <th className="px-4 py-3 text-right">Taxable Amount</th>
             <th className="px-4 py-3 text-right">% of Total</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800">
+        <tbody className="divide-y divide-slate-800/60">
           {entries.map(([head, amt]) => (
-            <tr key={head} className="hover:bg-zinc-800/40">
-              <td className="px-4 py-3 text-zinc-200">{head}</td>
-              <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(amt)}</td>
-              <td className="px-4 py-3 text-right text-zinc-400">{total > 0 ? ((amt / total) * 100).toFixed(1) : 0}%</td>
+            <tr key={head} className="hover:bg-slate-800/30">
+              <td className="px-4 py-3 text-slate-300">{head}</td>
+              <td className="px-4 py-3 text-right text-slate-100 font-medium font-mono tabular-nums">{fmtINR(amt)}</td>
+              <td className="px-4 py-3 text-right text-slate-500">{total > 0 ? ((amt / total) * 100).toFixed(1) : 0}%</td>
             </tr>
           ))}
-          <tr className="border-t border-zinc-600 bg-zinc-800/60">
-            <td className="px-4 py-3 text-zinc-300 font-semibold">Total Variable Costs</td>
-            <td className="px-4 py-3 text-right text-zinc-100 font-bold">{fmtINR(total)}</td>
-            <td className="px-4 py-3 text-right text-zinc-400">100%</td>
+          <tr className="border-t border-slate-700 bg-slate-800/40">
+            <td className="px-4 py-3 text-slate-300 font-semibold">Total Variable Costs</td>
+            <td className="px-4 py-3 text-right text-slate-100 font-bold font-mono tabular-nums">{fmtINR(total)}</td>
+            <td className="px-4 py-3 text-right text-slate-500">100%</td>
           </tr>
         </tbody>
       </table>
@@ -71,7 +71,7 @@ function CostBreakdownTab({ costByHead }) {
 }
 
 function BySkuTab({ bySku }) {
-  if (!bySku?.length) return <p className="text-sm text-zinc-500 py-4">No SKU data. Add products and ensure line items have SKUs.</p>
+  if (!bySku?.length) return <p className="text-sm text-slate-500 py-4">No SKU data. Add products and ensure line items have SKUs.</p>
   const hasMetaAttribution = bySku.some(s => s.meta_spend > 0)
   return (
     <div className="space-y-2">
@@ -80,10 +80,10 @@ function BySkuTab({ bySku }) {
           No Meta spend is linked to SKUs yet — net margin excludes ad spend. Link campaigns on the Ad Spend page.
         </p>
       )}
-      <div className="rounded-xl border border-zinc-700 overflow-hidden">
+      <div className="rounded-xl border border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-800 text-xs text-slate-600 uppercase tracking-wider bg-slate-900/40">
               <th className="px-4 py-3 text-left">SKU / Product</th>
               <th className="px-4 py-3 text-right">Units</th>
               <th className="px-4 py-3 text-right">Revenue (net)</th>
@@ -94,19 +94,19 @@ function BySkuTab({ bySku }) {
               <th className="px-4 py-3 text-right">Net Margin</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800/60">
             {bySku.map(s => (
-              <tr key={s.sku} className="hover:bg-zinc-800/40">
+              <tr key={s.sku} className="hover:bg-slate-800/30">
                 <td className="px-4 py-3">
-                  <p className="text-zinc-100">{s.name}</p>
-                  <p className="text-xs text-zinc-500 font-mono">{s.sku}</p>
+                  <p className="text-slate-100">{s.name}</p>
+                  <p className="text-xs text-slate-600 font-mono">{s.sku}</p>
                 </td>
-                <td className="px-4 py-3 text-right text-zinc-300">{s.units}</td>
-                <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(s.revenue_net)}</td>
-                <td className="px-4 py-3 text-right text-red-400">{fmtINR(s.cogs)}</td>
-                <td className={`px-4 py-3 text-right font-medium ${s.gross_profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(s.gross_profit)}</td>
+                <td className="px-4 py-3 text-right text-slate-400">{s.units}</td>
+                <td className="px-4 py-3 text-right text-slate-100 font-medium font-mono tabular-nums">{fmtINR(s.revenue_net)}</td>
+                <td className="px-4 py-3 text-right text-red-400 font-mono tabular-nums">{fmtINR(s.cogs)}</td>
+                <td className={`px-4 py-3 text-right font-medium font-mono tabular-nums ${s.gross_profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtINR(s.gross_profit)}</td>
                 <td className="px-4 py-3 text-right"><MarginBadge pct={s.margin_pct} /></td>
-                <td className={`px-4 py-3 text-right font-medium ${s.net_profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(s.net_profit)}</td>
+                <td className={`px-4 py-3 text-right font-medium font-mono tabular-nums ${s.net_profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtINR(s.net_profit)}</td>
                 <td className="px-4 py-3 text-right"><MarginBadge pct={s.net_margin_pct} /></td>
               </tr>
             ))}
@@ -120,12 +120,12 @@ function BySkuTab({ bySku }) {
 const PT_LABELS = { cash_on_delivery: 'COD', prepaid_cashfree: 'Cashfree', prepaid_razorpay: 'Razorpay', unknown: 'Unknown' }
 
 function ByPaymentTypeTab({ data }) {
-  if (!data?.length) return <p className="text-sm text-zinc-500 py-4">No payment type data for this range.</p>
+  if (!data?.length) return <p className="text-sm text-slate-500 py-4">No payment type data for this range.</p>
   return (
-    <div className="rounded-xl border border-zinc-700 overflow-hidden">
+    <div className="rounded-xl border border-slate-800 overflow-hidden">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+          <tr className="border-b border-slate-800 text-xs text-slate-600 uppercase tracking-wider bg-slate-900/40">
             <th className="px-4 py-3 text-left">Payment Type</th>
             <th className="px-4 py-3 text-right">Orders</th>
             <th className="px-4 py-3 text-right">Revenue (net)</th>
@@ -135,15 +135,15 @@ function ByPaymentTypeTab({ data }) {
             <th className="px-4 py-3 text-right">Margin</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-zinc-800">
+        <tbody className="divide-y divide-slate-800/60">
           {data.map(pt => (
-            <tr key={pt.type} className="hover:bg-zinc-800/40">
-              <td className="px-4 py-3 text-zinc-100 font-medium">{PT_LABELS[pt.type] || pt.type}</td>
-              <td className="px-4 py-3 text-right text-zinc-300">{pt.count}</td>
-              <td className="px-4 py-3 text-right text-zinc-100">{fmtINR(pt.revenue_net)}</td>
-              <td className="px-4 py-3 text-right text-red-400">{fmtINR(pt.variable_costs)}</td>
-              <td className="px-4 py-3 text-right text-red-400">{fmtINR(pt.cogs)}</td>
-              <td className={`px-4 py-3 text-right font-medium ${pt.net >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(pt.net)}</td>
+            <tr key={pt.type} className="hover:bg-slate-800/30">
+              <td className="px-4 py-3 text-slate-100 font-medium">{PT_LABELS[pt.type] || pt.type}</td>
+              <td className="px-4 py-3 text-right text-slate-400 tabular-nums">{pt.count}</td>
+              <td className="px-4 py-3 text-right text-slate-100 font-mono tabular-nums">{fmtINR(pt.revenue_net)}</td>
+              <td className="px-4 py-3 text-right text-red-400 font-mono tabular-nums">{fmtINR(pt.variable_costs)}</td>
+              <td className="px-4 py-3 text-right text-red-400 font-mono tabular-nums">{fmtINR(pt.cogs)}</td>
+              <td className={`px-4 py-3 text-right font-medium font-mono tabular-nums ${pt.net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtINR(pt.net)}</td>
               <td className="px-4 py-3 text-right"><MarginBadge pct={pt.margin_pct} /></td>
             </tr>
           ))}
@@ -154,14 +154,14 @@ function ByPaymentTypeTab({ data }) {
 }
 
 function ByMonthTab({ data }) {
-  if (!data?.length) return <p className="text-sm text-zinc-500 py-4">No monthly data for this range.</p>
+  if (!data?.length) return <p className="text-sm text-slate-500 py-4">No monthly data for this range.</p>
   const maxRev = Math.max(...data.map(m => m.revenue_net), 1)
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-zinc-700 overflow-hidden">
+      <div className="rounded-xl border border-slate-800 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-800 text-xs text-slate-600 uppercase tracking-wider bg-slate-900/40">
               <th className="px-4 py-3 text-left">Month</th>
               <th className="px-4 py-3 text-right">Delivered</th>
               <th className="px-4 py-3 text-right">Revenue (net)</th>
@@ -169,16 +169,16 @@ function ByMonthTab({ data }) {
               <th className="px-4 py-3 text-right">Gross Contribution</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800/60">
             {data.map(m => {
               const gross = m.revenue_net - m.variable_costs
               return (
-                <tr key={m.month} className="hover:bg-zinc-800/40">
-                  <td className="px-4 py-3 text-zinc-100 font-medium">{fmtMonth(m.month)}</td>
-                  <td className="px-4 py-3 text-right text-zinc-300">{m.count}</td>
-                  <td className="px-4 py-3 text-right text-zinc-100">{fmtINR(m.revenue_net)}</td>
-                  <td className="px-4 py-3 text-right text-red-400">{fmtINR(m.variable_costs)}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${gross >= 0 ? 'text-green-400' : 'text-red-400'}`}>{fmtINR(gross)}</td>
+                <tr key={m.month} className="hover:bg-slate-800/30">
+                  <td className="px-4 py-3 text-slate-100 font-medium">{fmtMonth(m.month)}</td>
+                  <td className="px-4 py-3 text-right text-slate-400 tabular-nums">{m.count}</td>
+                  <td className="px-4 py-3 text-right text-slate-100 font-mono tabular-nums">{fmtINR(m.revenue_net)}</td>
+                  <td className="px-4 py-3 text-right text-red-400 font-mono tabular-nums">{fmtINR(m.variable_costs)}</td>
+                  <td className={`px-4 py-3 text-right font-medium font-mono tabular-nums ${gross >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{fmtINR(gross)}</td>
                 </tr>
               )
             })}
@@ -186,13 +186,13 @@ function ByMonthTab({ data }) {
         </table>
       </div>
       {/* Mini bar chart */}
-      <div className="flex items-end gap-2 h-24 px-1">
+      <div className="flex items-end gap-1.5 h-20 px-1">
         {data.map(m => {
           const pct = (m.revenue_net / maxRev) * 100
           return (
             <div key={m.month} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full rounded-t bg-blue-600/70" style={{ height: `${Math.max(pct, 2)}%` }} title={fmtINR(m.revenue_net)} />
-              <span className="text-[10px] text-zinc-500">{fmtMonth(m.month).slice(0, 3)}</span>
+              <div className="w-full rounded-sm bg-emerald-600/60" style={{ height: `${Math.max(pct, 2)}%` }} title={fmtINR(m.revenue_net)} />
+              <span className="text-[10px] text-slate-600">{fmtMonth(m.month).slice(0, 3)}</span>
             </div>
           )
         })}
@@ -260,7 +260,7 @@ export default function PnLPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {['This Month','Last Month','Last 30 Days'].map(p => (
               <button key={p} onClick={() => applyPreset(p)}
-                className="rounded-lg border border-zinc-600 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-700 transition">
+                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors cursor-pointer">
                 {p}
               </button>
             ))}
@@ -270,32 +270,32 @@ export default function PnLPage() {
 
       {/* Date range picker */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2">
-          <label htmlFor="pnl-from" className="text-xs text-zinc-500">From</label>
+        <div className="flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-900/60 px-3 py-2">
+          <label htmlFor="pnl-from" className="text-xs text-slate-600">From</label>
           <input id="pnl-from" type="date" value={from} onChange={e => setFrom(e.target.value)}
-            className="bg-transparent text-sm text-zinc-100 focus:outline-none" />
-          <span className="text-zinc-600">→</span>
-          <label htmlFor="pnl-to" className="text-xs text-zinc-500">To</label>
+            className="bg-transparent text-sm text-slate-200 focus:outline-none" />
+          <span className="text-slate-700">→</span>
+          <label htmlFor="pnl-to" className="text-xs text-slate-600">To</label>
           <input id="pnl-to" type="date" value={to} onChange={e => setTo(e.target.value)}
-            className="bg-transparent text-sm text-zinc-100 focus:outline-none" />
+            className="bg-transparent text-sm text-slate-200 focus:outline-none" />
         </div>
         <button onClick={handleApply} disabled={loading}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 transition">
+          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50 transition-colors cursor-pointer">
           {loading ? 'Loading…' : 'Apply'}
         </button>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
 
-      {loading && !pnl && <p className="text-sm text-zinc-500">Computing…</p>}
+      {loading && !pnl && <p className="text-sm text-slate-500">Computing…</p>}
 
       {pnl && (
         <>
           {/* Gross revenue hero card */}
-          <div className="rounded-2xl border border-blue-700/40 bg-blue-950/30 px-6 py-5">
-            <p className="text-xs text-blue-400 uppercase tracking-wider mb-1">Gross Revenue (incl. GST)</p>
-            <p className="text-4xl font-bold text-white">{fmtINR(pnl.revenue_gross)}</p>
-            <p className="text-xs text-zinc-500 mt-1.5">
+          <div className="rounded-xl border border-slate-700/60 bg-slate-900/80 px-6 py-5">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1.5">Gross Revenue (incl. GST)</p>
+            <p className="text-4xl font-bold text-white font-mono tabular-nums">{fmtINR(pnl.revenue_gross)}</p>
+            <p className="text-xs text-slate-600 mt-2">
               {pnl.orders.delivered} delivered orders · GST collected: {fmtINR(pnl.revenue_gross - pnl.revenue_net)}
             </p>
           </div>
@@ -309,7 +309,7 @@ export default function PnLPage() {
           </div>
 
           {/* Secondary stats row */}
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-6 text-xs">
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-6 text-xs">
             {[
               { label: 'Variable Costs',  val: pnl.variable_costs         },
               { label: 'COGS',            val: pnl.cogs                   },
@@ -318,9 +318,9 @@ export default function PnLPage() {
               { label: 'RTO Orders',      val: pnl.orders.rto             },
               { label: 'Pending Delivery',val: pnl.orders.active          },
             ].map(({ label, val }) => (
-              <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-                <p className="text-zinc-500 mb-1">{label}</p>
-                <p className="text-zinc-200 font-semibold">{typeof val === 'number' && val > 99 ? fmtINR(val) : val}</p>
+              <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-3">
+                <p className="text-slate-600 mb-1">{label}</p>
+                <p className="text-slate-300 font-semibold font-mono tabular-nums">{typeof val === 'number' && val > 99 ? fmtINR(val) : val}</p>
               </div>
             ))}
           </div>
@@ -329,7 +329,7 @@ export default function PnLPage() {
           <WaterfallCard pnl={pnl} />
 
           {/* Breakdown tabs */}
-          <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-5">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
             <Tabs tabs={['Cost Breakdown','By SKU','By Payment Type','By Month']} active={tab} onChange={setTab} />
             {tab === 'Cost Breakdown'    && <CostBreakdownTab   costByHead={pnl.cost_by_head} />}
             {tab === 'By SKU'            && <BySkuTab           bySku={pnl.by_sku} />}
@@ -347,9 +347,9 @@ export default function PnLPage() {
               { label: 'COD',            val: pnl.orders.cod       },
               { label: 'Prepaid',        val: pnl.orders.prepaid   },
             ].map(({ label, val }) => (
-              <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-center">
-                <p className="text-zinc-600 mb-0.5">{label}</p>
-                <p className="text-zinc-300 font-semibold text-base">{val}</p>
+              <div key={label} className="rounded-xl border border-slate-800 bg-slate-900/30 px-3 py-2 text-center">
+                <p className="text-slate-600 mb-0.5">{label}</p>
+                <p className="text-slate-400 font-semibold text-base tabular-nums">{val}</p>
               </div>
             ))}
           </div>

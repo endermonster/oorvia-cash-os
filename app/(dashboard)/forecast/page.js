@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
@@ -109,7 +109,7 @@ function CumulativeChart({ series, projections, breakEvenMonth }) {
         return (
           <circle key={p.id} cx={c.x} cy={c.y} r={3}
             fill={p.cumulative >= 0 ? '#4ade80' : '#f87171'}
-            stroke="#111118" strokeWidth="1.5" />
+            stroke="#0f172a" strokeWidth="1.5" />
         )
       })}
 
@@ -121,7 +121,7 @@ function CumulativeChart({ series, projections, breakEvenMonth }) {
           <g key={p.id}>
             <circle cx={c.x} cy={c.y} r={isBE ? 5 : 2.5}
               fill={isBE ? '#4ade80' : '#4ade80'} opacity={isBE ? 1 : 0.5}
-              stroke={isBE ? '#111118' : 'none'} strokeWidth={1.5} />
+              stroke={isBE ? '#020617' : 'none'} strokeWidth={1.5} />
             {isBE && (
               <circle cx={c.x} cy={c.y} r={9} fill="none"
                 stroke="#4ade80" strokeWidth="1" opacity="0.4" />
@@ -227,9 +227,9 @@ export default function ForecastPage() {
     load()
   }, [])
 
-  if (loading) return <p className="text-zinc-400 text-sm">Loading…</p>
+  if (loading) return <p className="text-slate-400 text-sm">Loading…</p>
   if (err)     return <p className="text-red-400 text-sm">{err}</p>
-  if (!baseline) return <p className="text-zinc-400 text-sm">No baseline found. Run the SQL setup.</p>
+  if (!baseline) return <p className="text-slate-400 text-sm">No baseline found. Run the SQL setup.</p>
 
   const now            = currentYM()
   const trackedMonths  = monthsBetween(TRACKING_START, now)
@@ -336,32 +336,32 @@ export default function ForecastPage() {
       </div>
 
       {/* SVG cumulative chart */}
-      <div className="rounded-2xl border border-[#1e1e2e] bg-[#111118] p-5">
-        <h3 className="text-sm font-semibold text-zinc-100 mb-1">Cumulative P&L — Day 1 to Break-Even</h3>
-        <p className="text-xs text-zinc-500 mb-4">
+      <div className="rounded-2xl border border-[rgb(30 41 59 / 0.6)] bg-slate-900/80 p-5">
+        <h3 className="text-sm font-semibold text-slate-100 mb-1">Cumulative P&L — Day 1 to Break-Even</h3>
+        <p className="text-xs text-slate-500 mb-4">
           Running total from inception.
           {projections.length > 0
             ? ' Dashed green = projection at current trajectory.'
             : ' Projection appears once monthly average turns positive.'}
         </p>
         <CumulativeChart series={series} projections={projections} breakEvenMonth={breakEvenMonth} />
-        <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-500">
+        <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-500">
           <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 bg-red-400 rounded" /> Actual (loss)</span>
           {projections.length > 0 && <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 bg-green-400 rounded" style={{backgroundImage:'repeating-linear-gradient(90deg,#4ade80 0,#4ade80 6px,transparent 6px,transparent 9px)'}} /> Projected</span>}
-          <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 bg-zinc-500 rounded" /> Break-even (₹0)</span>
+          <span className="flex items-center gap-1.5"><span className="inline-block h-0.5 w-5 bg-slate-500 rounded" /> Break-even (₹0)</span>
         </div>
       </div>
 
       {/* Monthly detail rows */}
-      <div className="rounded-2xl border border-[#1e1e2e] bg-[#111118] p-5">
-        <h3 className="text-sm font-semibold text-zinc-100 mb-1">Monthly Net + Cumulative P&L</h3>
-        <p className="text-xs text-zinc-500 mb-5">
+      <div className="rounded-2xl border border-[rgb(30 41 59 / 0.6)] bg-slate-900/80 p-5">
+        <h3 className="text-sm font-semibold text-slate-100 mb-1">Monthly Net + Cumulative P&L</h3>
+        <p className="text-xs text-slate-500 mb-5">
           Bars = monthly net. Right column = running total from inception.
           {projections.length > 0 && ' Faded rows = projection at current trajectory.'}
         </p>
 
         {/* Column headers */}
-        <div className="flex items-center gap-3 mb-2 text-[10px] uppercase tracking-widest text-zinc-600">
+        <div className="flex items-center gap-3 mb-2 text-[10px] uppercase tracking-widest text-slate-600">
           <span className="w-44 shrink-0">Period</span>
           <span className="flex-1">Monthly Net</span>
           <span className="w-24 shrink-0 text-right">Monthly</span>
@@ -387,13 +387,13 @@ export default function ForecastPage() {
             return (
               <div
                 key={row.id}
-                className={`flex items-center gap-3 ${row.isBaseline ? 'pb-2 mb-1 border-b border-zinc-800' : ''}`}
+                className={`flex items-center gap-3 ${row.isBaseline ? 'pb-2 mb-1 border-b border-slate-800' : ''}`}
               >
-                <span className={`w-44 shrink-0 text-xs ${row.isProjected ? 'text-zinc-500 italic' : row.isInProgress ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                <span className={`w-44 shrink-0 text-xs ${row.isProjected ? 'text-slate-500 italic' : row.isInProgress ? 'text-slate-300' : 'text-slate-400'}`}>
                   {row.label}
-                  {row.isInProgress && <span className="ml-1 text-[10px] text-zinc-600">(in progress)</span>}
+                  {row.isInProgress && <span className="ml-1 text-[10px] text-slate-600">(in progress)</span>}
                 </span>
-                <div className="flex-1 h-5 rounded bg-zinc-800 overflow-hidden">
+                <div className="flex-1 h-5 rounded bg-slate-800 overflow-hidden">
                   <div className={`h-full rounded transition-all ${barColor}`} style={{ width: `${barPct}%` }} />
                 </div>
                 <span className={`w-24 shrink-0 text-right text-xs font-semibold tabular-nums ${netColor}`}>
@@ -407,7 +407,7 @@ export default function ForecastPage() {
           })}
         </div>
 
-        <div className="mt-4 pt-3 border-t border-zinc-800 flex flex-wrap gap-4 text-xs text-zinc-500">
+        <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-4 text-xs text-slate-500">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm bg-green-600 inline-block" /> Monthly profit
           </span>
@@ -416,7 +416,7 @@ export default function ForecastPage() {
           </span>
           {projections.length > 0 && (
             <span className="flex items-center gap-1.5">
-              <span className="h-2.5 w-2.5 rounded-sm bg-zinc-600/60 inline-block" /> Projected
+              <span className="h-2.5 w-2.5 rounded-sm bg-slate-600/60 inline-block" /> Projected
             </span>
           )}
           <span className="ml-auto">Right column = running total from Day 1</span>
@@ -425,31 +425,31 @@ export default function ForecastPage() {
 
       {/* Break-even detail table */}
       {projections.length > 0 && (
-        <div className="rounded-2xl border border-[#1e1e2e] bg-[#111118] p-5">
-          <h3 className="text-sm font-semibold text-zinc-100 mb-1">Break-Even Projection</h3>
-          <p className="text-xs text-zinc-500 mb-4">
+        <div className="rounded-2xl border border-[rgb(30 41 59 / 0.6)] bg-slate-900/80 p-5">
+          <h3 className="text-sm font-semibold text-slate-100 mb-1">Break-Even Projection</h3>
+          <p className="text-xs text-slate-500 mb-4">
             Based on {completedMonths.length}-month trailing average of{' '}
             <span className={trailingAvg >= 0 ? 'text-green-400' : 'text-red-400'}>
               {trailingAvg >= 0 ? '+' : '−'}{fmtINR(Math.abs(trailingAvg))}/month
             </span>
           </p>
-          <div className="rounded-xl border border-zinc-700 overflow-hidden">
+          <div className="rounded-xl border border-slate-700 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+                <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
                   <th className="px-4 py-3 text-left">Month</th>
                   <th className="px-4 py-3 text-right">Projected Net</th>
                   <th className="px-4 py-3 text-right">Cumulative</th>
                   <th className="px-4 py-3 text-right">Still to Recover</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-800">
+              <tbody className="divide-y divide-slate-800">
                 {projections.map(row => (
                   <tr
                     key={row.id}
-                    className={`hover:bg-zinc-800/40 ${row.id === breakEvenMonth ? 'bg-green-900/20' : ''}`}
+                    className={`hover:bg-slate-800/40 ${row.id === breakEvenMonth ? 'bg-green-900/20' : ''}`}
                   >
-                    <td className="px-4 py-3 text-zinc-300">
+                    <td className="px-4 py-3 text-slate-300">
                       {fmtMonth(row.id)}
                       {row.id === breakEvenMonth && (
                         <span className="ml-2 text-xs font-semibold text-green-400">Break-even</span>
@@ -461,7 +461,7 @@ export default function ForecastPage() {
                     <td className={`px-4 py-3 text-right tabular-nums font-medium ${row.cumulative >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                       {row.cumulative >= 0 ? '+' : '−'}{fmtINR(Math.abs(row.cumulative))}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-zinc-400">
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-400">
                       {row.cumulative < 0 ? fmtINR(Math.abs(row.cumulative)) : '✓ Recovered'}
                     </td>
                   </tr>

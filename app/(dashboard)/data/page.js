@@ -1,10 +1,10 @@
-'use client'
+﻿'use client'
 
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import { fmtINR } from '@/lib/pnl'
 
-const inp = 'w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500'
+const inp = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 const sel = `${inp} cursor-pointer`
 const btn = 'rounded-lg px-3 py-1.5 text-sm font-medium transition'
 
@@ -17,10 +17,10 @@ const TABS = ['Fixed Costs', 'Marketing Spend', 'Capital & Loans', 'Wallet']
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-2xl border border-zinc-700 bg-zinc-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-lg rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
-          <p className="text-base font-semibold text-zinc-100">{title}</p>
-          <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 shrink-0">
+          <p className="text-base font-semibold text-slate-100">{title}</p>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-200 shrink-0">
             <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 4l10 10M14 4L4 14"/></svg>
           </button>
         </div>
@@ -37,7 +37,7 @@ function DeleteBtn({ onDelete }) {
 }
 
 function EmptyRow({ cols, msg }) {
-  return <tr><td colSpan={cols} className="px-4 py-8 text-center text-sm text-zinc-500">{msg}</td></tr>
+  return <tr><td colSpan={cols} className="px-4 py-8 text-center text-sm text-slate-500">{msg}</td></tr>
 }
 
 // ---------------------------------------------------------------------------
@@ -88,12 +88,12 @@ function FixedCostsTab() {
   return (
     <>
       <div className="flex justify-end mb-4">
-        <button onClick={openAdd} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white px-4 py-2`}>+ Add Fixed Cost</button>
+        <button onClick={openAdd} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2`}>+ Add Fixed Cost</button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-zinc-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
               <th className="px-4 py-3 text-left">Name</th>
               <th className="px-4 py-3 text-left">Category</th>
               <th className="px-4 py-3 text-right">Amount</th>
@@ -103,21 +103,21 @@ function FixedCostsTab() {
               <th className="px-4 py-3 text-right"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800">
             {rows.length === 0 ? <EmptyRow cols={7} msg="No fixed costs yet." /> : rows.map((r) => (
-              <tr key={r.id} className="hover:bg-zinc-800/40">
-                <td className="px-4 py-3 text-zinc-100">{r.name}</td>
-                <td className="px-4 py-3 text-zinc-400">{r.category || '—'}</td>
-                <td className="px-4 py-3 text-right text-zinc-100 font-medium">
+              <tr key={r.id} className="hover:bg-slate-800/40">
+                <td className="px-4 py-3 text-slate-100">{r.name}</td>
+                <td className="px-4 py-3 text-slate-400">{r.category || '—'}</td>
+                <td className="px-4 py-3 text-right text-slate-100 font-medium">
                   {fmtINR(r.amount)}
-                  {r.usd_amount && <span className="block text-xs text-zinc-500">${r.usd_amount} · live rate</span>}
+                  {r.usd_amount && <span className="block text-xs text-slate-500">${r.usd_amount} · live rate</span>}
                 </td>
-                <td className="px-4 py-3 text-zinc-400 capitalize">{r.frequency}</td>
-                <td className="px-4 py-3 text-zinc-400 text-xs">{r.start_date} → {r.end_date || '∞'}</td>
-                <td className="px-4 py-3 text-right text-zinc-400">{r.gst_inclusive ? 'Yes' : 'No'}</td>
+                <td className="px-4 py-3 text-slate-400 capitalize">{r.frequency}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs">{r.start_date} → {r.end_date || '∞'}</td>
+                <td className="px-4 py-3 text-right text-slate-400">{r.gst_inclusive ? 'Yes' : 'No'}</td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => openEdit(r)} className={`${btn} bg-zinc-700 hover:bg-zinc-600 text-zinc-200`}>Edit</button>
+                    <button onClick={() => openEdit(r)} className={`${btn} bg-slate-700 hover:bg-slate-600 text-slate-200`}>Edit</button>
                     <DeleteBtn onDelete={() => del(r.id)} />
                   </div>
                 </td>
@@ -131,19 +131,19 @@ function FixedCostsTab() {
         <Modal title={editing ? 'Edit Fixed Cost' : 'Add Fixed Cost'} onClose={() => setShow(false)}>
           <form onSubmit={save} className="space-y-3">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Name *</label>
+              <label className="block text-xs text-slate-400 mb-1">Name *</label>
               <input className={inp} required value={form.name} onChange={f('name')} placeholder="e.g. Warehouse rent" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Currency</label>
+                <label className="block text-xs text-slate-400 mb-1">Currency</label>
                 <select className={sel} value={form.currency} onChange={f('currency')}>
                   <option value="INR">INR (₹)</option>
                   <option value="USD">USD ($)</option>
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Frequency *</label>
+                <label className="block text-xs text-slate-400 mb-1">Frequency *</label>
                 <select className={sel} value={form.frequency} onChange={f('frequency')}>
                   <option value="monthly">Monthly</option>
                   <option value="yearly">Yearly</option>
@@ -154,37 +154,37 @@ function FixedCostsTab() {
             {form.currency === 'USD' ? (
               <div className="space-y-2">
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">USD Amount *</label>
+                  <label className="block text-xs text-slate-400 mb-1">USD Amount *</label>
                   <input className={inp} type="number" step="0.01" required value={form.usd_amount} onChange={f('usd_amount')} placeholder="149" />
                 </div>
-                <p className="text-xs text-zinc-500">INR equivalent is fetched automatically at the live rate each time P&L is computed.</p>
+                <p className="text-xs text-slate-500">INR equivalent is fetched automatically at the live rate each time P&L is computed.</p>
               </div>
             ) : (
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Amount (₹) *</label>
+                <label className="block text-xs text-slate-400 mb-1">Amount (₹) *</label>
                 <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Start Date *</label>
+                <label className="block text-xs text-slate-400 mb-1">Start Date *</label>
                 <input className={inp} type="date" required value={form.start_date} onChange={f('start_date')} />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">End Date (leave blank if active)</label>
+                <label className="block text-xs text-slate-400 mb-1">End Date (leave blank if active)</label>
                 <input className={inp} type="date" value={form.end_date} onChange={f('end_date')} />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Category</label>
+              <label className="block text-xs text-slate-400 mb-1">Category</label>
               <input className={inp} value={form.category} onChange={f('category')} placeholder="e.g. Logistics, SaaS" />
             </div>
-            <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
               <input type="checkbox" checked={form.gst_inclusive} onChange={f('gst_inclusive')} className="rounded" />
               Amount is GST-inclusive
             </label>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+            <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
               {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add'}
             </button>
           </form>
@@ -232,15 +232,15 @@ function MarketingSpendTab() {
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-6">
-          <div><p className="text-xs text-zinc-500">Total Spend (gross)</p><p className="text-lg font-bold text-zinc-100">{fmtINR(totalSpend)}</p></div>
-          <div><p className="text-xs text-zinc-500">Input GST (ITC)</p><p className="text-lg font-bold text-blue-400">{fmtINR(totalGst)}</p></div>
+          <div><p className="text-xs text-slate-500">Total Spend (gross)</p><p className="text-lg font-bold text-slate-100">{fmtINR(totalSpend)}</p></div>
+          <div><p className="text-xs text-slate-500">Input GST (ITC)</p><p className="text-lg font-bold text-blue-400">{fmtINR(totalGst)}</p></div>
         </div>
-        <button onClick={() => { setShow(true); setErr(null) }} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white px-4 py-2`}>+ Add Spend</button>
+        <button onClick={() => { setShow(true); setErr(null) }} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2`}>+ Add Spend</button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-zinc-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Platform</th>
               <th className="px-4 py-3 text-left">Campaign</th>
@@ -250,15 +250,15 @@ function MarketingSpendTab() {
               <th className="px-4 py-3 text-right"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800">
             {rows.length === 0 ? <EmptyRow cols={7} msg="No marketing spend entries yet." /> : rows.map((r) => (
-              <tr key={r.id} className="hover:bg-zinc-800/40">
-                <td className="px-4 py-3 text-zinc-400 text-xs">{r.date}</td>
-                <td className="px-4 py-3 text-zinc-100 capitalize">{r.platform}</td>
-                <td className="px-4 py-3 text-zinc-400">{r.campaign || '—'}</td>
-                <td className="px-4 py-3 text-right text-zinc-100">{fmtINR(r.amount)}</td>
+              <tr key={r.id} className="hover:bg-slate-800/40">
+                <td className="px-4 py-3 text-slate-400 text-xs">{r.date}</td>
+                <td className="px-4 py-3 text-slate-100 capitalize">{r.platform}</td>
+                <td className="px-4 py-3 text-slate-400">{r.campaign || '—'}</td>
+                <td className="px-4 py-3 text-right text-slate-100">{fmtINR(r.amount)}</td>
                 <td className="px-4 py-3 text-right text-blue-400">{fmtINR(r.gst_amt)}</td>
-                <td className="px-4 py-3 text-right text-zinc-100">{fmtINR(r.amount - r.gst_amt)}</td>
+                <td className="px-4 py-3 text-right text-slate-100">{fmtINR(r.amount - r.gst_amt)}</td>
                 <td className="px-4 py-3 text-right"><DeleteBtn onDelete={() => del(r.id)} /></td>
               </tr>
             ))}
@@ -271,30 +271,30 @@ function MarketingSpendTab() {
           <form onSubmit={save} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Platform *</label>
+                <label className="block text-xs text-slate-400 mb-1">Platform *</label>
                 <input className={inp} required value={form.platform} onChange={f('platform')} placeholder="meta / google" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Date *</label>
+                <label className="block text-xs text-slate-400 mb-1">Date *</label>
                 <input className={inp} type="date" required value={form.date} onChange={f('date')} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Gross Amount (₹) *</label>
+                <label className="block text-xs text-slate-400 mb-1">Gross Amount (₹) *</label>
                 <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">GST Amount (₹)</label>
+                <label className="block text-xs text-slate-400 mb-1">GST Amount (₹)</label>
                 <input className={inp} type="number" step="0.01" value={form.gst_amt} onChange={f('gst_amt')} placeholder="0.00" />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Campaign (optional)</label>
+              <label className="block text-xs text-slate-400 mb-1">Campaign (optional)</label>
               <input className={inp} value={form.campaign} onChange={f('campaign')} placeholder="Campaign name or ID" />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+            <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
               {saving ? 'Saving…' : 'Add'}
             </button>
           </form>
@@ -351,15 +351,15 @@ function CapitalTab() {
     <>
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-6">
-          <div><p className="text-xs text-zinc-500">Total Capital In</p><p className="text-lg font-bold text-green-400">{fmtINR(totalIn)}</p></div>
-          <div><p className="text-xs text-zinc-500">Loans Repaid</p><p className="text-lg font-bold text-zinc-100">{fmtINR(totalRepaid)}</p></div>
+          <div><p className="text-xs text-slate-500">Total Capital In</p><p className="text-lg font-bold text-green-400">{fmtINR(totalIn)}</p></div>
+          <div><p className="text-xs text-slate-500">Loans Repaid</p><p className="text-lg font-bold text-slate-100">{fmtINR(totalRepaid)}</p></div>
         </div>
-        <button onClick={openAdd} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white px-4 py-2`}>+ Add Entry</button>
+        <button onClick={openAdd} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2`}>+ Add Entry</button>
       </div>
-      <div className="overflow-x-auto rounded-xl border border-zinc-700">
+      <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Contributor</th>
               <th className="px-4 py-3 text-left">Type</th>
@@ -370,25 +370,25 @@ function CapitalTab() {
               <th className="px-4 py-3 text-right"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800">
             {rows.length === 0 ? <EmptyRow cols={8} msg="No capital infusions yet." /> : rows.map((r) => {
               const outstanding = r.contributor_type === 'loan' ? Number(r.amount) - Number(r.repaid_amount) : null
               return (
-                <tr key={r.id} className="hover:bg-zinc-800/40">
-                  <td className="px-4 py-3 text-zinc-400 text-xs">{r.date}</td>
-                  <td className="px-4 py-3 text-zinc-100">{r.contributor_name}</td>
+                <tr key={r.id} className="hover:bg-slate-800/40">
+                  <td className="px-4 py-3 text-slate-400 text-xs">{r.date}</td>
+                  <td className="px-4 py-3 text-slate-100">{r.contributor_name}</td>
                   <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${r.contributor_type === 'partner' ? 'bg-blue-900 text-blue-300' : 'bg-yellow-900 text-yellow-300'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${r.contributor_type === 'partner' ? 'bg-sky-950 text-sky-400 border border-sky-800/50' : 'bg-yellow-950 text-yellow-400'}`}>
                       {r.contributor_type}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-zinc-100 font-medium">{fmtINR(r.amount)}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">{r.contributor_type === 'loan' ? fmtINR(r.repaid_amount) : '—'}</td>
+                  <td className="px-4 py-3 text-right text-slate-100 font-medium">{fmtINR(r.amount)}</td>
+                  <td className="px-4 py-3 text-right text-slate-400">{r.contributor_type === 'loan' ? fmtINR(r.repaid_amount) : '—'}</td>
                   <td className="px-4 py-3 text-right">{outstanding !== null ? <span className={outstanding > 0 ? 'text-red-400' : 'text-green-400'}>{fmtINR(outstanding)}</span> : '—'}</td>
-                  <td className="px-4 py-3 text-right text-zinc-400">{r.interest_rate ? `${(r.interest_rate * 100).toFixed(1)}%` : '—'}</td>
+                  <td className="px-4 py-3 text-right text-slate-400">{r.interest_rate ? `${(r.interest_rate * 100).toFixed(1)}%` : '—'}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openEdit(r)} className={`${btn} bg-zinc-700 hover:bg-zinc-600 text-zinc-200`}>Edit</button>
+                      <button onClick={() => openEdit(r)} className={`${btn} bg-slate-700 hover:bg-slate-600 text-slate-200`}>Edit</button>
                       <DeleteBtn onDelete={() => del(r.id)} />
                     </div>
                   </td>
@@ -406,11 +406,11 @@ function CapitalTab() {
               <>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1">Contributor Name *</label>
+                    <label className="block text-xs text-slate-400 mb-1">Contributor Name *</label>
                     <input className={inp} required value={form.contributor_name} onChange={f('contributor_name')} placeholder="Name" />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1">Type *</label>
+                    <label className="block text-xs text-slate-400 mb-1">Type *</label>
                     <select className={sel} value={form.contributor_type} onChange={f('contributor_type')}>
                       <option value="partner">Partner</option>
                       <option value="loan">Loan</option>
@@ -419,22 +419,22 @@ function CapitalTab() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1">Amount (₹) *</label>
+                    <label className="block text-xs text-slate-400 mb-1">Amount (₹) *</label>
                     <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
                   </div>
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1">Date *</label>
+                    <label className="block text-xs text-slate-400 mb-1">Date *</label>
                     <input className={inp} type="date" required value={form.date} onChange={f('date')} />
                   </div>
                 </div>
                 {form.contributor_type === 'loan' && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Annual Interest Rate (%)</label>
+                      <label className="block text-xs text-slate-400 mb-1">Annual Interest Rate (%)</label>
                       <input className={inp} type="number" step="0.01" value={form.interest_rate} onChange={f('interest_rate')} placeholder="e.g. 18" />
                     </div>
                     <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Repayment Due</label>
+                      <label className="block text-xs text-slate-400 mb-1">Repayment Due</label>
                       <input className={inp} type="date" value={form.repayment_due} onChange={f('repayment_due')} />
                     </div>
                   </div>
@@ -443,16 +443,16 @@ function CapitalTab() {
             )}
             {(editing && editing.contributor_type === 'loan') && (
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Amount Repaid So Far (₹)</label>
+                <label className="block text-xs text-slate-400 mb-1">Amount Repaid So Far (₹)</label>
                 <input className={inp} type="number" step="0.01" value={form.repaid_amount} onChange={f('repaid_amount')} />
               </div>
             )}
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Note</label>
+              <label className="block text-xs text-slate-400 mb-1">Note</label>
               <input className={inp} value={form.note} onChange={f('note')} placeholder="Optional note" />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+            <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
               {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add'}
             </button>
           </form>
@@ -496,18 +496,18 @@ function WalletTab() {
 
   const f = (k) => (e) => setForm((p) => ({ ...p, [k]: e.target.value }))
 
-  const typeColor = (t) => ({ recharge: 'text-green-400', withdrawal: 'text-red-400', service_fee: 'text-yellow-400', sourcing: 'text-blue-400' }[t] || 'text-zinc-400')
+  const typeColor = (t) => ({ recharge: 'text-green-400', withdrawal: 'text-red-400', service_fee: 'text-yellow-400', sourcing: 'text-blue-400' }[t] || 'text-slate-400')
 
   return (
     <>
       <div className="flex justify-end mb-4">
-        <button onClick={() => { setShow(true); setErr(null) }} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white px-4 py-2`}>+ Manual Entry</button>
+        <button onClick={() => { setShow(true); setErr(null) }} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2`}>+ Manual Entry</button>
       </div>
-      <p className="text-xs text-zinc-500 mb-3">vFulfill-imported entries are shown here for reference but can only be changed by re-running the vFulfill import.</p>
-      <div className="overflow-x-auto rounded-xl border border-zinc-700">
+      <p className="text-xs text-slate-500 mb-3">vFulfill-imported entries are shown here for reference but can only be changed by re-running the vFulfill import.</p>
+      <div className="overflow-x-auto rounded-xl border border-slate-700">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-700 text-xs text-zinc-500 uppercase tracking-wider">
+            <tr className="border-b border-slate-700 text-xs text-slate-500 uppercase tracking-wider">
               <th className="px-4 py-3 text-left">Date</th>
               <th className="px-4 py-3 text-left">Wallet</th>
               <th className="px-4 py-3 text-left">Type</th>
@@ -517,15 +517,15 @@ function WalletTab() {
               <th className="px-4 py-3 text-right"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-800">
+          <tbody className="divide-y divide-slate-800">
             {rows.length === 0 ? <EmptyRow cols={7} msg="No wallet transactions yet." /> : rows.map((r) => (
-              <tr key={r.id} className="hover:bg-zinc-800/40">
-                <td className="px-4 py-3 text-zinc-400 text-xs">{r.date}</td>
-                <td className="px-4 py-3 text-zinc-100 capitalize">{r.wallet}</td>
+              <tr key={r.id} className="hover:bg-slate-800/40">
+                <td className="px-4 py-3 text-slate-400 text-xs">{r.date}</td>
+                <td className="px-4 py-3 text-slate-100 capitalize">{r.wallet}</td>
                 <td className={`px-4 py-3 capitalize font-medium ${typeColor(r.type)}`}>{r.type.replace('_', ' ')}</td>
-                <td className="px-4 py-3 text-right text-zinc-100">{fmtINR(r.amount)}</td>
-                <td className="px-4 py-3 text-zinc-400 text-xs max-w-xs truncate">{r.note || '—'}</td>
-                <td className="px-4 py-3 text-xs text-zinc-500">{r.vf_transaction_id ? 'vFulfill' : 'Manual'}</td>
+                <td className="px-4 py-3 text-right text-slate-100">{fmtINR(r.amount)}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs max-w-xs truncate">{r.note || '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-500">{r.vf_transaction_id ? 'vFulfill' : 'Manual'}</td>
                 <td className="px-4 py-3 text-right">
                   {!r.vf_transaction_id && <DeleteBtn onDelete={() => del(r.id)} />}
                 </td>
@@ -540,11 +540,11 @@ function WalletTab() {
           <form onSubmit={save} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Wallet *</label>
+                <label className="block text-xs text-slate-400 mb-1">Wallet *</label>
                 <input className={inp} required value={form.wallet} onChange={f('wallet')} placeholder="cashfree / vfulfill" />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Type *</label>
+                <label className="block text-xs text-slate-400 mb-1">Type *</label>
                 <select className={sel} value={form.type} onChange={f('type')}>
                   <option value="recharge">Recharge</option>
                   <option value="withdrawal">Withdrawal</option>
@@ -555,20 +555,20 @@ function WalletTab() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Amount (₹) *</label>
+                <label className="block text-xs text-slate-400 mb-1">Amount (₹) *</label>
                 <input className={inp} type="number" step="0.01" required value={form.amount} onChange={f('amount')} />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1">Date *</label>
+                <label className="block text-xs text-slate-400 mb-1">Date *</label>
                 <input className={inp} type="date" required value={form.date} onChange={f('date')} />
               </div>
             </div>
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Note</label>
+              <label className="block text-xs text-slate-400 mb-1">Note</label>
               <input className={inp} value={form.note} onChange={f('note')} placeholder="Optional note" />
             </div>
             {err && <p className="text-sm text-red-400">{err}</p>}
-            <button type="submit" disabled={saving} className={`${btn} bg-blue-600 hover:bg-blue-500 text-white w-full py-2 disabled:opacity-40`}>
+            <button type="submit" disabled={saving} className={`${btn} bg-emerald-600 hover:bg-emerald-500 text-white w-full py-2 disabled:opacity-40`}>
               {saving ? 'Saving…' : 'Add'}
             </button>
           </form>
@@ -601,15 +601,15 @@ export default function DataPage() {
       />
 
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-zinc-700 mb-6">
+      <div className="flex gap-1 border-b border-slate-700 mb-6">
         {TABS.map((tab) => (
           <button
             key={tab}
             onClick={() => setActive(tab)}
             className={`px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px ${
               active === tab
-                ? 'border-blue-500 text-zinc-100'
-                : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                ? 'border-blue-500 text-slate-100'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             {tab}

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #08080f;
-  --foreground: #f0f0f6;
+  --background: #020617;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -18,7 +18,6 @@ body {
   font-family: var(--font-ibm-sans), 'IBM Plex Sans', sans-serif;
 }
 
-/* Date inputs: force light text on dark background in webkit */
 input[type="date"]::-webkit-calendar-picker-indicator {
   filter: invert(0.7);
 }

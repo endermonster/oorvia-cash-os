@@ -27,7 +27,6 @@ export default function ImportButton({ importType, onDone, label }) {
     setResult(data)
     if (onDone) onDone(data)
 
-    // Reset file input
     e.target.value = ''
   }
 
@@ -44,7 +43,7 @@ export default function ImportButton({ importType, onDone, label }) {
       <button
         onClick={() => inputRef.current?.click()}
         disabled={loading}
-        className="flex items-center gap-1.5 rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-700 disabled:opacity-50 transition-colors"
+        className="flex items-center gap-1.5 rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:bg-slate-800 hover:text-slate-100 disabled:opacity-50 transition-colors cursor-pointer"
       >
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <path d="M8 2v9M4 7l4-4 4 4" />
@@ -54,7 +53,7 @@ export default function ImportButton({ importType, onDone, label }) {
       </button>
 
       {result && (
-        <span className={`text-xs ${result.errors?.length > 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+        <span className={`text-xs ${result.errors?.length > 0 ? 'text-yellow-400' : 'text-emerald-400'}`}>
           {result.error
             ? `Error: ${result.error}`
             : `Imported ${result.inserted} of ${result.total} rows${result.errors?.length ? ` (${result.errors.length} errors)` : ''}`
