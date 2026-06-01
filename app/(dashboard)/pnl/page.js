@@ -201,25 +201,21 @@ function ByMonthTab({ data }) {
   )
 }
 
-// ── Date range presets ────────────────────────────────────────────────────────
-
-function getPreset(label) {
-  const now  = new Date()
-  const y    = now.getFullYear()
-  const m    = now.getMonth()
-  if (label === 'This Month')  return { from: new Date(y, m, 1).toISOString().slice(0, 10), to: new Date(y, m + 1, 0).toISOString().slice(0, 10) }
-  if (label === 'Last Month')  return { from: new Date(y, m - 1, 1).toISOString().slice(0, 10), to: new Date(y, m, 0).toISOString().slice(0, 10) }
-  if (label === 'Last 30 Days') {
-    const to = now.toISOString().slice(0, 10)
-    const from = new Date(now - 30 * 86400000).toISOString().slice(0, 10)
-    return { from, to }
-  }
-  return null
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+const now = new Date()
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
+const YEAR_OPTIONS = Array.from({ length: now.getFullYear() - 2022 + 1 }, (_, i) => 2022 + i)
+
+function monthRange(year, month) {
+  const from = new Date(year, month - 1, 1).toISOString().slice(0, 10)
+  const to   = new Date(year, month, 0).toISOString().slice(0, 10)
+  return { from, to }
+}
+
 export default function PnLPage() {
+  const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
+  const [selYear,  setSelYear]  = useState(now.getFullYear())
   const [from, setFrom] = useState(monthStart)
   const [to,   setTo]   = useState(monthEnd)
   const [pnl,  setPnl]  = useState(null)
@@ -241,10 +237,19 @@ export default function PnLPage() {
 
   useEffect(() => { load(from, to) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyPreset = (label) => {
-    const p = getPreset(label)
-    if (!p) return
-    setFrom(p.from); setTo(p.to); load(p.from, p.to)
+  const applyMonthYear = (month, year) => {
+    const { from: f, to: t } = monthRange(year, month)
+    setFrom(f); setTo(t); load(f, t)
+  }
+
+  const handleMonthChange = (e) => {
+    const m = Number(e.target.value)
+    setSelMonth(m); applyMonthYear(m, selYear)
+  }
+
+  const handleYearChange = (e) => {
+    const y = Number(e.target.value)
+    setSelYear(y); applyMonthYear(selMonth, y)
   }
 
   const handleApply = () => load(from, to)
@@ -257,13 +262,19 @@ export default function PnLPage() {
         title="P&L"
         subtitle="Net-of-GST profit & loss for any date range"
         actions={
-          <div className="flex items-center gap-2 flex-wrap">
-            {['This Month','Last Month','Last 30 Days'].map(p => (
-              <button key={p} onClick={() => applyPreset(p)}
-                className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors cursor-pointer">
-                {p}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <select value={selMonth} onChange={handleMonthChange}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none cursor-pointer">
+              {MONTH_NAMES.map((name, i) => (
+                <option key={i + 1} value={i + 1}>{name}</option>
+              ))}
+            </select>
+            <select value={selYear} onChange={handleYearChange}
+              className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none cursor-pointer">
+              {YEAR_OPTIONS.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
           </div>
         }
       />
