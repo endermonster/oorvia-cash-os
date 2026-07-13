@@ -8,10 +8,12 @@ import { fmtINR } from '@/lib/pnl'
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
 
-function today()      { return new Date().toISOString().slice(0, 10) }
+const pad2 = n => String(n).padStart(2, '0')
+function today()      { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
 function monthStart() { return today().slice(0, 7) + '-01' }
 function monthEnd()   {
-  const d = new Date(); return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+  const d = new Date(); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(last)}`
 }
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
@@ -208,9 +210,8 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 const YEAR_OPTIONS = Array.from({ length: now.getFullYear() - 2022 + 1 }, (_, i) => 2022 + i)
 
 function monthRange(year, month) {
-  const pad = n => String(n).padStart(2, '0')
   const lastDay = new Date(year, month, 0).getDate()
-  return { from: `${year}-${pad(month)}-01`, to: `${year}-${pad(month)}-${pad(lastDay)}` }
+  return { from: `${year}-${pad2(month)}-01`, to: `${year}-${pad2(month)}-${pad2(lastDay)}` }
 }
 
 export default function PnLPage() {
