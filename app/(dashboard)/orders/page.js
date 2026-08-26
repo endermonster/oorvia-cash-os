@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
-import OrderForm from '@/components/orders/OrderForm'
+import OrderEditModal from '@/components/orders/OrderEditModal'
 import OrderTable from '@/components/orders/OrderTable'
 import ImportButton from '@/components/shared/ImportButton'
 import { fmtINR } from '@/lib/pnl'
@@ -30,7 +30,6 @@ export default function OrdersPage() {
   const [month, setMonth] = useState(currentMonth)
   const [statusFilter, setStatusFilter] = useState('')
   const [modeFilter, setModeFilter] = useState('')
-  const [showForm, setShowForm] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -54,18 +53,14 @@ export default function OrdersPage() {
   useEffect(() => { fetchOrders(month, statusFilter, modeFilter) }, [month, statusFilter, modeFilter])
 
   const handleSaved = (saved) => {
-    const key = saved.shopify_order_name ?? saved.id
-    if (editingOrder) {
-      setOrders((prev) => prev.map((o) => ((o.shopify_order_name ?? o.id) === key ? saved : o)))
-      setEditingOrder(null)
-    } else {
-      setOrders((prev) => [saved, ...prev])
-      setShowForm(false)
-    }
+    setOrders((prev) =>
+      prev.map((o) => (o.shopify_order_name === saved.shopify_order_name ? saved : o))
+    )
+    setEditingOrder(null)
   }
 
-  const handleEdit = (order) => { setEditingOrder(order); setShowForm(false) }
-  const handleDelete = (key) => setOrders((prev) => prev.filter((o) => (o.shopify_order_name ?? o.id) !== key))
+  const handleEdit = (order) => setEditingOrder(order)
+  const handleDelete = (key) => setOrders((prev) => prev.filter((o) => o.shopify_order_name !== key))
 
   // Client-side search filter
   const filteredOrders = searchQuery.trim()
@@ -96,12 +91,6 @@ export default function OrdersPage() {
           <>
             <MonthPicker monthStr={month} onChange={setMonth} />
             <ImportButton importType="orders" onDone={() => fetchOrders(month, statusFilter, modeFilter)} />
-            <button
-              onClick={() => { setShowForm(true); setEditingOrder(null) }}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
-            >
-              + Add Order
-            </button>
           </>
         }
       />
@@ -151,13 +140,9 @@ export default function OrdersPage() {
         <OrderTable orders={filteredOrders} onEdit={handleEdit} onDelete={handleDelete} />
       )}
 
-      {/* Modals */}
-      {showForm && (
-        <OrderForm onSaved={handleSaved} onClose={() => setShowForm(false)} />
-      )}
       {editingOrder && (
-        <OrderForm
-          initial={editingOrder}
+        <OrderEditModal
+          order={editingOrder}
           onSaved={handleSaved}
           onClose={() => setEditingOrder(null)}
         />

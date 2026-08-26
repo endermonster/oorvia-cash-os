@@ -54,7 +54,9 @@ export async function PATCH(request, context) {
     updates.delivered_at = null
   }
 
-  // The UI still posts a `payment_mode` shorthand; the column is `payment_type`.
+  // No UI sends this any more — the order edit modal only corrects status and
+  // delivered_at. Kept so an external caller using the `payment_mode` shorthand
+  // still maps onto the real `payment_type` column.
   if (payment_mode !== undefined) {
     if (payment_mode === 'cod' || payment_mode === PAYMENT_TYPE.COD) updates.payment_type = PAYMENT_TYPE.COD
     else if (payment_mode === 'razorpay' || payment_mode === PAYMENT_TYPE.PREPAID_RAZORPAY) updates.payment_type = PAYMENT_TYPE.PREPAID_RAZORPAY
