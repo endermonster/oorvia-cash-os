@@ -2,15 +2,17 @@
 
 import { useState } from 'react'
 import { computeOrderFees, computeOrderNetProfit, fmtINR } from '@/lib/pnl'
+import { today } from '@/lib/dates'
+import { ORDER_STATUS, ORDER_STATUS_LIST, ORDER_STATUS_LABELS } from '@/lib/constants'
 
 const inputCls =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 const defaultForm = {
   shopify_order_id: '',
-  order_date:       new Date().toISOString().slice(0, 10),
+  order_date:       today(),
   payment_mode:     'prepaid',
-  status:           'pending',
+  status:           ORDER_STATUS.UNFULFILLED,
   order_value:      '',
   checkout_fee:     '',
   cashfree_fee:     '',
@@ -136,11 +138,9 @@ export default function OrderForm({ onSaved, onClose, initial }) {
             <div>
               <label className="block text-xs font-medium text-slate-400 mb-1">Status</label>
               <select name="status" value={form.status} onChange={handleChange} className={inputCls}>
-                <option value="pending">Pending</option>
-                <option value="shipped">Shipped</option>
-                <option value="delivered">Delivered</option>
-                <option value="rto">RTO</option>
-                <option value="cancelled">Cancelled</option>
+                {ORDER_STATUS_LIST.map((s) => (
+                  <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+                ))}
               </select>
             </div>
           </div>

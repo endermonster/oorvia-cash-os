@@ -6,17 +6,13 @@ import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
 import ImportButton from '@/components/shared/ImportButton'
 import { fmtINR } from '@/lib/pnl'
-
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+import { currentMonth, today, monthRange, fmtDate } from '@/lib/dates'
 
 const inputCls =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 
 const defaultForm = {
-  spend_date: new Date().toISOString().slice(0, 10),
+  spend_date: today(),
   campaign: '',
   adset: '',
   spend: '',
@@ -33,12 +29,14 @@ function CampaignAttributionPanel({ products }) {
   const [campaigns, setCampaigns] = useState(null) // null = not yet fetched
   const [saving, setSaving]       = useState(null)
 
+  // Fetched on mount, not on expand: the "N unlinked" badge is the only warning
+  // that per-SKU margins are incomplete, so it has to be right while collapsed.
   useEffect(() => {
-    if (!open || campaigns !== null) return
     fetch('/api/campaign-sku-map')
       .then(r => r.json())
       .then(data => setCampaigns(Array.isArray(data) ? data : []))
-  }, [open, campaigns])
+      .catch(() => setCampaigns([]))
+  }, [])
 
   const handleSkuChange = async (campaign_id, campaign_name, sku) => {
     setSaving(campaign_id)
@@ -228,9 +226,7 @@ export default function AdSpendPage() {
   const handleMetaSync = async () => {
     setSyncing(true)
     setSyncMsg(null)
-    const [y, m] = month.split('-').map(Number)
-    const from = `${y}-${String(m).padStart(2, '0')}-01`
-    const to   = new Date(y, m, 0).toISOString().slice(0, 10)
+    const { from, to } = monthRange(month)
     const res  = await fetch('/api/sync/meta', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -357,7 +353,7 @@ export default function AdSpendPage() {
                   const entryCA  = e.purchases > 0 ? (e.spend / e.purchases).toFixed(0) : '—'
                   return (
                     <tr key={e.id} className="hover:bg-slate-800/60">
-                      <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{new Date(e.spend_date).toLocaleDateString('en-IN')}</td>
+                      <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{fmtDate(e.spend_date)}</td>
                       <td className="px-4 py-3 text-slate-300 max-w-[120px] truncate">{e.campaign || '—'}</td>
                       <td className="px-4 py-3 text-slate-400 max-w-[120px] truncate">{e.adset || '—'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-red-400">{fmtINR(e.spend)}</td>

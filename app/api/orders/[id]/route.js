@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase'
+import { today } from '@/lib/dates'
+import { ORDER_STATUS, ORDER_STATUS_LIST, PAYMENT_TYPE, isValidOrderStatus } from '@/lib/constants'
 
 export async function GET(request, context) {
   const { id } = await context.params
@@ -20,6 +22,13 @@ export async function PATCH(request, context) {
 
   const { order_date, payment_mode, status, order_value, delivered_at } = body
 
+  if (status !== undefined && !isValidOrderStatus(status)) {
+    return Response.json(
+      { error: `Unknown status '${status}'. Valid values: ${ORDER_STATUS_LIST.join(', ')}` },
+      { status: 400 }
+    )
+  }
+
   const updates = { updated_at: new Date().toISOString() }
   if (order_date   !== undefined) updates.order_date    = order_date
   if (status       !== undefined) updates.status        = status
@@ -29,28 +38,27 @@ export async function PATCH(request, context) {
   // /api/pnl and /api/gst select delivered orders by delivered_at. An order
   // marked delivered without one drops out of every P&L month and GST return,
   // so backfill it here rather than trusting each caller to remember.
-  if (status === 'delivered' && updates.delivered_at === undefined) {
+  if (status === ORDER_STATUS.DELIVERED && updates.delivered_at === undefined) {
     const { data: existing } = await supabase
       .from('orders')
       .select('delivered_at')
       .eq('shopify_order_name', id)
       .maybeSingle()
     if (!existing?.delivered_at) {
-      const now = new Date()
-      const pad = (n) => String(n).padStart(2, '0')
-      updates.delivered_at = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
+      updates.delivered_at = today()
     }
   }
 
   // Leaving RTO/cancelled must clear a stale delivery date.
-  if (status !== undefined && status !== 'delivered' && delivered_at === undefined) {
+  if (status !== undefined && status !== ORDER_STATUS.DELIVERED && delivered_at === undefined) {
     updates.delivered_at = null
   }
 
+  // The UI still posts a `payment_mode` shorthand; the column is `payment_type`.
   if (payment_mode !== undefined) {
-    if (payment_mode === 'cod') updates.payment_type = 'cash_on_delivery'
-    else if (payment_mode === 'razorpay' || payment_mode === 'prepaid_razorpay') updates.payment_type = 'prepaid_razorpay'
-    else updates.payment_type = 'prepaid_cashfree'
+    if (payment_mode === 'cod' || payment_mode === PAYMENT_TYPE.COD) updates.payment_type = PAYMENT_TYPE.COD
+    else if (payment_mode === 'razorpay' || payment_mode === PAYMENT_TYPE.PREPAID_RAZORPAY) updates.payment_type = PAYMENT_TYPE.PREPAID_RAZORPAY
+    else updates.payment_type = PAYMENT_TYPE.PREPAID_CASHFREE
   }
 
   const { data, error } = await supabase

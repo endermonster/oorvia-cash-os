@@ -2,15 +2,10 @@
 
 import { useRef, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
+import { addMonths, currentMonth, monthRange } from '@/lib/dates'
 
 function monthBounds(offset = 0) {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = d.getMonth() + 1 + offset
-  const first = new Date(y, m - 1, 1)
-  const last  = new Date(y, m, 0)
-  const fmt = (dt) => dt.toISOString().slice(0, 10)
-  return { from: fmt(first), to: fmt(last) }
+  return monthRange(addMonths(currentMonth(), offset))
 }
 
 function ShopifySyncCard() {

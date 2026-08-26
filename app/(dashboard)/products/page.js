@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import { fmtINR } from '@/lib/pnl'
+import { today } from '@/lib/dates'
 
 const inp = 'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
 const btn = 'rounded-lg px-3 py-1.5 text-sm font-medium transition'
@@ -27,7 +28,7 @@ function Modal({ title, onClose, children }) {
 
 function CogsHistoryPanel({ sku, onClose }) {
   const [history, setHistory] = useState([])
-  const [form, setForm]       = useState({ cogs: '', effective_from: new Date().toISOString().slice(0, 10), note: '' })
+  const [form, setForm]       = useState({ cogs: '', effective_from: today(), note: '' })
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState(null)
 
@@ -45,7 +46,7 @@ function CogsHistoryPanel({ sku, onClose }) {
     const data = await res.json()
     if (!res.ok) { setErr(data.error); setSaving(false); return }
     setHistory((prev) => [data, ...prev])
-    setForm({ cogs: '', effective_from: new Date().toISOString().slice(0, 10), note: '' })
+    setForm({ cogs: '', effective_from: today(), note: '' })
     setSaving(false)
   }
 

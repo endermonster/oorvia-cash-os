@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
 
 async function fetchUsdInrRate() {
   try {
@@ -11,12 +12,13 @@ async function fetchUsdInrRate() {
 }
 
 export async function GET() {
-  const { data, error } = await supabase
-    .from('fixed_costs')
-    .select('*')
-    .order('name')
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
+  // Fixed costs are summed into the monthly P&L — the set must be complete.
+  try {
+    const rows = await selectAll(() => supabase.from('fixed_costs').select('*').order('name'))
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 }
 
 export async function POST(request) {

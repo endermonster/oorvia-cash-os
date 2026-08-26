@@ -1,21 +1,25 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
+import { monthRange } from '@/lib/dates'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const month = searchParams.get('month') // YYYY-MM
 
-  let query = supabase.from('marketing_spend').select('*').order('date', { ascending: false })
-
-  if (month) {
-    const [y, m] = month.split('-').map(Number)
-    const start = `${y}-${String(m).padStart(2, '0')}-01`
-    const end   = new Date(y, m, 0).toISOString().slice(0, 10)
-    query = query.gte('date', start).lte('date', end)
+  // The caller totals these rows for spend and ITC, so the read must be complete.
+  try {
+    const rows = await selectAll(() => {
+      let q = supabase.from('marketing_spend').select('*').order('date', { ascending: false })
+      if (month) {
+        const { from, to } = monthRange(month)
+        q = q.gte('date', from).lte('date', to)
+      }
+      return q
+    })
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
-
-  const { data, error } = await query
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
 }
 
 export async function POST(request) {

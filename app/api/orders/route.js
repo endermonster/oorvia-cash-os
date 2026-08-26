@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase'
 import { computeOrderFees } from '@/lib/pnl'
+import { selectAll } from '@/lib/paged'
+import { monthRange } from '@/lib/dates'
+import { ORDER_STATUS_LIST, PAYMENT_TYPE, PREPAID_TYPES, isValidOrderStatus } from '@/lib/constants'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
@@ -7,24 +10,38 @@ export async function GET(request) {
   const status      = searchParams.get('status')
   const paymentMode = searchParams.get('paymentMode')
 
-  let query = supabase
-    .from('orders')
-    .select('*')
-    .order('order_date', { ascending: false })
-
-  if (month) {
-    const [y, m] = month.split('-').map(Number)
-    const start = `${y}-${String(m).padStart(2, '0')}-01`
-    const end   = new Date(y, m, 0).toISOString().slice(0, 10)
-    query = query.gte('order_date', start).lte('order_date', end)
+  // An unknown status used to fall through to `.eq()` and return an empty array,
+  // which reads as "no orders" rather than "bad filter".
+  if (status && !isValidOrderStatus(status)) {
+    return Response.json(
+      { error: `Unknown status '${status}'. Valid values: ${ORDER_STATUS_LIST.join(', ')}` },
+      { status: 400 }
+    )
   }
-  if (status) query = query.eq('status', status)
-  if (paymentMode === 'cod')     query = query.eq('payment_type', 'cash_on_delivery')
-  else if (paymentMode === 'prepaid') query = query.in('payment_type', ['prepaid_cashfree', 'prepaid_razorpay'])
 
-  const { data, error } = await query
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
+  // Callers (the ad-spend and RTO pages) total these rows, so the read must be
+  // complete — an unbounded select truncates at the PostgREST row cap.
+  try {
+    const rows = await selectAll(() => {
+      let q = supabase
+        .from('orders')
+        .select('*')
+        .order('order_date', { ascending: false })
+
+      if (month) {
+        const { from, to } = monthRange(month)
+        q = q.gte('order_date', from).lte('order_date', to)
+      }
+      if (status) q = q.eq('status', status)
+      if (paymentMode === 'cod')          q = q.eq('payment_type', PAYMENT_TYPE.COD)
+      else if (paymentMode === 'prepaid') q = q.in('payment_type', PREPAID_TYPES)
+
+      return q
+    })
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 }
 
 export async function POST(request) {

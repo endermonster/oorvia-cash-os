@@ -1,20 +1,27 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
 export async function GET() {
-  const [{ data: spendRows, error: sErr }, { data: maps, error: mErr }] = await Promise.all([
-    supabase.from('ad_spend').select('campaign_id, campaign, spend').not('campaign_id', 'is', null),
-    supabase.from('campaign_sku_map').select('campaign_id, sku, campaign_name'),
-  ])
+  // ad_spend is one row per campaign per day across all time — this aggregate
+  // reads every one of them, so it must page or the totals under-report.
+  let spendRows, maps
+  try {
+    ;[spendRows, maps] = await Promise.all([
+      selectAll(() =>
+        supabase.from('ad_spend').select('campaign_id, campaign, spend').not('campaign_id', 'is', null)
+      ),
+      selectAll(() => supabase.from('campaign_sku_map').select('campaign_id, sku, campaign_name')),
+    ])
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 
-  if (sErr) return Response.json({ error: sErr.message }, { status: 500 })
-  if (mErr) return Response.json({ error: mErr.message }, { status: 500 })
-
-  const mapById = Object.fromEntries((maps || []).map(m => [m.campaign_id, m.sku]))
+  const mapById = Object.fromEntries(maps.map(m => [m.campaign_id, m.sku]))
 
   const agg = {}
-  for (const row of (spendRows || [])) {
+  for (const row of spendRows) {
     if (!row.campaign_id) continue
     if (!agg[row.campaign_id]) {
       agg[row.campaign_id] = { campaign_id: row.campaign_id, campaign_name: row.campaign, total_spend: 0 }

@@ -1,12 +1,16 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
+import { today } from '@/lib/dates'
 
 export async function GET() {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .order('name')
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
+  // The catalogue is the lookup table for COGS and GST rate — a truncated list
+  // silently drops SKUs out of every costing screen.
+  try {
+    const rows = await selectAll(() => supabase.from('products').select('*').order('name'))
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 }
 
 export async function POST(request) {
@@ -27,7 +31,7 @@ export async function POST(request) {
     await supabase.from('cogs_history').insert([{
       sku,
       cogs,
-      effective_from: new Date().toISOString().slice(0, 10),
+      effective_from: today(),
       note: 'Initial entry',
     }])
   }

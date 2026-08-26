@@ -60,5 +60,26 @@ export async function POST(request) {
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  return Response.json({ synced: adSpendRows.length })
+  // The upsert key is (spend_date, campaign_id). Manually-entered rows have a
+  // NULL campaign_id, so they never conflict and this sync lands on top of them
+  // rather than replacing them — the same spend then counts twice in P&L, ITC
+  // and ROAS. Surface it; only a human can decide which row is the real one.
+  const { data: manualRows } = await supabase
+    .from('ad_spend')
+    .select('id, spend_date, campaign, spend')
+    .gte('spend_date', from)
+    .lte('spend_date', to)
+    .is('campaign_id', null)
+
+  const overlaps = (manualRows || []).filter((m) =>
+    adSpendRows.some((r) => r.spend_date === m.spend_date)
+  )
+
+  return Response.json({
+    synced: adSpendRows.length,
+    manual_rows_in_range: overlaps,
+    duplicate_warning: overlaps.length > 0
+      ? `${overlaps.length} manually-entered ad spend row(s) sit on dates this sync just wrote. They are counted in addition to the synced spend — delete them to avoid double-counting.`
+      : null,
+  })
 }

@@ -1,12 +1,16 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
 
 export async function GET() {
-  const { data, error } = await supabase
-    .from('capital_infusions')
-    .select('*')
-    .order('date', { ascending: false })
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
+  // Callers total principal and outstanding across the whole set — never truncate.
+  try {
+    const rows = await selectAll(() =>
+      supabase.from('capital_infusions').select('*').order('date', { ascending: false })
+    )
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 }
 
 export async function POST(request) {

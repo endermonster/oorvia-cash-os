@@ -4,12 +4,8 @@ import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
+import { currentMonth, monthStart } from '@/lib/dates'
 const fmtINR = (n) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n)
-
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
 
 const inputCls =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
@@ -88,8 +84,7 @@ export default function GSTPage() {
   const handleAddEntry = async (e) => {
     e.preventDefault()
     setSavingEntry(true)
-    const [y, m_] = month.split('-').map(Number)
-    const entry_month = `${y}-${String(m_).padStart(2, '0')}-01`
+    const entry_month = monthStart(month)
     const res = await fetch('/api/gst/entries', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -413,7 +408,12 @@ export default function GSTPage() {
           {/* Manual Entry Form */}
           {showEntryForm && (
             <div className="rounded-2xl border border-slate-700 bg-slate-900 p-5">
-              <h3 className="text-sm font-semibold text-slate-100 mb-4">Add Manual GST Entry</h3>
+              <h3 className="text-sm font-semibold text-slate-100 mb-1">Add Manual GST Entry</h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Only for external purchases where GST was claimed outside the normal scope of the business —
+                Shopify subscription, SaaS, domain, and similar. 3PL, checkout, payment gateway and Meta ads
+                are already derived automatically; entering them here double-counts the credit.
+              </p>
               <form onSubmit={handleAddEntry}>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-3">
                   <div>

@@ -5,19 +5,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import StatCard   from '@/components/shared/StatCard'
 import WaterfallCard from '@/components/pnl/WaterfallCard'
 import { fmtINR } from '@/lib/pnl'
-
-// ── Date helpers ─────────────────────────────────────────────────────────────
-
-const pad2 = n => String(n).padStart(2, '0')
-function today()      { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` }
-function monthStart() { return today().slice(0, 7) + '-01' }
-function monthEnd()   {
-  const d = new Date(); const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(last)}`
-}
-
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function fmtMonth(ym) { const [y, m] = ym.split('-'); return `${MONTHS[+m - 1]} ${y}` }
+import { currentMonth, fmtMonth, monthRange } from '@/lib/dates'
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -205,20 +193,26 @@ function ByMonthTab({ data }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-const now = new Date()
+const CURRENT_YM   = currentMonth()
+const CURRENT_YEAR = Number(CURRENT_YM.slice(0, 4))
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
-const YEAR_OPTIONS = Array.from({ length: now.getFullYear() - 2022 + 1 }, (_, i) => 2022 + i)
+const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 2022 + 1 }, (_, i) => 2022 + i)
 
-function monthRange(year, month) {
-  const lastDay = new Date(year, month, 0).getDate()
-  return { from: `${year}-${pad2(month)}-01`, to: `${year}-${pad2(month)}-${pad2(lastDay)}` }
+/** 'YYYY-MM' when the range covers exactly one calendar month, else null. */
+function ymOfRange(from, to) {
+  if (!from || !to) return null
+  const ym = from.slice(0, 7)
+  const whole = monthRange(ym)
+  return from === whole.from && to === whole.to ? ym : null
 }
 
 export default function PnLPage() {
-  const [selMonth, setSelMonth] = useState(now.getMonth() + 1)
-  const [selYear,  setSelYear]  = useState(now.getFullYear())
-  const [from, setFrom] = useState(monthStart)
-  const [to,   setTo]   = useState(monthEnd)
+  const initialRange = monthRange(CURRENT_YM)
+  const [from, setFrom] = useState(initialRange.from)
+  const [to,   setTo]   = useState(initialRange.to)
+  // The range the displayed numbers actually cover — the month/year dropdowns
+  // read off this, so they can never describe a range the page is not showing.
+  const [applied, setApplied] = useState(initialRange)
   const [pnl,  setPnl]  = useState(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
@@ -230,6 +224,7 @@ export default function PnLPage() {
       const res  = await fetch(`/api/pnl?from=${f}&to=${t}`)
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed'); setLoading(false); return }
+      setApplied({ from: f, to: t })
       setPnl(data); setLoading(false)
     } catch (e) {
       setError('Failed to load P&L data'); setLoading(false)
@@ -238,19 +233,25 @@ export default function PnLPage() {
 
   useEffect(() => { load(from, to) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const applyMonthYear = (month, year) => {
-    const { from: f, to: t } = monthRange(year, month)
+  const appliedYm = ymOfRange(applied.from, applied.to)
+  const isCustom  = appliedYm === null
+  const baseYm    = appliedYm ?? applied.from.slice(0, 7)
+  const selMonth  = appliedYm ? Number(appliedYm.slice(5, 7)) : ''
+  const selYear   = appliedYm ? Number(appliedYm.slice(0, 4)) : ''
+
+  const applyYm = (ym) => {
+    const { from: f, to: t } = monthRange(ym)
     setFrom(f); setTo(t); load(f, t)
   }
 
   const handleMonthChange = (e) => {
-    const m = Number(e.target.value)
-    setSelMonth(m); applyMonthYear(m, selYear)
+    if (!e.target.value) return
+    applyYm(`${baseYm.slice(0, 4)}-${String(e.target.value).padStart(2, '0')}`)
   }
 
   const handleYearChange = (e) => {
-    const y = Number(e.target.value)
-    setSelYear(y); applyMonthYear(selMonth, y)
+    if (!e.target.value) return
+    applyYm(`${e.target.value}-${baseYm.slice(5, 7)}`)
   }
 
   const handleApply = () => load(from, to)
@@ -264,14 +265,16 @@ export default function PnLPage() {
         subtitle="Net-of-GST profit & loss for any date range"
         actions={
           <div className="flex items-center gap-2">
-            <select value={selMonth} onChange={handleMonthChange}
+            <select value={selMonth} onChange={handleMonthChange} aria-label="Month"
               className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none cursor-pointer">
+              {isCustom && <option value="">Custom range</option>}
               {MONTH_NAMES.map((name, i) => (
                 <option key={i + 1} value={i + 1}>{name}</option>
               ))}
             </select>
-            <select value={selYear} onChange={handleYearChange}
+            <select value={selYear} onChange={handleYearChange} aria-label="Year"
               className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs text-slate-300 focus:outline-none cursor-pointer">
+              {isCustom && <option value="">—</option>}
               {YEAR_OPTIONS.map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}

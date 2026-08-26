@@ -1,14 +1,26 @@
 import { supabase } from '@/lib/supabase'
-import { mapShopifyStatus } from '@/lib/shopify'
+import { mapShopifyStatus, mapShopifyPaymentMode } from '@/lib/shopify'
+import { selectAllIn } from '@/lib/paged'
+import {
+  ORDER_STATUS,
+  PAYMENT_TYPE,
+  CASHFREE_FEE_RATE,
+  GST_RATE_PCT,
+  COST_SOURCE,
+} from '@/lib/constants'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
-function mapPaymentType(gateway) {
-  const v = (gateway || '').toLowerCase().replace(/[\s_-]/g, '')
-  if (v.includes('cod') || v.includes('cashondelivery') || v === 'manual') return 'cash_on_delivery'
-  if (v.includes('cashfree')) return 'prepaid_cashfree'
-  if (v.includes('razorpay')) return 'prepaid_razorpay'
-  return 'unknown'
+// RPC payloads travel in the POST body, so the limit is statement size rather
+// than URL length. Each chunk is one atomic delete+insert inside the function.
+const RPC_CHUNK   = 200
+// PostgREST builds a single statement per write request — keep batches bounded.
+const WRITE_CHUNK = 400
+
+function chunk(arr, size) {
+  const out = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
 }
 
 export async function POST(request) {
@@ -48,6 +60,7 @@ export async function POST(request) {
     const orderDate  = (o.created_at || '').slice(0, 10)
     const shipState  = o.shipping_address?.province || null
     const status     = mapShopifyStatus(o.financial_status, o.fulfillment_status, o.cancelled_at)
+    const paymentType = mapShopifyPaymentMode(gateway)
 
     const lineItems = (o.line_items || [])
       .filter((li) => li.sku || li.title)
@@ -58,10 +71,29 @@ export async function POST(request) {
         unit_price: r2(parseFloat(li.price) || 0),
       }))
 
+    // Cashfree charges 2.5% + 18% GST on the fee, prepaid only. Nothing else
+    // writes this row, so without it the fee is missing from cost and its GST
+    // input credit is never claimed.
+    let cashfreeCost = null
+    if (paymentType === PAYMENT_TYPE.PREPAID_CASHFREE && orderValue > 0) {
+      const taxable = r2(orderValue * CASHFREE_FEE_RATE)
+      const gst     = r2(taxable * GST_RATE_PCT / 100)
+      cashfreeCost = {
+        shopify_order_name: name,
+        transaction_head:   'Payment Gateway Fee',
+        taxable_amt:        taxable,
+        gst_amt:            gst,
+        total_amt:          r2(taxable + gst),
+        transaction_date:   orderDate,
+        nature:             'debit',
+        source:             COST_SOURCE.CASHFREE,
+      }
+    }
+
     orderMap.set(name, {
       order: {
         shopify_order_name: name,
-        payment_type:       mapPaymentType(gateway),
+        payment_type:       paymentType,
         order_value:        r2(orderValue),
         order_date:         orderDate,
         status,
@@ -76,8 +108,9 @@ export async function POST(request) {
         total_amt:          r2(orderValue * 0.0236),
         transaction_date:   orderDate,
         nature:             'debit',
-        source:             'fastrr',
+        source:             COST_SOURCE.FASTRR,
       },
+      cashfreeCost,
     })
   }
 
@@ -85,82 +118,116 @@ export async function POST(request) {
     return Response.json({ synced: 0, message: 'No valid orders in payload' })
   }
 
-  const orderNames   = [...orderMap.keys()]
-  const allOrderRows = [...orderMap.values()].map((v) => v.order)
-  const allLineItems = [...orderMap.values()].flatMap((v) => v.lineItems)
-  const allCosts     = [...orderMap.values()].map((v) => v.checkoutCost)
-  const errors       = []
+  const orderNames    = [...orderMap.keys()]
+  const allOrderRows  = [...orderMap.values()].map((v) => v.order)
+  const allLineItems  = [...orderMap.values()].flatMap((v) => v.lineItems)
+  const checkoutCosts = [...orderMap.values()].map((v) => v.checkoutCost)
+  const cashfreeCosts = [...orderMap.values()].map((v) => v.cashfreeCost).filter(Boolean)
+  const errors        = []
 
-  // Fetch existing orders + their current status
-  const { data: existingRows, error: fetchErr } = await supabase
-    .from('orders')
-    .select('shopify_order_name, status')
-    .in('shopify_order_name', orderNames)
-  if (fetchErr) return Response.json({ error: fetchErr.message }, { status: 500 })
-
-  const existingMap = new Map((existingRows || []).map((o) => [o.shopify_order_name, o.status]))
-  const newOrders   = allOrderRows.filter((o) => !existingMap.has(o.shopify_order_name))
-  const oldOrders   = allOrderRows.filter((o) =>  existingMap.has(o.shopify_order_name))
-
-  if (newOrders.length > 0) {
-    const { error } = await supabase.from('orders').insert(newOrders)
-    if (error) return Response.json({ error: error.message }, { status: 500 })
+  // Fetch existing orders + their current status. Chunked: an unbounded .in()
+  // is truncated at 1000 rows, which makes existing orders look new — they then
+  // collide on the primary key and abort the whole batch.
+  let existingRows
+  try {
+    existingRows = await selectAllIn(
+      (names) => supabase.from('orders').select('shopify_order_name, status').in('shopify_order_name', names),
+      orderNames
+    )
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
 
-  for (const o of oldOrders) {
-    const currentStatus = existingMap.get(o.shopify_order_name)
-    // Never downgrade from 'delivered' — that status is set by vFulfill, Shopify doesn't know about it
-    const newStatus = currentStatus === 'delivered' ? 'delivered' : o.status
+  const existingMap   = new Map(existingRows.map((o) => [o.shopify_order_name, o.status]))
+  const insertedCount = allOrderRows.filter((o) => !existingMap.has(o.shopify_order_name)).length
+  const updatedCount  = allOrderRows.length - insertedCount
 
+  // Never downgrade from 'delivered' — that status is set by vFulfill, Shopify
+  // doesn't know about it. Resolved before the write so the upsert carries the
+  // same status the per-order update used to compute.
+  const upsertRows = allOrderRows.map((o) => ({
+    ...o,
+    status: existingMap.get(o.shopify_order_name) === ORDER_STATUS.DELIVERED
+      ? ORDER_STATUS.DELIVERED
+      : o.status,
+  }))
+
+  for (const batch of chunk(upsertRows, WRITE_CHUNK)) {
     const { error } = await supabase
       .from('orders')
-      .update({
-        payment_type: o.payment_type,
-        order_value:  o.order_value,
-        order_date:   o.order_date,
-        ship_state:   o.ship_state,
-        status:       newStatus,
-      })
-      .eq('shopify_order_name', o.shopify_order_name)
-    if (error) errors.push({ order: o.shopify_order_name, message: error.message })
+      .upsert(batch, { onConflict: 'shopify_order_name' })
+    if (!error) continue
+    // Retry row by row so one bad order can't drop the rest of the batch
+    for (const row of batch) {
+      const { error: rowErr } = await supabase
+        .from('orders')
+        .upsert(row, { onConflict: 'shopify_order_name' })
+      if (rowErr) errors.push({ order: row.shopify_order_name, message: rowErr.message })
+    }
   }
 
-  // Replace line items
-  const { error: delLiErr } = await supabase
-    .from('order_line_items')
-    .delete()
-    .in('shopify_order_name', orderNames)
-  if (delLiErr) errors.push({ row: 'line_items_delete', message: delLiErr.message })
-
+  // Stub any SKUs we've never seen, so the line item rows have something to
+  // point at. ON CONFLICT DO NOTHING — never reset an existing product's COGS.
   if (allLineItems.length > 0) {
     const uniqueSkus = [...new Set(allLineItems.map((li) => li.sku).filter(Boolean))]
     if (uniqueSkus.length > 0) {
-      const { data: existingProducts } = await supabase
-        .from('products').select('sku').in('sku', uniqueSkus)
-      const existingSkuSet = new Set((existingProducts || []).map((p) => p.sku))
+      let existingProducts = []
+      try {
+        existingProducts = await selectAllIn(
+          (skus) => supabase.from('products').select('sku').in('sku', skus),
+          uniqueSkus
+        )
+      } catch (e) {
+        errors.push({ row: 'products_lookup', message: e.message })
+      }
+      const existingSkuSet = new Set(existingProducts.map((p) => p.sku))
       const missingSkus = uniqueSkus.filter((s) => !existingSkuSet.has(s))
-      if (missingSkus.length > 0) {
+      for (const batch of chunk(missingSkus, WRITE_CHUNK)) {
         const { error: stubErr } = await supabase
           .from('products')
-          .insert(missingSkus.map((sku) => ({ sku, name: sku, current_cogs: 0 })))
+          .upsert(
+            batch.map((sku) => ({ sku, name: sku, current_cogs: 0 })),
+            { onConflict: 'sku', ignoreDuplicates: true }
+          )
         if (stubErr) errors.push({ row: 'products_stub', message: stubErr.message })
       }
     }
-
-    const { error } = await supabase.from('order_line_items').insert(allLineItems)
-    if (error) errors.push({ row: 'line_items_insert', message: error.message })
   }
 
-  // Replace Fastrr checkout costs
-  const { error: delCostErr } = await supabase
-    .from('order_costs')
-    .delete()
-    .in('shopify_order_name', orderNames)
-    .eq('source', 'fastrr')
-  if (delCostErr) errors.push({ row: 'order_costs_delete', message: delCostErr.message })
+  // Replace line items — the delete and the insert share one transaction inside
+  // replace_order_line_items(). A failed insert used to leave the orders with no
+  // line items at all, which silently zeroes their COGS.
+  // Called even when there are no line items: the delete still has to run.
+  let lineItemsWritten = 0
+  for (const names of chunk(orderNames, RPC_CHUNK)) {
+    const inChunk = new Set(names)
+    const { data, error } = await supabase.rpc('replace_order_line_items', {
+      p_order_names: names,
+      p_rows:        allLineItems.filter((li) => inChunk.has(li.shopify_order_name)),
+    })
+    if (error) errors.push({ row: 'line_items_replace', message: error.message })
+    else lineItemsWritten += data || 0
+  }
 
-  const { error: costsErr } = await supabase.from('order_costs').insert(allCosts)
-  if (costsErr) errors.push({ row: 'order_costs_insert', message: costsErr.message })
+  // Replace the fee rows we own — checkout (Fastrr) and payment gateway
+  // (Cashfree). Same atomic replace, scoped per source so re-syncing is
+  // idempotent and never duplicates.
+  const costsWritten = { [COST_SOURCE.FASTRR]: 0, [COST_SOURCE.CASHFREE]: 0 }
+  for (const [source, rows] of [
+    [COST_SOURCE.FASTRR,   checkoutCosts],
+    [COST_SOURCE.CASHFREE, cashfreeCosts],
+  ]) {
+    for (const names of chunk(orderNames, RPC_CHUNK)) {
+      const inChunk = new Set(names)
+      const { data, error } = await supabase.rpc('replace_order_costs', {
+        p_order_names: names,
+        p_source:      source,
+        p_rows:        rows.filter((c) => inChunk.has(c.shopify_order_name)),
+      })
+      if (error) errors.push({ row: `order_costs_replace_${source}`, message: error.message })
+      else costsWritten[source] += data || 0
+    }
+  }
 
   const byStatus = allOrderRows.reduce((acc, o) => {
     acc[o.status] = (acc[o.status] || 0) + 1
@@ -169,10 +236,12 @@ export async function POST(request) {
 
   return Response.json({
     synced:             orderNames.length,
-    inserted:           newOrders.length,
-    updated:            oldOrders.length,
+    inserted:           insertedCount,
+    updated:            updatedCount,
     by_status:          byStatus,
-    line_items_created: allLineItems.length,
+    line_items_created: lineItemsWritten,
+    checkout_costs:     costsWritten[COST_SOURCE.FASTRR],
+    gateway_costs:      costsWritten[COST_SOURCE.CASHFREE],
     errors,
     date:               new Date().toISOString(),
   })

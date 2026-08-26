@@ -1,4 +1,19 @@
 import { supabase } from '@/lib/supabase'
+import { selectAllIn } from '@/lib/paged'
+import { today } from '@/lib/dates'
+import { ORDER_STATUS, PAYMENT_TYPE, COST_SOURCE } from '@/lib/constants'
+
+// RPC payloads travel in the POST body, so the limit is statement size rather
+// than URL length. Each chunk is one atomic delete+insert inside the function.
+const RPC_CHUNK   = 200
+// PostgREST builds a single statement per write request — keep batches bounded.
+const WRITE_CHUNK = 400
+
+function chunk(arr, size) {
+  const out = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
 
 // ---------------------------------------------------------------------------
 // CSV parser — same character-by-character approach as the Shopify importer
@@ -148,6 +163,7 @@ export async function POST(request) {
   const errors   = []
   const warnings = []
   const unknownHeads = new Set()
+  let costRowsWritten = 0
 
   // ---------------------------------------------------------------------------
   // 1. Process order-linked rows
@@ -207,60 +223,70 @@ export async function POST(request) {
       transaction_date:   vfDate(r.transaction_date),
       nature:             (r.transaction_nature || '').toLowerCase() === 'credit' ? 'credit' : 'debit',
       ratecard_type:      blank(r.lmd_ratecard_type) ? null : r.lmd_ratecard_type,
-      source:             'vfulfill',
+      source:             COST_SOURCE.VFULFILL,
     })
   }
 
   const orderNames = [...orderGroups.keys()]
 
   if (orderNames.length > 0) {
-    // Check which orders already exist
-    const { data: existingRows, error: fetchErr } = await supabase
-      .from('orders')
-      .select('shopify_order_name, status')
-      .in('shopify_order_name', orderNames)
+    // Check which orders already exist. Chunked: an unbounded .in() is
+    // truncated at 1000 rows, which makes existing orders look missing — they
+    // then get queued as stubs and collide on the primary key, aborting the
+    // whole batch so no order gets its status or delivered_at.
+    let existingRows
+    try {
+      existingRows = await selectAllIn(
+        (names) => supabase.from('orders').select('shopify_order_name, status').in('shopify_order_name', names),
+        orderNames
+      )
+    } catch (e) {
+      return Response.json({ error: e.message }, { status: 500 })
+    }
 
-    if (fetchErr) return Response.json({ error: fetchErr.message }, { status: 500 })
-
-    const existingMap = new Map((existingRows || []).map((o) => [o.shopify_order_name, o]))
+    const existingMap = new Map(existingRows.map((o) => [o.shopify_order_name, o]))
     const missingNames = orderNames.filter((n) => !existingMap.has(n))
 
     // Create stub orders for any names not found in DB (came from outside the Shopify import window)
     if (missingNames.length > 0) {
       const stubs = missingNames.map((name) => {
         const g         = orderGroups.get(name)
-        const newStatus = g.hasRto ? 'rto' : (g.hasFulfilled || g.hasCodRemittance) ? 'delivered' : 'active'
+        const newStatus = g.hasRto ? ORDER_STATUS.RTO : (g.hasFulfilled || g.hasCodRemittance) ? ORDER_STATUS.DELIVERED : ORDER_STATUS.ACTIVE
         return {
           shopify_order_name:  name,
-          payment_type:        'unknown',
+          payment_type:        PAYMENT_TYPE.UNKNOWN,
           vf_payment_type_raw: g.vfPaymentRaw,
           order_value:         g.orderValue || 0,
-          order_date:          g.orderDate  || new Date().toISOString().slice(0, 10),
+          order_date:          g.orderDate  || today(),
           status:              newStatus,
           vf_order_id:         g.vf_order_id,
-          delivered_at:        newStatus === 'delivered' ? g.deliveredAt : null,
+          delivered_at:        newStatus === ORDER_STATUS.DELIVERED ? g.deliveredAt : null,
         }
       })
-      const { error } = await supabase.from('orders').insert(stubs)
-      if (error) errors.push({ row: 'stub_orders', message: error.message })
-      if (missingNames.length > 0) {
-        warnings.push(`${missingNames.length} stub order(s) created (not in Shopify import): ${missingNames.slice(0, 5).join(', ')}${missingNames.length > 5 ? '…' : ''}`)
+      // ON CONFLICT DO NOTHING: a stub must never overwrite a real order, and a
+      // duplicate must never abort the batch.
+      for (const batch of chunk(stubs, WRITE_CHUNK)) {
+        const { error } = await supabase
+          .from('orders')
+          .upsert(batch, { onConflict: 'shopify_order_name', ignoreDuplicates: true })
+        if (error) errors.push({ row: 'stub_orders', message: error.message })
       }
+      warnings.push(`${missingNames.length} stub order(s) created (not in Shopify import): ${missingNames.slice(0, 5).join(', ')}${missingNames.length > 5 ? '…' : ''}`)
     }
 
     // Update existing orders: set vf_order_id + status (rto > delivered > keep)
     for (const [name, g] of orderGroups) {
       if (!existingMap.has(name)) continue // stubs handled above
       const current = existingMap.get(name)
-      const newStatus = g.hasRto ? 'rto' : (g.hasFulfilled || g.hasCodRemittance) ? 'delivered' : null
+      const newStatus = g.hasRto ? ORDER_STATUS.RTO : (g.hasFulfilled || g.hasCodRemittance) ? ORDER_STATUS.DELIVERED : null
 
       const updates = {}
       if (g.vf_order_id) updates.vf_order_id = g.vf_order_id
       // Only promote status — never regress (rto stays rto, delivered stays delivered)
-      if (newStatus && current.status !== 'rto') {
-        if (newStatus === 'rto' || current.status === 'active') {
+      if (newStatus && current.status !== ORDER_STATUS.RTO) {
+        if (newStatus === ORDER_STATUS.RTO || current.status === ORDER_STATUS.ACTIVE) {
           updates.status = newStatus
-          if (newStatus === 'delivered' && g.deliveredAt) updates.delivered_at = g.deliveredAt
+          if (newStatus === ORDER_STATUS.DELIVERED && g.deliveredAt) updates.delivered_at = g.deliveredAt
         }
       }
 
@@ -273,18 +299,19 @@ export async function POST(request) {
       }
     }
 
-    // Replace vfulfill order_costs for all affected orders (delete + insert = idempotent)
-    const { error: delErr } = await supabase
-      .from('order_costs')
-      .delete()
-      .in('shopify_order_name', orderNames)
-      .eq('source', 'vfulfill')
-    if (delErr) errors.push({ row: 'order_costs_delete', message: delErr.message })
-
-    const allCostRows = orderNames.flatMap((n) => orderGroups.get(n).costRows)
-    if (allCostRows.length > 0) {
-      const { error } = await supabase.from('order_costs').insert(allCostRows)
-      if (error) errors.push({ row: 'order_costs_insert', message: error.message })
+    // Replace vfulfill order_costs for all affected orders. The delete and the
+    // insert share one transaction inside replace_order_costs() — a failed
+    // insert used to leave the orders with their vFulfill costs wiped and no
+    // way back.
+    for (const names of chunk(orderNames, RPC_CHUNK)) {
+      const rows = names.flatMap((n) => orderGroups.get(n).costRows)
+      const { data, error } = await supabase.rpc('replace_order_costs', {
+        p_order_names: names,
+        p_source:      COST_SOURCE.VFULFILL,
+        p_rows:        rows,
+      })
+      if (error) errors.push({ row: 'order_costs_replace', message: error.message })
+      else costRowsWritten += data || 0
     }
   }
 
@@ -325,7 +352,7 @@ export async function POST(request) {
 
   return Response.json({
     orders_affected:     orderGroups.size,
-    cost_rows_inserted:  orderNames.flatMap((n) => orderGroups.get(n)?.costRows ?? []).length,
+    cost_rows_inserted:  costRowsWritten,
     wallet_rows:         walletInserts.length,
     declined_skipped:    declinedCount,
     errors,

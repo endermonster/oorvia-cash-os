@@ -1,11 +1,13 @@
 import { supabase } from '@/lib/supabase'
 import { selectAll } from '@/lib/paged'
+import { today as todayYmd, parseYmd } from '@/lib/dates'
+import { COD_FLOAT_STATUSES, COST_SOURCE, PAYMENT_TYPE } from '@/lib/constants'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
 function daysBetween(dateStr, today) {
-  const d1 = new Date(dateStr)
-  const d2 = new Date(today)
+  const d1 = parseYmd(String(dateStr).slice(0, 10))
+  const d2 = parseYmd(today)
   return Math.max(0, Math.floor((d2 - d1) / 86400000))
 }
 
@@ -18,7 +20,7 @@ export async function GET() {
 }
 
 async function buildCashPosition() {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayYmd()
 
   // ── vFulfill wallet: sum across wallet_transactions + order_costs ──
   // wallet_transactions captures recharges / withdrawals / service fees
@@ -31,7 +33,7 @@ async function buildCashPosition() {
       supabase
         .from('order_costs')
         .select('nature, taxable_amt, gst_amt')
-        .eq('source', 'vfulfill')
+        .eq('source', COST_SOURCE.VFULFILL)
     ),
   ])
 
@@ -62,13 +64,15 @@ async function buildCashPosition() {
     vfulfillBalance = r2(vfulfillBalance + (c.nature === 'credit' ? amt : -amt))
   }
 
-  // ── COD float: active COD orders in transit ──
+  // ── COD float: COD cash sitting with the courier ──
+  // Only genuinely in-transit orders count. 'unfulfilled' has not shipped and
+  // 'delivered' has already remitted, so neither is float.
   const codOrders = await selectAll(() =>
     supabase
       .from('orders')
       .select('order_value')
-      .eq('payment_type', 'cash_on_delivery')
-      .eq('status', 'active')
+      .eq('payment_type', PAYMENT_TYPE.COD)
+      .in('status', COD_FLOAT_STATUSES)
   )
 
   const cod_float       = r2(codOrders.reduce((s, o) => s + Number(o.order_value || 0), 0))

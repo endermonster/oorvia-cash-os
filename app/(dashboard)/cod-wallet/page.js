@@ -5,11 +5,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
 import { fmtINR, computeRunningBalance } from '@/lib/pnl'
-
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+import { currentMonth, today, fmtDate } from '@/lib/dates'
 
 const inputCls =
   'w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500'
@@ -35,7 +31,7 @@ export default function CodWalletPage() {
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ entry_date: new Date().toISOString().slice(0, 10), entry_type: 'credit', amount: '', reference: '', notes: '' })
+  const [form, setForm] = useState({ entry_date: today(), entry_type: 'credit', amount: '', reference: '', notes: '' })
   const [saving, setSaving] = useState(false)
 
   const fetchEntries = async (m) => {
@@ -57,7 +53,7 @@ export default function CodWalletPage() {
       body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
     })
     setShowForm(false)
-    setForm({ entry_date: new Date().toISOString().slice(0, 10), entry_type: 'credit', amount: '', reference: '', notes: '' })
+    setForm({ entry_date: today(), entry_type: 'credit', amount: '', reference: '', notes: '' })
     fetchEntries(month)
     setSaving(false)
   }
@@ -150,7 +146,7 @@ export default function CodWalletPage() {
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-slate-500">No wallet entries this month.</td></tr>
                 ) : [...entries].reverse().map((e) => (
                   <tr key={e.id} className="hover:bg-slate-800/60">
-                    <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{new Date(e.entry_date).toLocaleDateString('en-IN')}</td>
+                    <td className="px-4 py-3 text-slate-300 text-xs whitespace-nowrap">{fmtDate(e.entry_date)}</td>
                     <td className="px-4 py-3">
                       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TYPE_STYLES[e.entry_type] || 'bg-slate-700 text-slate-400'}`}>
                         {TYPE_LABELS[e.entry_type] || e.entry_type}

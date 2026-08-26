@@ -1,5 +1,16 @@
 import { supabase } from '@/lib/supabase'
 import { mapShopifyStatus } from '@/lib/shopify'
+import { selectAllIn } from '@/lib/paged'
+import { COST_SOURCE, PAYMENT_TYPE } from '@/lib/constants'
+
+// PostgREST serialises .in() lists into the query string, so a large export has
+// to be split for writes too — not just for the paged reads in lib/paged.js.
+const IN_CHUNK = 400
+function chunked(values) {
+  const out = []
+  for (let i = 0; i < values.length; i += IN_CHUNK) out.push(values.slice(i, i + IN_CHUNK))
+  return out
+}
 
 // ---------------------------------------------------------------------------
 // CSV helpers
@@ -73,10 +84,10 @@ function parseShopifyDate(s) {
 
 function mapPaymentType(raw) {
   const v = (raw || '').toLowerCase().trim()
-  if (v.includes('cash on delivery') || v.includes('cod')) return 'cash_on_delivery'
-  if (v.includes('cashfree'))  return 'prepaid_cashfree'
-  if (v.includes('razorpay'))  return 'prepaid_razorpay'
-  return 'unknown'
+  if (v.includes('cash on delivery') || v.includes('cod')) return PAYMENT_TYPE.COD
+  if (v.includes('cashfree'))  return PAYMENT_TYPE.PREPAID_CASHFREE
+  if (v.includes('razorpay'))  return PAYMENT_TYPE.PREPAID_RAZORPAY
+  return PAYMENT_TYPE.UNKNOWN
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +168,7 @@ export async function POST(request) {
     const rawPayment = meta.payment_method?.trim() || ''
     const paymentType = mapPaymentType(rawPayment)
 
-    if (paymentType === 'unknown' && rawPayment) {
+    if (paymentType === PAYMENT_TYPE.UNKNOWN && rawPayment) {
       unknownPaymentRaws.push(rawPayment)
     }
 
@@ -195,7 +206,7 @@ export async function POST(request) {
       total_amt:          r2(orderValue * 0.0236),
       transaction_date:   orderDate,
       nature:             'debit',
-      source:             'fastrr',
+      source:             COST_SOURCE.FASTRR,
     })
   }
 
@@ -205,14 +216,19 @@ export async function POST(request) {
   //   - Existing    → update only payment_type, order_value, ship_state, order_date
   //                   (do NOT overwrite status or vf_order_id set by vFulfill)
   // ---------------------------------------------------------------------------
-  const { data: existingRows, error: fetchErr } = await supabase
-    .from('orders')
-    .select('shopify_order_name')
-    .in('shopify_order_name', orderNames)
+  // A truncated read here misclassifies existing orders as new, and the insert
+  // then fails on the primary key — page and chunk it.
+  let existingRows
+  try {
+    existingRows = await selectAllIn(
+      (chunk) => supabase.from('orders').select('shopify_order_name').in('shopify_order_name', chunk),
+      orderNames
+    )
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
 
-  if (fetchErr) return Response.json({ error: fetchErr.message }, { status: 500 })
-
-  const existingSet = new Set((existingRows || []).map((o) => o.shopify_order_name))
+  const existingSet = new Set(existingRows.map((o) => o.shopify_order_name))
   const newOrders   = allOrderRows.filter((o) => !existingSet.has(o.shopify_order_name))
   const oldOrders   = allOrderRows.filter((o) =>  existingSet.has(o.shopify_order_name))
 
@@ -237,19 +253,28 @@ export async function POST(request) {
   // ---------------------------------------------------------------------------
   // Replace line items for these orders (delete + insert handles re-imports)
   // ---------------------------------------------------------------------------
-  const { error: delLiErr } = await supabase
-    .from('order_line_items')
-    .delete()
-    .in('shopify_order_name', orderNames)
-  if (delLiErr) errors.push({ row: 'line_items_delete', message: delLiErr.message })
+  for (const names of chunked(orderNames)) {
+    const { error: delLiErr } = await supabase
+      .from('order_line_items')
+      .delete()
+      .in('shopify_order_name', names)
+    if (delLiErr) errors.push({ row: 'line_items_delete', message: delLiErr.message })
+  }
 
   if (allLineItems.length > 0) {
     // Auto-create stub products for any SKUs not yet in the products table
     const uniqueSkus = [...new Set(allLineItems.map(li => li.sku).filter(Boolean))]
     if (uniqueSkus.length > 0) {
-      const { data: existingProducts } = await supabase
-        .from('products').select('sku').in('sku', uniqueSkus)
-      const existingSkuSet = new Set((existingProducts || []).map(p => p.sku))
+      let existingProducts = []
+      try {
+        existingProducts = await selectAllIn(
+          (chunk) => supabase.from('products').select('sku').in('sku', chunk),
+          uniqueSkus
+        )
+      } catch (e) {
+        errors.push({ row: 'products_lookup', message: e.message })
+      }
+      const existingSkuSet = new Set(existingProducts.map(p => p.sku))
       const missingSkus = uniqueSkus.filter(s => !existingSkuSet.has(s))
       if (missingSkus.length > 0) {
         const { error: stubErr } = await supabase.from('products')
@@ -265,12 +290,14 @@ export async function POST(request) {
   // ---------------------------------------------------------------------------
   // Replace Fastrr order_costs for these orders (idempotent re-import)
   // ---------------------------------------------------------------------------
-  const { error: delCostErr } = await supabase
-    .from('order_costs')
-    .delete()
-    .in('shopify_order_name', orderNames)
-    .eq('source', 'fastrr')
-  if (delCostErr) errors.push({ row: 'order_costs_delete', message: delCostErr.message })
+  for (const names of chunked(orderNames)) {
+    const { error: delCostErr } = await supabase
+      .from('order_costs')
+      .delete()
+      .in('shopify_order_name', names)
+      .eq('source', COST_SOURCE.FASTRR)
+    if (delCostErr) errors.push({ row: 'order_costs_delete', message: delCostErr.message })
+  }
 
   const { error: costsErr } = await supabase.from('order_costs').insert(allOrderCosts)
   if (costsErr) errors.push({ row: 'order_costs_insert', message: costsErr.message })

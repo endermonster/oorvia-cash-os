@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react'
 import PageHeader from '@/components/shared/PageHeader'
 import StatCard   from '@/components/shared/StatCard'
 import { fmtINR } from '@/lib/pnl'
+import { addMonths, currentMonth, fmtMonth, monthEnd, monthStart, monthsBetween } from '@/lib/dates'
 
 const TRACKING_START = '2026-03'
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function fmtL(n) {
   const abs = Math.abs(n)
@@ -158,39 +158,6 @@ function CumulativeChart({ series, projections, breakEvenMonth }) {
   )
 }
 
-function currentYM() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function monthsBetween(from, to) {
-  const result = []
-  let [y, m] = from.split('-').map(Number)
-  const [ey, em] = to.split('-').map(Number)
-  while (y < ey || (y === ey && m <= em)) {
-    result.push(`${y}-${String(m).padStart(2, '0')}`)
-    m++; if (m > 12) { m = 1; y++ }
-  }
-  return result
-}
-
-function addMonths(ym, n) {
-  let [y, m] = ym.split('-').map(Number)
-  m += n; while (m > 12) { m -= 12; y++ }
-  return `${y}-${String(m).padStart(2, '0')}`
-}
-
-function fmtMonth(ym) {
-  const [y, mo] = ym.split('-')
-  return `${MONTHS[+mo - 1]} ${y}`
-}
-
-function monthStart(ym) { return `${ym}-01` }
-function monthEnd(ym) {
-  const [y, m] = ym.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().slice(0, 10)
-}
-
 function r2(n) { return Math.round(n * 100) / 100 }
 
 export default function ForecastPage() {
@@ -207,7 +174,7 @@ export default function ForecastPage() {
         if (b.error) throw new Error(b.error)
         setBaseline(b)
 
-        const now    = currentYM()
+        const now    = currentMonth()
         const months = monthsBetween(TRACKING_START, now)
 
         const entries = await Promise.all(
@@ -231,7 +198,7 @@ export default function ForecastPage() {
   if (err)     return <p className="text-red-400 text-sm">{err}</p>
   if (!baseline) return <p className="text-slate-400 text-sm">No baseline found. Run the SQL setup.</p>
 
-  const now            = currentYM()
+  const now            = currentMonth()
   const trackedMonths  = monthsBetween(TRACKING_START, now)
   const completedMonths = trackedMonths.slice(0, -1) // exclude current in-progress month
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { fmtINR } from '@/lib/pnl'
+import { today } from '@/lib/dates'
 
 const inputCls =
   'rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500'
@@ -40,7 +41,7 @@ export default function CashPage() {
         wallet,
         type:   'snapshot',
         amount: parseFloat(balanceInput) || 0,
-        date:   new Date().toISOString().slice(0, 10),
+        date:   today(),
         note:   'Manual balance snapshot',
       }),
     })

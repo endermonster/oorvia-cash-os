@@ -375,17 +375,19 @@ export async function POST(request) {
   else if (importType === 'cod_wallet') result = await importCodWallet(rows)
   else result = await importProducts(rows)
 
-  await supabase.from('import_logs').insert([{
-    import_type:  importType,
-    filename:     file.name,
-    row_count:    rows.length,
-    error_count:  result.errors.length,
-    errors:       result.errors.length > 0 ? result.errors : null,
-  }])
-
+  // The audit write to `import_logs` was removed: that table does not exist in
+  // this database, so the insert failed on every single import and the error was
+  // discarded (no `await` on the result, no check). Nothing has ever read it.
+  // The same facts now travel back in the response instead of into a black hole.
   return Response.json({
     inserted: result.inserted,
     total:    rows.length,
     errors:   result.errors,
+    log: {
+      import_type: importType,
+      filename:    file.name,
+      row_count:   rows.length,
+      error_count: result.errors.length,
+    },
   })
 }

@@ -1,20 +1,12 @@
 'use client'
 
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+import { addMonths, fmtMonth } from '@/lib/dates'
 
 // monthStr: YYYY-MM string
 // onChange: (newMonthStr: string) => void
 export default function MonthPicker({ monthStr, onChange }) {
-  const [year, month] = monthStr.split('-').map(Number)
-
-  const prev = () => {
-    const d = new Date(year, month - 2, 1)
-    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
-  const next = () => {
-    const d = new Date(year, month, 1)
-    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-  }
+  const prev = () => onChange(addMonths(monthStr, -1))
+  const next = () => onChange(addMonths(monthStr, 1))
 
   return (
     <div className="flex items-center gap-1.5">
@@ -28,7 +20,7 @@ export default function MonthPicker({ monthStr, onChange }) {
         </svg>
       </button>
       <span className="min-w-[110px] text-center text-sm font-medium text-slate-300 tabular-nums">
-        {MONTHS[month - 1]} {year}
+        {fmtMonth(monthStr)}
       </span>
       <button
         onClick={next}

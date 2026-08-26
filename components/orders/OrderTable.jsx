@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import OrderStatusBadge from './OrderStatusBadge'
 import { fmtINR, computeOrderNetProfit } from '@/lib/pnl'
+import { fmtDate } from '@/lib/dates'
 
 const PAGE_SIZE = 15
 
@@ -69,7 +70,11 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
   }
 
   const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE))
-  const slice = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  // Clamp during render rather than resetting in an effect: filtering to fewer
+  // rows while on a later page used to render an empty table, and an effect
+  // would fix it only after an extra render pass.
+  const safePage = Math.min(page, totalPages)
+  const slice = orders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   if (orders.length === 0) {
     return (
@@ -106,7 +111,7 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
               return (
                 <tr key={key} className="hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap text-slate-400 text-xs tabular-nums">
-                    {new Date(o.order_date).toLocaleDateString('en-IN')}
+                    {fmtDate(o.order_date)}
                   </td>
                   <td className="px-4 py-3 text-slate-500 text-xs font-mono">
                     {o.shopify_order_name || o.shopify_order_id || <span className="text-slate-700">—</span>}
@@ -154,13 +159,13 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
       </div>
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
-          <span className="text-xs text-slate-600">Page {page} of {totalPages} · {orders.length} orders</span>
+          <span className="text-xs text-slate-600">Page {safePage} of {totalPages} · {orders.length} orders</span>
           <div className="flex gap-2">
-            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+            <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage === 1}
               className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40 cursor-pointer">
               Prev
             </button>
-            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+            <button onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages}
               className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40 cursor-pointer">
               Next
             </button>

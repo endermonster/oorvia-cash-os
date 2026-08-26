@@ -1,22 +1,28 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
+import { monthRange } from '@/lib/dates'
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const wallet = searchParams.get('wallet') // optional filter
   const month  = searchParams.get('month')  // YYYY-MM, optional
 
-  let query = supabase.from('wallet_transactions').select('*').order('date', { ascending: false })
-  if (wallet) query = query.eq('wallet', wallet)
-  if (month) {
-    const [y, m] = month.split('-').map(Number)
-    const start = `${y}-${String(m).padStart(2, '0')}-01`
-    const end   = new Date(y, m, 0).toISOString().slice(0, 10)
-    query = query.gte('date', start).lte('date', end)
+  // vFulfill CSV re-imports push this table past the PostgREST row cap, and the
+  // ledger is summed into a wallet balance — read it in full.
+  try {
+    const rows = await selectAll(() => {
+      let q = supabase.from('wallet_transactions').select('*').order('date', { ascending: false })
+      if (wallet) q = q.eq('wallet', wallet)
+      if (month) {
+        const { from, to } = monthRange(month)
+        q = q.gte('date', from).lte('date', to)
+      }
+      return q
+    })
+    return Response.json(rows)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
-
-  const { data, error } = await query
-  if (error) return Response.json({ error: error.message }, { status: 500 })
-  return Response.json(data)
 }
 
 export async function POST(request) {

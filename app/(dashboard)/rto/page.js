@@ -5,19 +5,7 @@ import PageHeader from '@/components/shared/PageHeader'
 import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
 import { fmtINR } from '@/lib/pnl'
-
-const pad2 = (n) => String(n).padStart(2, '0')
-
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
-}
-
-// Local date, not toISOString() — that shifts a day back in IST.
-function todayLocal() {
-  const d = new Date()
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
-}
+import { currentMonth, fmtDate, today } from '@/lib/dates'
 
 export default function RTOPage() {
   const [month, setMonth] = useState(currentMonth)
@@ -27,7 +15,7 @@ export default function RTOPage() {
   const [loading, setLoading] = useState(true)
   const [markingId, setMarkingId] = useState(null)
   const [confirmingId, setConfirmingId] = useState(null) // order awaiting a delivery date
-  const [deliveredOn, setDeliveredOn] = useState(todayLocal)
+  const [deliveredOn, setDeliveredOn] = useState(today)
   const [markError, setMarkError] = useState(null)
 
   const fetchData = async (m) => {
@@ -62,7 +50,7 @@ export default function RTOPage() {
 
   const openConfirm = (key) => {
     setConfirmingId(key)
-    setDeliveredOn(todayLocal())
+    setDeliveredOn(today())
     setMarkError(null)
   }
 
@@ -136,7 +124,7 @@ export default function RTOPage() {
                   return (
                     <tr key={key} className="hover:bg-slate-800/60">
                       <td className="px-4 py-3 whitespace-nowrap text-slate-300 text-xs">
-                        {new Date(o.order_date).toLocaleDateString('en-IN')}
+                        {fmtDate(o.order_date)}
                       </td>
                       <td className="px-4 py-3 text-slate-400 text-xs">{key || '—'}</td>
                       <td className="px-4 py-3">
@@ -156,7 +144,7 @@ export default function RTOPage() {
                               type="date"
                               autoFocus
                               value={deliveredOn}
-                              max={todayLocal()}
+                              max={today()}
                               onChange={(e) => setDeliveredOn(e.target.value)}
                               className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                             />

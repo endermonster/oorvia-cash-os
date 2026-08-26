@@ -1,4 +1,7 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll } from '@/lib/paged'
+import { monthRange } from '@/lib/dates'
+import { COST_SOURCE } from '@/lib/constants'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
@@ -13,36 +16,43 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const month = searchParams.get('month')
 
-  let start = null, end = null
-  if (month) {
-    const [y, m] = month.split('-').map(Number)
-    start = `${y}-${String(m).padStart(2, '0')}-01`
-    end   = new Date(y, m, 0).toISOString().slice(0, 10)
+  const range = month ? monthRange(month) : null
+  const start = range?.from ?? null
+  const end   = range?.to   ?? null
+
+  // The caller derives a running wallet balance from this list, so every read
+  // below must be complete — a truncated page silently shifts the balance.
+  let manualEntries, orderCosts, walletTxns
+  try {
+    // 1. Manual entries from cod_wallet_entries
+    manualEntries = await selectAll(() => {
+      let q = supabase.from('cod_wallet_entries').select('*')
+      if (start) q = q.gte('entry_date', start).lte('entry_date', end)
+      return q
+    })
+
+    // 2. Per-order vFulfill credits (COD remittances) and debits (fees) from order_costs
+    orderCosts = await selectAll(() => {
+      let q = supabase
+        .from('order_costs')
+        .select('id, shopify_order_name, transaction_head, total_amt, transaction_date, nature')
+        .eq('source', COST_SOURCE.VFULFILL)
+      if (start) q = q.gte('transaction_date', start).lte('transaction_date', end)
+      return q
+    })
+
+    // 3. Wallet-level vFulfill transactions (recharges, withdrawals, service fees)
+    walletTxns = await selectAll(() => {
+      let q = supabase
+        .from('wallet_transactions')
+        .select('id, type, amount, date, note')
+        .eq('wallet', 'vfulfill')
+      if (start) q = q.gte('date', start).lte('date', end)
+      return q
+    })
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
   }
-
-  // 1. Manual entries from cod_wallet_entries
-  let manualQuery = supabase.from('cod_wallet_entries').select('*')
-  if (start) manualQuery = manualQuery.gte('entry_date', start).lte('entry_date', end)
-  const { data: manualEntries, error: manualErr } = await manualQuery
-  if (manualErr) return Response.json({ error: manualErr.message }, { status: 500 })
-
-  // 2. Per-order vFulfill credits (COD remittances) and debits (fees) from order_costs
-  let ocQuery = supabase
-    .from('order_costs')
-    .select('id, shopify_order_name, transaction_head, total_amt, transaction_date, nature')
-    .eq('source', 'vfulfill')
-  if (start) ocQuery = ocQuery.gte('transaction_date', start).lte('transaction_date', end)
-  const { data: orderCosts, error: ocErr } = await ocQuery
-  if (ocErr) return Response.json({ error: ocErr.message }, { status: 500 })
-
-  // 3. Wallet-level vFulfill transactions (recharges, withdrawals, service fees)
-  let wtQuery = supabase
-    .from('wallet_transactions')
-    .select('id, type, amount, date, note')
-    .eq('wallet', 'vfulfill')
-  if (start) wtQuery = wtQuery.gte('date', start).lte('date', end)
-  const { data: walletTxns, error: wtErr } = await wtQuery
-  if (wtErr) return Response.json({ error: wtErr.message }, { status: 500 })
 
   // Build unified entry list
   const entries = []

@@ -8,11 +8,20 @@ import OrderForm from '@/components/orders/OrderForm'
 import OrderTable from '@/components/orders/OrderTable'
 import ImportButton from '@/components/shared/ImportButton'
 import { fmtINR } from '@/lib/pnl'
+import { currentMonth } from '@/lib/dates'
+import {
+  ORDER_STATUS,
+  ORDER_STATUS_LIST,
+  ORDER_STATUS_LABELS,
+  PAYMENT_TYPE,
+  PAYMENT_TYPE_LABELS,
+} from '@/lib/constants'
 
-function currentMonth() {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
+// The API takes `paymentMode` as a cod|prepaid shorthand, not a raw payment_type.
+const PAYMENT_MODE_OPTIONS = [
+  { value: 'cod',     label: PAYMENT_TYPE_LABELS[PAYMENT_TYPE.COD] },
+  { value: 'prepaid', label: 'Prepaid' },
+]
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState([])
@@ -71,8 +80,8 @@ export default function OrdersPage() {
 
   // Stats
   const total = orders.length
-  const delivered = orders.filter((o) => o.status === 'delivered').length
-  const rtoCount = orders.filter((o) => o.status === 'rto').length
+  const delivered = orders.filter((o) => o.status === ORDER_STATUS.DELIVERED).length
+  const rtoCount = orders.filter((o) => o.status === ORDER_STATUS.RTO).length
   const rtoRate = total > 0 ? ((rtoCount / total) * 100).toFixed(1) : '0.0'
   const grossRevenue = orders.reduce((s, o) => s + Number(o.order_value || 0), 0)
 
@@ -119,17 +128,16 @@ export default function OrdersPage() {
         <label className="sr-only" htmlFor="orders-status">Filter by status</label>
         <select id="orders-status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={inputCls}>
           <option value="">All Statuses</option>
-          <option value="pending">Pending</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-          <option value="rto">RTO</option>
-          <option value="cancelled">Cancelled</option>
+          {ORDER_STATUS_LIST.map((s) => (
+            <option key={s} value={s}>{ORDER_STATUS_LABELS[s]}</option>
+          ))}
         </select>
         <label className="sr-only" htmlFor="orders-mode">Filter by payment mode</label>
         <select id="orders-mode" value={modeFilter} onChange={(e) => setModeFilter(e.target.value)} className={inputCls}>
           <option value="">All Modes</option>
-          <option value="prepaid">Prepaid</option>
-          <option value="cod">COD</option>
+          {PAYMENT_MODE_OPTIONS.map(({ value, label }) => (
+            <option key={value} value={value}>{label}</option>
+          ))}
         </select>
         <span className="text-sm text-slate-500">Gross: <span className="text-slate-200 font-medium">{fmtINR(grossRevenue)}</span></span>
       </div>
