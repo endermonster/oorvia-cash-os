@@ -262,10 +262,12 @@ export async function POST(request) {
     if (missingNames.length > 0) {
       const stubs = missingNames.map((name) => {
         const g         = orderGroups.get(name)
-        // A fulfilment fee proves the order shipped, not that it arrived. Only a COD
-        // remittance proves money changed hands. Anything else stays in flight until
-        // the shipments import confirms delivery.
-        const newStatus = g.hasRto ? ORDER_STATUS.RTO : g.hasCodRemittance ? ORDER_STATUS.DELIVERED : ORDER_STATUS.ACTIVE
+        // This export can prove an order came BACK (RTO fees) but never that it
+        // arrived — it carries no delivery date. Marking an order delivered here
+        // would leave delivered_at null, and /api/pnl and /api/gst both select
+        // delivered orders BY delivered_at, so the order would vanish from every
+        // P&L month and GST return. Delivery is the shipments import's job.
+        const newStatus = g.hasRto ? ORDER_STATUS.RTO : ORDER_STATUS.ACTIVE
         return {
           shopify_order_name:  name,
           // Stub orders only — these are not in Shopify yet, so there is no
@@ -277,7 +279,7 @@ export async function POST(request) {
           order_date:          g.orderDate  || today(),
           status:              newStatus,
           vf_order_id:         g.vf_order_id,
-          delivered_at:        newStatus === ORDER_STATUS.DELIVERED ? g.deliveredAt : null,
+          delivered_at:        null, // only /api/import/vf-shipments may set this
         }
       })
       // ON CONFLICT DO NOTHING: a stub must never overwrite a real order, and a
@@ -291,11 +293,12 @@ export async function POST(request) {
       warnings.push(`${missingNames.length} stub order(s) created (not in Shopify import): ${missingNames.slice(0, 5).join(', ')}${missingNames.length > 5 ? '…' : ''}`)
     }
 
-    // Update existing orders: set vf_order_id + status (rto > delivered > keep)
+    // Update existing orders: set vf_order_id, and promote to RTO only.
+    // Never promotes to delivered — see the note above.
     for (const [name, g] of orderGroups) {
       if (!existingMap.has(name)) continue // stubs handled above
       const current = existingMap.get(name)
-      const newStatus = g.hasRto ? ORDER_STATUS.RTO : g.hasCodRemittance ? ORDER_STATUS.DELIVERED : null
+      const newStatus = g.hasRto ? ORDER_STATUS.RTO : null
 
       const updates = {}
       if (g.vf_order_id) updates.vf_order_id = g.vf_order_id
