@@ -183,6 +183,12 @@ export async function POST(request) {
         vf_order_id:      r.vf_order_id && r.vf_order_id !== '-' ? r.vf_order_id : null,
         orderValue:       num(r.order_value),
         orderDate:        vfDate(r.shopify_order_date),
+        // REFERENCE ONLY — never write this to orders.payment_type.
+        // vFulfill's Payment Type column is unreliable: in a 3,238-row export,
+        // 252 rows marked "Prepaid" carried a COD Fee and 260 carried a COD
+        // Remittance, which a prepaid order cannot have. Shopify's gateway is the
+        // source of truth. Where that is unrecognised, recover COD behaviourally
+        // (a COD Fee or COD Remittance on the order) — not from this column.
         vfPaymentRaw:     r.payment_type || null,
         hasRto:           false,
         hasFulfilled:     false,
@@ -262,6 +268,9 @@ export async function POST(request) {
         const newStatus = g.hasRto ? ORDER_STATUS.RTO : g.hasCodRemittance ? ORDER_STATUS.DELIVERED : ORDER_STATUS.ACTIVE
         return {
           shopify_order_name:  name,
+          // Stub orders only — these are not in Shopify yet, so there is no
+          // authoritative payment type. The Shopify sync fills it in later and
+          // must be allowed to; do not guess it from the transaction export.
           payment_type:        PAYMENT_TYPE.UNKNOWN,
           vf_payment_type_raw: g.vfPaymentRaw,
           order_value:         g.orderValue || 0,
