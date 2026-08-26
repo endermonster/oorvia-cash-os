@@ -14,32 +14,6 @@ function SectionHeading({ children }) {
   )
 }
 
-function WalletCard({ title, value, subtitle, highlight, asOf, onEdit, children }) {
-  const borderCls = highlight
-    ? 'border-slate-700/60 bg-slate-900/60'
-    : 'border-slate-700 bg-slate-900'
-  const titleCls  = highlight ? 'text-blue-400' : 'text-slate-500'
-  const valueCls  = highlight ? 'text-slate-200' : 'text-slate-100'
-
-  return (
-    <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${borderCls}`}>
-      <p className={`text-xs ${titleCls}`}>{title}</p>
-      <p className={`text-2xl font-semibold tabular-nums ${valueCls}`}>{fmtINR(value)}</p>
-      {asOf  && <p className="text-[10px] text-slate-600">as of {asOf}</p>}
-      {subtitle && !asOf && <p className={`text-[10px] ${highlight ? 'text-blue-600' : 'text-slate-600'}`}>{subtitle}</p>}
-      {children}
-      {onEdit && (
-        <button
-          onClick={onEdit}
-          className="mt-1 self-start text-[10px] text-emerald-500 hover:text-emerald-400"
-        >
-          Update balance
-        </button>
-      )}
-    </div>
-  )
-}
-
 export default function CashPage() {
   const [data,          setData]          = useState(null)
   const [loading,       setLoading]       = useState(true)

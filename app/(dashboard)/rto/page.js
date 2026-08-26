@@ -19,23 +19,6 @@ function todayLocal() {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
-// Transaction heads that are charged even on RTO orders
-const RTO_COST_HEADS = new Set([
-  'forward shipping',
-  'fulfilment fees',
-  'fulfillment fees',
-  'order managment fee',
-  'order management fee',
-  'convenience fees percentage',
-  'rto handling fee',
-  'rto shipping',
-])
-
-// COD Fees are NOT charged when an order RTOs — exclude them
-function isRtoCostRow(transactionHead) {
-  return RTO_COST_HEADS.has(transactionHead.toLowerCase().trim())
-}
-
 export default function RTOPage() {
   const [month, setMonth] = useState(currentMonth)
   const [rtoOrders, setRtoOrders] = useState([])
