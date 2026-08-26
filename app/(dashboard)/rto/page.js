@@ -6,9 +6,17 @@ import StatCard from '@/components/shared/StatCard'
 import MonthPicker from '@/components/shared/MonthPicker'
 import { fmtINR } from '@/lib/pnl'
 
+const pad2 = (n) => String(n).padStart(2, '0')
+
 function currentMonth() {
   const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
+}
+
+// Local date, not toISOString() — that shifts a day back in IST.
+function todayLocal() {
+  const d = new Date()
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 }
 
 // Transaction heads that are charged even on RTO orders
@@ -35,6 +43,9 @@ export default function RTOPage() {
   const [allCount, setAllCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [markingId, setMarkingId] = useState(null)
+  const [confirmingId, setConfirmingId] = useState(null) // order awaiting a delivery date
+  const [deliveredOn, setDeliveredOn] = useState(todayLocal)
+  const [markError, setMarkError] = useState(null)
 
   const fetchData = async (m) => {
     setLoading(true)
@@ -66,16 +77,30 @@ export default function RTOPage() {
 
   useEffect(() => { fetchData(month) }, [month])
 
-  const markDelivered = async (order) => {
-    const key = order.shopify_order_name
+  const openConfirm = (key) => {
+    setConfirmingId(key)
+    setDeliveredOn(todayLocal())
+    setMarkError(null)
+  }
+
+  // delivered_at drives which P&L month and GST return this order lands in,
+  // so it is asked for rather than assumed.
+  const markDelivered = async (key) => {
     setMarkingId(key)
-    await fetch(`/api/orders/${encodeURIComponent(key)}`, {
+    setMarkError(null)
+    const res = await fetch(`/api/orders/${encodeURIComponent(key)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'delivered' }),
+      body: JSON.stringify({ status: 'delivered', delivered_at: deliveredOn }),
     })
-    fetchData(month)
     setMarkingId(null)
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setMarkError(d.error || 'Could not update this order.')
+      return
+    }
+    setConfirmingId(null)
+    fetchData(month)
   }
 
   const rtoCount    = rtoOrders.length
@@ -140,13 +165,43 @@ export default function RTOPage() {
                       <td className="px-4 py-3 text-right text-orange-400 font-semibold">{rtoCost > 0 ? fmtINR(rtoCost) : '—'}</td>
                       <td className="px-4 py-3 text-right text-red-400 font-bold">{fmtINR(totalLoss)}</td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => markDelivered(o)}
-                          disabled={markingId === key}
-                          className="text-xs text-green-400 hover:text-green-200 px-2 py-1 rounded border border-green-800 hover:bg-slate-700 disabled:opacity-40"
-                        >
-                          {markingId === key ? 'Saving…' : 'Mark Delivered'}
-                        </button>
+                        {confirmingId === key ? (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <label className="sr-only" htmlFor={`delivered-${key}`}>Delivery date</label>
+                            <input
+                              id={`delivered-${key}`}
+                              type="date"
+                              autoFocus
+                              value={deliveredOn}
+                              max={todayLocal()}
+                              onChange={(e) => setDeliveredOn(e.target.value)}
+                              className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                            <button
+                              onClick={() => markDelivered(key)}
+                              disabled={markingId === key || !deliveredOn}
+                              className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500 disabled:opacity-40 cursor-pointer"
+                            >
+                              {markingId === key ? 'Saving…' : 'Confirm'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmingId(null)}
+                              className="rounded border border-slate-600 px-2 py-1 text-xs text-slate-400 hover:bg-slate-800 cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => openConfirm(key)}
+                            className="text-xs text-emerald-400 hover:text-emerald-200 px-2 py-1 rounded border border-emerald-800 hover:bg-slate-700 cursor-pointer"
+                          >
+                            Mark Delivered
+                          </button>
+                        )}
+                        {markError && confirmingId === key && (
+                          <p className="mt-1 text-xs text-red-400">{markError}</p>
+                        )}
                       </td>
                     </tr>
                   )

@@ -150,7 +150,7 @@ const NAV_GROUPS = [
   },
 ]
 
-export default function Sidebar() {
+export default function Sidebar({ userEmail }) {
   const pathname = usePathname()
 
   const isActive = (href) =>
@@ -212,6 +212,21 @@ export default function Sidebar() {
           <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
           <span className="text-[10px] text-slate-600 tracking-wide">VXP Ventures · Pune</span>
         </div>
+        {userEmail && (
+          <div className="mt-2.5 flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-[10px] text-slate-600" title={userEmail}>
+              {userEmail}
+            </span>
+            <form action="/api/auth/signout" method="post">
+              <button
+                type="submit"
+                className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-slate-600 transition-colors hover:bg-slate-800/60 hover:text-slate-300 cursor-pointer"
+              >
+                Sign out
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </aside>
   )

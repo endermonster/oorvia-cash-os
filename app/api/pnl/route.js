@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase'
+import { selectAll, selectAllIn } from '@/lib/paged'
 
 function r2(n) { return Math.round(n * 100) / 100 }
 
@@ -28,62 +29,70 @@ export async function GET(request) {
   const to   = searchParams.get('to')
   if (!from || !to) return Response.json({ error: 'from and to params required (YYYY-MM-DD)' }, { status: 400 })
 
+  try {
+    return await computePnL(from, to)
+  } catch (e) {
+    return Response.json({ error: e.message }, { status: 500 })
+  }
+}
+
+// Every read below goes through selectAll/selectAllIn. An unpaginated select
+// here truncates at the PostgREST row cap, which understates costs and
+// overstates profit without raising an error.
+async function computePnL(from, to) {
+  const ORDER_COLS = 'shopify_order_name, payment_type, order_value, order_date, status'
+
   // Delivered orders: filter by delivered_at (delivery date) for correct GST period accounting.
   // Active/RTO orders: filter by order_date for operational counts.
-  const [deliveredRes, nonDeliveredRes] = await Promise.all([
-    supabase.from('orders')
-      .select('shopify_order_name, payment_type, order_value, order_date, status')
-      .eq('status', 'delivered')
-      .gte('delivered_at', from).lte('delivered_at', to),
-    supabase.from('orders')
-      .select('shopify_order_name, payment_type, order_value, order_date, status')
-      .in('status', ['active', 'rto'])
-      .gte('order_date', from).lte('order_date', to),
+  const [deliveredOrders, nonDelivered] = await Promise.all([
+    selectAll(() =>
+      supabase.from('orders').select(ORDER_COLS)
+        .eq('status', 'delivered')
+        .gte('delivered_at', from).lte('delivered_at', to)
+    ),
+    selectAll(() =>
+      supabase.from('orders').select(ORDER_COLS)
+        .in('status', ['active', 'rto'])
+        .gte('order_date', from).lte('order_date', to)
+    ),
   ])
-  if (deliveredRes.error)    return Response.json({ error: deliveredRes.error.message }, { status: 500 })
-  if (nonDeliveredRes.error) return Response.json({ error: nonDeliveredRes.error.message }, { status: 500 })
 
-  const deliveredOrders = deliveredRes.data || []
-  const nonDelivered    = nonDeliveredRes.data || []
-  const allOrders       = [...deliveredOrders, ...nonDelivered]
+  const allOrders = [...deliveredOrders, ...nonDelivered]
   const orderNames      = allOrders.map(o => o.shopify_order_name)
   const deliveredNames  = deliveredOrders.map(o => o.shopify_order_name)
   const orderMap        = Object.fromEntries(allOrders.map(o => [o.shopify_order_name, o]))
 
-  let costRows = []
-  if (orderNames.length > 0) {
-    const { data, error } = await supabase
+  const costRows = await selectAllIn(
+    (chunk) => supabase
       .from('order_costs')
       .select('shopify_order_name, transaction_head, taxable_amt, gst_amt, source')
-      .in('shopify_order_name', orderNames).eq('nature', 'debit')
-    if (error) return Response.json({ error: error.message }, { status: 500 })
-    costRows = data || []
-  }
+      .in('shopify_order_name', chunk).eq('nature', 'debit'),
+    orderNames
+  )
 
-  let lineItems = []
-  if (deliveredNames.length > 0) {
-    const { data, error } = await supabase
+  const lineItems = await selectAllIn(
+    (chunk) => supabase
       .from('order_line_items')
       .select('shopify_order_name, sku, qty, unit_price')
-      .in('shopify_order_name', deliveredNames)
-    if (error) return Response.json({ error: error.message }, { status: 500 })
-    lineItems = data || []
-  }
+      .in('shopify_order_name', chunk),
+    deliveredNames
+  )
 
   const skus = [...new Set(lineItems.map(li => li.sku).filter(Boolean))]
-  let cogsHistory = [], productMap = {}
-  if (skus.length > 0) {
-    const [hRes, pRes] = await Promise.all([
-      supabase.from('cogs_history').select('sku, cogs, effective_from, effective_to').in('sku', skus),
-      supabase.from('products').select('sku, name, current_cogs').in('sku', skus),
-    ])
-    if (hRes.error) return Response.json({ error: hRes.error.message }, { status: 500 })
-    cogsHistory = hRes.data || []
-    productMap  = Object.fromEntries((pRes.data || []).map(p => [p.sku, p]))
-  }
+  const [cogsHistory, productRows] = await Promise.all([
+    selectAllIn(
+      (chunk) => supabase.from('cogs_history').select('sku, cogs, effective_from, effective_to').in('sku', chunk),
+      skus
+    ),
+    selectAllIn(
+      (chunk) => supabase.from('products').select('sku, name, current_cogs').in('sku', chunk),
+      skus
+    ),
+  ])
+  const productMap = Object.fromEntries(productRows.map(p => [p.sku, p]))
 
-  const { data: allFixed } = await supabase.from('fixed_costs').select('*')
-  const fixedCosts = (allFixed || []).filter(fc => fc.start_date <= to && (!fc.end_date || fc.end_date >= from))
+  const allFixed   = await selectAll(() => supabase.from('fixed_costs').select('*'))
+  const fixedCosts = allFixed.filter(fc => fc.start_date <= to && (!fc.end_date || fc.end_date >= from))
 
   let usdInrRate = null
   if (fixedCosts.some(fc => fc.usd_amount)) {
@@ -110,12 +119,14 @@ export async function GET(request) {
     }
   }
 
-  const [marketingRes, campaignMapRes] = await Promise.all([
-    supabase.from('ad_spend').select('spend, spend_date, campaign_id').gte('spend_date', from).lte('spend_date', to),
-    supabase.from('campaign_sku_map').select('campaign_id, sku'),
+  const [marketing, campaignMapRows] = await Promise.all([
+    selectAll(() =>
+      supabase.from('ad_spend').select('spend, spend_date, campaign_id')
+        .gte('spend_date', from).lte('spend_date', to)
+    ),
+    selectAll(() => supabase.from('campaign_sku_map').select('campaign_id, sku')),
   ])
-  const marketing       = marketingRes.data || []
-  const campaignSkuMap  = Object.fromEntries((campaignMapRes.data || []).map(m => [m.campaign_id, m.sku]))
+  const campaignSkuMap = Object.fromEntries(campaignMapRows.map(m => [m.campaign_id, m.sku]))
 
   // ── Revenue ──
   const revenue_gross = r2(deliveredOrders.reduce((s, o) => s + Number(o.order_value), 0))

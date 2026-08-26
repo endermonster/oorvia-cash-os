@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Sidebar from './Sidebar'
 
-export default function DashboardShell({ children }) {
+export default function DashboardShell({ children, userEmail }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
 
@@ -28,7 +28,7 @@ export default function DashboardShell({ children }) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        <Sidebar />
+        <Sidebar userEmail={userEmail} />
       </div>
 
       {/* Main area */}
