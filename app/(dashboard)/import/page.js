@@ -166,6 +166,12 @@ function UploadCard({ title, subtitle, endpoint, onDone }) {
           {result.orders_affected !== undefined && <p>Orders affected: <strong>{result.orders_affected}</strong></p>}
           {result.cost_rows_inserted !== undefined && <p>Cost rows: <strong>{result.cost_rows_inserted}</strong></p>}
           {result.wallet_rows  !== undefined && <p>Wallet entries: <strong>{result.wallet_rows}</strong></p>}
+          {result.shipments_read !== undefined && <p>Shipments read: <strong>{result.shipments_read}</strong></p>}
+          {result.delivery_dates_updated !== undefined && <p>Delivery dates corrected: <strong>{result.delivery_dates_updated}</strong></p>}
+          {result.status_updated !== undefined && <p>Statuses updated: <strong>{result.status_updated}</strong></p>}
+          {result.ship_states_filled !== undefined && result.ship_states_filled > 0 && <p>Ship states filled: <strong>{result.ship_states_filled}</strong></p>}
+          {result.unchanged !== undefined && <p className="text-slate-400">Already correct: {result.unchanged}</p>}
+          {result.skipped_no_order !== undefined && result.skipped_no_order > 0 && <p className="text-yellow-400">Skipped, no matching order: {result.skipped_no_order}</p>}
           {result.skipped      !== undefined && <p className="text-slate-400">Skipped: {result.skipped}</p>}
           {result.declined_skipped !== undefined && <p className="text-slate-400">Declined skipped: {result.declined_skipped}</p>}
           {result.warnings?.map((w, i) => (
@@ -196,8 +202,13 @@ export default function ImportPage() {
         />
         <UploadCard
           title="vFulfill Transactions"
-          subtitle="Export from vFulfill → Wallet → Transaction Report as CSV"
+          subtitle="Export from vFulfill → Wallet → Transaction Report as CSV. Brings in per-order fees and wallet movements."
           endpoint="/api/import/vfulfill"
+        />
+        <UploadCard
+          title="vFulfill Shipments"
+          subtitle="Export from vFulfill → Orders → Shipments as CSV. This is the only file with real delivery dates — it decides which month each order's revenue and GST land in."
+          endpoint="/api/import/vf-shipments"
         />
       </div>
     </div>

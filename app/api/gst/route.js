@@ -66,7 +66,83 @@ export async function GET(request) {
   }
 }
 
+// ── Carry-forward ───────────────────────────────────────────────────────────
+//
+// When ITC exceeds output tax in a month, the surplus reduces the next month's
+// liability. This used to be stored: viewing a month WROTE the following month's
+// opening balance, so the ledger's correctness depended on the order you happened
+// to click in, and two open tabs raced each other.
+//
+// It is now derived. gst_credit_ledger holds only the balances you seed by hand
+// (is_manual = true); everything after a seed is recomputed from the months in
+// between, every time. Nothing is written on read.
+//
+// The chain starts at the latest seed on or before the month being viewed, so
+// seeding a month is also how you close the books on everything before it.
+
+const MAX_CHAIN_MONTHS = 36
+
+async function carryForwardFor(month, netLiabilityThisMonth) {
+  const { data: seeds, error } = await supabase
+    .from('gst_credit_ledger')
+    .select('month, opening_balance')
+    .eq('is_manual', true)
+    .lte('month', month)
+    .order('month', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(error.message)
+
+  const seed = seeds?.[0] ?? null
+
+  // No seed at or before this month: the chain has no defined start, so treat
+  // the opening balance as zero rather than inventing one.
+  if (!seed) {
+    return finish(0, netLiabilityThisMonth, { is_seeded: false, seeded_from: null, months_chained: 0 })
+  }
+
+  let opening = Number(seed.opening_balance || 0)
+
+  // Walk the months between the seed and the one being viewed.
+  const between = []
+  for (let m = seed.month; m !== month && between.length < MAX_CHAIN_MONTHS; m = addMonths(m, 1)) {
+    if (m !== seed.month) between.push(m)
+  }
+  between.unshift(seed.month === month ? null : seed.month)
+
+  const chain = between.filter(Boolean)
+  if (chain.length > 0) {
+    // Independent of one another, so fetch in parallel and fold in order.
+    const figures = await Promise.all(chain.map((m) => gstFiguresForMonth(m)))
+    for (const f of figures) {
+      const adjusted = r2(f.net_liability - opening)
+      opening = r2(Math.max(0, -adjusted))
+    }
+  }
+
+  return finish(opening, netLiabilityThisMonth, {
+    is_seeded:      true,
+    seeded_from:    seed.month,
+    months_chained: chain.length,
+  })
+}
+
+function finish(opening, netLiability, meta) {
+  const adjusted = r2(netLiability - opening)
+  return {
+    opening,
+    closing:     r2(Math.max(0, -adjusted)),
+    tax_payable: r2(Math.max(0, adjusted)),
+    ...meta,
+  }
+}
+
 async function computeGST(month) {
+  const figures = await gstFiguresForMonth(month)
+  const carry_forward = await carryForwardFor(month, figures.net_liability)
+  return Response.json({ ...figures, carry_forward })
+}
+
+async function gstFiguresForMonth(month) {
   const { from: start, to: end } = monthRange(month)
 
   const ORDER_COLS = 'shopify_order_name, status, payment_type, order_value, order_date, ship_state'
@@ -182,39 +258,9 @@ async function computeGST(month) {
   const totalITC    = r2(itc3PL + itcCheckout + itcCashfree + itcMetaAds + itcVfWallet + itcManual)
   const netLiability = r2(totalOTC + manualOTC - totalITC)
 
-  // ── Carry-Forward Calculation ──────────────────────────────────────────────
-  let openingCF = 0
-  let cfIsSeeded = false
-  const { data: cfRow } = await supabase
-    .from('gst_credit_ledger')
-    .select('opening_balance, is_manual')
-    .eq('month', month)
-    .maybeSingle()
-  if (cfRow) {
-    openingCF = Number(cfRow.opening_balance || 0)
-    cfIsSeeded = true
-  }
-
-  const adjustedNet  = r2(netLiability - openingCF)
-  const taxPayable   = r2(Math.max(0, adjustedNet))
-  const closingCF    = r2(Math.max(0, -adjustedNet))
-
-  // Auto-propagate closing balance → next month's opening (skip if next month has a manual seed)
-  // NOTE (B12): this is a write inside a GET. Known, deliberately left as-is.
-  const nextMonth = addMonths(month, 1)
-  const { data: nextCfRow } = await supabase
-    .from('gst_credit_ledger')
-    .select('is_manual')
-    .eq('month', nextMonth)
-    .maybeSingle()
-  if (!nextCfRow?.is_manual) {
-    await supabase.from('gst_credit_ledger')
-      .upsert({ month: nextMonth, opening_balance: closingCF, is_manual: false }, { onConflict: 'month' })
-  }
-
   const adSpendTotal = r2(marketing.reduce((s, m) => s + Number(m.spend), 0))
 
-  return Response.json({
+  return {
     period: { start, end, month },
     otc: {
       from_orders: totalOTC,
@@ -235,14 +281,8 @@ async function computeGST(month) {
       total:           totalITC,
     },
     net_liability:  netLiability,
-    carry_forward: {
-      opening:    openingCF,
-      closing:    closingCF,
-      tax_payable: taxPayable,
-      is_seeded:  cfIsSeeded,
-    },
     manual_entries: manualEntries,
     ad_spend_total: adSpendTotal,
     order_count:    deliveredOrders.length,
-  })
+  }
 }

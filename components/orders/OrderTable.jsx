@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import OrderStatusBadge from './OrderStatusBadge'
-import { fmtINR, computeOrderNetProfit } from '@/lib/pnl'
+import { fmtINR } from '@/lib/pnl'
 import { fmtDate } from '@/lib/dates'
 
 const PAGE_SIZE = 15
@@ -103,7 +103,7 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
           </thead>
           <tbody className="divide-y divide-slate-800/60">
             {slice.map((o) => {
-              const net   = computeOrderNetProfit(o)
+              const net   = o.net_profit
               const isRTO = o.status === 'rto'
               const isCOD = o.payment_type === 'cash_on_delivery'
               const modeLabel = isCOD ? 'COD' : o.payment_type?.startsWith('prepaid') ? 'Prepaid' : (o.payment_type ?? '—').toUpperCase()
@@ -141,8 +141,20 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
                   <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap font-mono tabular-nums ${isRTO ? 'text-red-400 line-through' : 'text-slate-200'}`}>
                     {fmtINR(o.order_value)}
                   </td>
-                  <td className={`px-4 py-3 text-right font-semibold whitespace-nowrap font-mono tabular-nums ${net >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {net >= 0 ? '+' : ''}{fmtINR(net)}
+                  <td className="px-4 py-3 text-right whitespace-nowrap font-mono tabular-nums">
+                    {typeof net !== 'number' ? (
+                      <span className="text-slate-700">—</span>
+                    ) : (
+                      <span
+                        className={`font-semibold ${net >= 0 ? 'text-emerald-400' : 'text-red-400'} ${o.net_profit_is_partial ? 'opacity-60' : ''}`}
+                        title={o.net_profit_is_partial
+                          ? 'COGS is missing for at least one line, so this understates cost'
+                          : `Revenue ${fmtINR(o.revenue_net)} − costs ${fmtINR(o.variable_costs)} − COGS ${fmtINR(o.cogs)}`}
+                      >
+                        {net >= 0 ? '+' : ''}{fmtINR(net)}
+                        {o.net_profit_is_partial && <span className="ml-1 text-yellow-500">*</span>}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <RowMenu
@@ -159,7 +171,12 @@ export default function OrderTable({ orders, onEdit, onDelete }) {
       </div>
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t border-slate-800 px-4 py-3">
-          <span className="text-xs text-slate-600">Page {safePage} of {totalPages} · {orders.length} orders</span>
+          <span className="text-xs text-slate-600">
+            Page {safePage} of {totalPages} · {orders.length} orders
+            {orders.some((o) => o.net_profit_is_partial) && (
+              <span className="ml-2 text-yellow-600/80">* COGS incomplete — net understates cost</span>
+            )}
+          </span>
           <div className="flex gap-2">
             <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage === 1}
               className="rounded-lg border border-slate-700 px-3 py-1 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 disabled:opacity-40 cursor-pointer">

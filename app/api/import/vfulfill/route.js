@@ -187,7 +187,12 @@ export async function POST(request) {
         hasRto:           false,
         hasFulfilled:     false,
         hasCodRemittance: false,
-        deliveredAt:      null, // transaction_date of the delivery-confirming row
+        // NOTE: the transaction export carries no delivery date. The fulfilment-fee
+        // charge date was previously used as a stand-in, but that is when vFulfill
+        // picks and packs — measured against the shipments export it ran on average
+        // 3.8 days early, which pushed revenue and GST into the wrong month. Real
+        // delivery dates now come from the shipments CSV (/api/import/vf-shipments).
+        deliveredAt:      null,
         costRows:         [],
       })
     }
@@ -201,7 +206,7 @@ export async function POST(request) {
     if (headLower.includes('rto'))                                            g.hasRto = true
     if (headLower === 'fulfilment fees' || headLower === 'fulfillment fees') {
       g.hasFulfilled = true
-      if (txDate) g.deliveredAt = txDate
+      // deliberately does NOT set deliveredAt — see the note above.
     }
     if (headLower.includes('cod remittance')) {
       g.hasCodRemittance = true
@@ -251,7 +256,10 @@ export async function POST(request) {
     if (missingNames.length > 0) {
       const stubs = missingNames.map((name) => {
         const g         = orderGroups.get(name)
-        const newStatus = g.hasRto ? ORDER_STATUS.RTO : (g.hasFulfilled || g.hasCodRemittance) ? ORDER_STATUS.DELIVERED : ORDER_STATUS.ACTIVE
+        // A fulfilment fee proves the order shipped, not that it arrived. Only a COD
+        // remittance proves money changed hands. Anything else stays in flight until
+        // the shipments import confirms delivery.
+        const newStatus = g.hasRto ? ORDER_STATUS.RTO : g.hasCodRemittance ? ORDER_STATUS.DELIVERED : ORDER_STATUS.ACTIVE
         return {
           shopify_order_name:  name,
           payment_type:        PAYMENT_TYPE.UNKNOWN,
@@ -278,7 +286,7 @@ export async function POST(request) {
     for (const [name, g] of orderGroups) {
       if (!existingMap.has(name)) continue // stubs handled above
       const current = existingMap.get(name)
-      const newStatus = g.hasRto ? ORDER_STATUS.RTO : (g.hasFulfilled || g.hasCodRemittance) ? ORDER_STATUS.DELIVERED : null
+      const newStatus = g.hasRto ? ORDER_STATUS.RTO : g.hasCodRemittance ? ORDER_STATUS.DELIVERED : null
 
       const updates = {}
       if (g.vf_order_id) updates.vf_order_id = g.vf_order_id
