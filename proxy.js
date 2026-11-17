@@ -5,9 +5,9 @@ import { createServerClient } from '@supabase/ssr'
 const PUBLIC_PATHS = ['/login']
 
 // Machine-to-machine endpoints that authenticate with their own shared secret
-// (SYNC_SECRET) rather than a user session. Matched exactly — /api/sync/shopify/pull
-// is browser-triggered and stays gated.
-const MACHINE_API_PATHS = ['/api/sync/shopify']
+// (SYNC_SECRET, CRON_SECRET) rather than a user session. Matched exactly —
+// /api/sync/shopify/pull is browser-triggered and stays gated.
+const MACHINE_API_PATHS = ['/api/sync/shopify', '/api/cron/keepalive']
 
 function isPublicPath(pathname) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
