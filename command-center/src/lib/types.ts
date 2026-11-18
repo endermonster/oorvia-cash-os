@@ -21,8 +21,8 @@ export type Product = {
   name: string
   /** COD list price, incl. GST. Prepaid pays this minus the prepaid discount. */
   price: number
-  /** Ex-GST, today's cost. Used for breakeven (forward-looking) only; past orders carry their own cost in `OrderDay.cogs`. */
-  cogs: number
+  /** Ex-GST, today's cost. Null when no cost is on record: breakeven is then not computed, never defaulted to 0. Used for breakeven (forward-looking) only; past orders carry their own cost in `OrderDay.cogs`. */
+  cogs: number | null
   packedWeightGrams: number
   liveSince: string
   /** Shopify product handle. A Meta campaign maps to this SKU when its ads land on `/products/{handle}`. */
@@ -64,6 +64,8 @@ export type OrderDay = {
   /** Σ over orders of ceil(whole order's packed grams / 500), and / 1000: vFulfill's shipping and storage slabs. */
   slabs500: number
   slabsKg: number
+  /** Orders with a line item that had no cost on record. Their COGS is understated. Absent on hourly rows. */
+  ordersMissingCogs?: number
 }
 
 /**
@@ -124,7 +126,8 @@ export type GstPosition = {
 }
 
 export type SyncStatus = {
-  metaMinutesAgo: number
-  shopifyMinutesAgo: number
-  vfulfillImportDaysAgo: number
+  /** Age of the oldest store's latest successful run. Null = never synced. */
+  metaMinutesAgo: number | null
+  shopifyMinutesAgo: number | null
+  vfulfillImportDaysAgo: number | null
 }

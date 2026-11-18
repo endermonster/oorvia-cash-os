@@ -6,6 +6,8 @@
  * spend and resolved counts are invented.
  */
 import { breakeven } from './calculator'
+import { addDays } from './dates'
+import type { Data } from './data'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, GstPosition, OrderDay, OrderHour, PaymentType, Product, RecentOrder,
   ResolvedDay, Store, StoreId, SyncStatus,
@@ -15,6 +17,7 @@ import type {
 export const NOW = new Date('2026-11-18T15:20:00+05:30')
 export const TODAY = '2026-11-18'
 export const NOW_HOUR = 15
+export const NOW_MINUTE = 20
 
 // Gateway fees: the sheet's 2% for every store until settlement reports are wired.
 export const STORES: Store[] = [
@@ -25,7 +28,7 @@ export const STORES: Store[] = [
 
 export const storeById = (id: StoreId) => STORES.find((s) => s.id === id)!
 
-export const PRODUCTS: Product[] = [
+export const PRODUCTS: (Product & { cogs: number })[] = [
   // Oorvia: Shopify (2026-11-18). 11 other products are still Active there but have no orders since Aug
   // (Yubi YB31 was the last seller, 16 Aug); left out until they sell again.
   { sku: 'OMS-1M', storeId: 'oorvia', name: 'Microinfusion System', price: 2499, cogs: 581, packedWeightGrams: 500, liveSince: '2026-09-16', handle: 'oorvia-microinfusion-system', stage: 'live' },
@@ -70,11 +73,7 @@ function mulberry32(seed: number) {
   }
 }
 
-export function addDays(date: string, n: number): string {
-  const d = new Date(`${date}T00:00:00Z`)
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().slice(0, 10)
-}
+export { addDays }
 
 function poisson(mean: number, rnd: () => number) {
   if (mean <= 0) return 0
@@ -154,7 +153,7 @@ function buildOrdersAndSpend(): { orders: OrderDay[]; spend: CampaignDay[] } {
       const count = paidOrders + poisson(p.organic * partial, rnd)
 
       const empty = (payment: PaymentType): OrderDay =>
-        ({ date, storeId: store.id, sku: product.sku, payment, orders: 0, units: 0, revenue: 0, cogs: 0, slabs500: 0, slabsKg: 0 })
+        ({ date, storeId: store.id, sku: product.sku, payment, orders: 0, units: 0, revenue: 0, cogs: 0, slabs500: 0, slabsKg: 0, ordersMissingCogs: 0 })
       const byPay: Record<PaymentType, OrderDay> = { cod: empty('cod'), prepaid: empty('prepaid') }
       for (let i = 0; i < count; i++) {
         const row = byPay[rnd() < GEN.codShare ? 'cod' : 'prepaid']
@@ -217,21 +216,22 @@ function buildResolved(): ResolvedDay[] {
 /** All invented: old Cash OS stops at 24 Aug, before Microinfusion launched. */
 export const RESOLVED: ResolvedDay[] = buildResolved()
 
-const HOUR_W = HOUR_WEIGHTS.slice(0, NOW_HOUR + 1)
-const HOUR_W_SUM = HOUR_W.reduce((s, x) => s + x, 0)
-function pickHour(rnd: () => number) {
-  let x = rnd() * HOUR_W_SUM
-  for (let h = 0; h < HOUR_W.length; h++) { x -= HOUR_W[h]; if (x <= 0) return h }
-  return NOW_HOUR
+/** Hour weights for hours 0..lastHour of a day. */
+const weightsTo = (lastHour: number) => HOUR_WEIGHTS.slice(0, lastHour + 1)
+function pickHour(rnd: () => number, w: number[]) {
+  let x = rnd() * w.reduce((s, v) => s + v, 0)
+  for (let h = 0; h < w.length; h++) { x -= w[h]; if (x <= 0) return h }
+  return w.length - 1
 }
 
-/** Today's orders by hour: each order gets an hour; a row's amounts split in proportion to its orders. */
-function buildOrderHours(): OrderHour[] {
+/** One day's orders by hour, hours 0..lastHour: each order gets an hour; a row's amounts split in proportion to its orders. */
+function buildOrderHours(date: string, lastHour: number, seed: number): OrderHour[] {
   const out: OrderHour[] = []
-  const rnd = mulberry32(31)
-  for (const r of ORDERS.filter((x) => x.date === TODAY)) {
-    const perHour = new Array<number>(NOW_HOUR + 1).fill(0)
-    for (let i = 0; i < r.orders; i++) perHour[pickHour(rnd)]++
+  const w = weightsTo(lastHour)
+  const rnd = mulberry32(seed)
+  for (const r of ORDERS.filter((x) => x.date === date)) {
+    const perHour = new Array<number>(lastHour + 1).fill(0)
+    for (let i = 0; i < r.orders; i++) perHour[pickHour(rnd, w)]++
     perHour.forEach((n, hour) => {
       if (n === 0) return
       const k = n / r.orders
@@ -244,16 +244,18 @@ function buildOrderHours(): OrderHour[] {
   return out
 }
 
-/** Today's spend by hour, along the hour-of-day curve. Every campaign row is kept, orders or not. */
-function buildCampaignHours(): CampaignHour[] {
+/** One day's spend by hour, hours 0..lastHour, along the hour-of-day curve. Every campaign row is kept, orders or not. */
+function buildCampaignHours(date: string, lastHour: number, seed: number): CampaignHour[] {
   const out: CampaignHour[] = []
-  const rnd = mulberry32(37)
-  for (const r of CAMPAIGN_DAYS.filter((x) => x.date === TODAY)) {
-    const spends = allocate(r.spend, HOUR_W)
-    const attributed = new Array<number>(NOW_HOUR + 1).fill(0)
-    for (let i = 0; i < r.attributedOrders; i++) attributed[pickHour(rnd)]++
+  const w = weightsTo(lastHour)
+  const wSum = w.reduce((s, x) => s + x, 0)
+  const rnd = mulberry32(seed)
+  for (const r of CAMPAIGN_DAYS.filter((x) => x.date === date)) {
+    const spends = allocate(r.spend, w)
+    const attributed = new Array<number>(lastHour + 1).fill(0)
+    for (let i = 0; i < r.attributedOrders; i++) attributed[pickHour(rnd, w)]++
     spends.forEach((spend, hour) => {
-      const k = HOUR_W[hour] / HOUR_W_SUM
+      const k = w[hour] / wSum
       out.push({
         hour, storeId: r.storeId, campaignId: r.campaignId, sku: r.sku, spend,
         impressions: Math.round(r.impressions * k), clicks: Math.round(r.clicks * k),
@@ -264,8 +266,12 @@ function buildCampaignHours(): CampaignHour[] {
   return out
 }
 
-export const ORDER_HOURS: OrderHour[] = buildOrderHours()
-export const CAMPAIGN_HOURS: CampaignHour[] = buildCampaignHours()
+export const YESTERDAY = addDays(TODAY, -1)
+export const ORDER_HOURS: OrderHour[] = buildOrderHours(TODAY, NOW_HOUR, 31)
+export const CAMPAIGN_HOURS: CampaignHour[] = buildCampaignHours(TODAY, NOW_HOUR, 37)
+/** Yesterday, all 24 hours: what Today is compared against, up to the current hour. */
+export const ORDER_HOURS_YESTERDAY: OrderHour[] = buildOrderHours(YESTERDAY, 23, 32)
+export const CAMPAIGN_HOURS_YESTERDAY: CampaignHour[] = buildCampaignHours(YESTERDAY, 23, 38)
 
 const CITIES = ['Bengaluru', 'Mumbai', 'Pune', 'Delhi', 'Hyderabad', 'Jaipur', 'Lucknow', 'Kochi', 'Indore', 'Chennai', 'Ahmedabad', 'Surat', 'Nagpur', 'Kolkata', 'Chandigarh']
 
@@ -313,3 +319,17 @@ export const GST: GstPosition = { month: '2026-11', outputTax: 16940, inputCredi
 export const FIXED_COSTS_MONTHLY = 14200
 
 export const SYNC: SyncStatus = { metaMinutesAgo: 4, shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4 }
+
+/**
+ * The mock as one Data object. Built from the same array instances the named exports
+ * hold, so a test that pushes into RESOLVED or CAMPAIGN_DAYS is seen through MOCK.
+ */
+export const MOCK: Data = {
+  now: NOW, today: TODAY, nowHour: NOW_HOUR, nowMinute: NOW_MINUTE, source: 'mock',
+  stores: STORES, products: PRODUCTS, orders: ORDERS,
+  orderHours: ORDER_HOURS, orderHoursYesterday: ORDER_HOURS_YESTERDAY,
+  campaigns: CAMPAIGNS, campaignDays: CAMPAIGN_DAYS,
+  campaignHours: CAMPAIGN_HOURS, campaignHoursYesterday: CAMPAIGN_HOURS_YESTERDAY,
+  resolved: RESOLVED, recentOrders: RECENT_ORDERS,
+  cash: CASH, gst: GST, fixedCostsMonthly: FIXED_COSTS_MONTHLY, sync: SYNC,
+}

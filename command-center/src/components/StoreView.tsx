@@ -1,11 +1,8 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import {
-  campaigns, deliveryRate, fmtX, inr, MIN_SAMPLE, pct, series, skuEconomics, storeStats, type Period, type Rate, type StoreStats,
-} from '@/lib/metrics'
-import { ORDERS, PRODUCTS, storeById } from '@/lib/mock'
+import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Rate, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
-import type { ProductStage, StoreId } from '@/lib/types'
+import type { OrderDay, ProductStage, StoreId } from '@/lib/types'
 import { PaceChart } from './PaceChart'
 import { Delta, Headline, Signed, StoreDot } from './bits'
 
@@ -16,13 +13,18 @@ const STAGE: Record<ProductStage, { label: string; tone: string }> = {
   failed: { label: 'Failed', tone: 'text-bad' },
 }
 
-export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; period: Period }) {
-  const s = storeStats(id, period)
-  const store = storeById(id)
-  const products = PRODUCTS.filter((p) => p.storeId === id)
+export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: ViewState; period: Period; m: Metrics; orders: OrderDay[] }) {
+  const s = m.storeStats(id, period)
+  const store = m.storeById(id)
+  const products = m.products.filter((p) => p.storeId === id)
   const productNames = products.map((p) => p.name).join(', ')
-  const pts = series([id], period)
-  const camps = campaigns(id, period)
+  const pts = m.series([id], period)
+  const camps = m.campaigns(id, period)
+  const warnings = [
+    ...s.unknownSkus.map((sku) => `Orders for SKU ${sku} have no product set up: add it to see breakeven`),
+    ...products.filter((p) => p.cogs === null).map((p) => `No cost on record for SKU ${p.sku}`),
+    ...(s.ordersMissingCogs > 0 ? [`${s.ordersMissingCogs} ${s.ordersMissingCogs === 1 ? 'order has a line' : 'orders have a line'} with no cost on record: profit is overstated`] : []),
+  ]
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
@@ -40,6 +42,9 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
           {s.orders} orders · profit (est.) <Signed value={s.contribution} className="font-semibold text-ink" />
           {s.unmappedSpend > 0 && <> · <span className="text-warn">{inr(s.unmappedSpend)} spend whose ad URL matches no product, check the handle</span></>}
         </p>
+        {warnings.length > 0 && (
+          <ul className="mt-2 space-y-1 text-sm text-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
+        )}
       </section>
 
       <div className="mt-14 grid gap-x-12 gap-y-10 border-t border-line pt-10 lg:grid-cols-12">
@@ -48,7 +53,7 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
           {s.roas === null ? (
             <div className="mt-6 rounded-xl bg-raised p-8">
               <p className="text-xl font-semibold text-ink">No ads ran in this period.</p>
-              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. Breakeven for {productNames} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</p>
+              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics ? <>Breakeven for {productNames} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</> : 'Breakeven needs a product cost.'}</p>
             </div>
           ) : (
             <Gauge s={s} />
@@ -57,7 +62,7 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
 
         <section className="lg:col-span-6" aria-label="Meta numbers">
           <dl className="grid gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-3">
-            <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">breakeven {inr(s.economics.breakevenCpa)} per order</span>} />
+            <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">{s.economics ? `breakeven ${inr(s.economics.breakevenCpa)} per order` : 'Breakeven needs a product cost'}</span>} />
             <Stat label="CPM" value={s.cpm ? inr(s.cpm) : '—'} sub={s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null} />
             <Stat label="CTR" value={s.ctr ? pct(s.ctr, 1) : '—'} sub={<span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span>} />
           </dl>
@@ -95,7 +100,7 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
         </section>
       </div>
 
-      <OrdersStrip s={s} period={period} />
+      <OrdersStrip s={s} period={period} m={m} orders={orders} />
     </main>
   )
 }
@@ -113,6 +118,14 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: React
 /** Semicircle with three zones on Meta's scale: below breakeven, covering costs, above target. */
 function Gauge({ s }: { s: StoreStats }) {
   const roas = s.roas!
+  if (s.economics === null) {
+    return (
+      <div className="mt-4 rounded-xl bg-raised p-8">
+        <p className="text-5xl font-extrabold tracking-tight text-ink">{fmtX(roas)}</p>
+        <p className="mt-2 text-ink-2">{s.orders} orders · {inr(s.spend)} spent · Breakeven needs a product cost</p>
+      </div>
+    )
+  }
   const { breakevenRoas: be, targetRoas: target } = s.economics
   const max = Math.ceil(Math.max(target * 1.25, roas * 1.1))
   const W = 420, H = 240, cx = W / 2, cy = 214, r = 172
@@ -157,9 +170,9 @@ function Gauge({ s }: { s: StoreStats }) {
   )
 }
 
-function OrdersStrip({ s, period }: { s: StoreStats; period: Period }) {
+function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; m: Metrics; orders: OrderDay[] }) {
   const store = s.store
-  const rows = ORDERS.filter((r) => r.storeId === store.id && r.date >= period.from && r.date <= period.to)
+  const rows = orders.filter((r) => r.storeId === store.id && r.date >= period.from && r.date <= period.to)
   const dots: ('cod' | 'prepaid')[] = []
   for (const r of rows) {
     for (let i = 0; i < r.orders; i++) dots.push(r.payment)
@@ -182,27 +195,28 @@ function OrdersStrip({ s, period }: { s: StoreStats; period: Period }) {
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
       )}
-      {PRODUCTS.filter((p) => p.storeId === store.id).map((p, _, all) => {
-        const e = skuEconomics(p.storeId, p.sku)
+      {m.products.filter((p) => p.storeId === store.id).map((p, _, all) => {
+        const share = m.codShare(p.storeId, p.sku)
         return (
           <div key={p.sku} className="mt-8">
             {all.length > 1 && <h3 className="mb-3 font-semibold text-ink">{p.name}</h3>}
             <dl className="grid gap-x-12 gap-y-6 sm:grid-cols-3">
               <div>
                 <dt className="label">COD share · last 30 days</dt>
-                <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(e.codShare.value)}</dd>
-                <dd className="mt-1 text-sm text-ink-3">{basisNote(e.codShare, store.name, 'orders')}</dd>
+                <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(share.value)}</dd>
+                <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders')}</dd>
               </div>
               {(['cod', 'prepaid'] as const).map((pay) => {
-                const week = deliveryRate(p.storeId, p.sku, pay, '7d')
-                const life = deliveryRate(p.storeId, p.sku, pay, 'lifetime')
+                const week = m.deliveryRate(p.storeId, p.sku, pay, '7d')
+                const life = m.deliveryRate(p.storeId, p.sku, pay, 'lifetime')
+                const rate = m.deliveryRate(p.storeId, p.sku, pay)
                 // Shown for reading only; no math uses them, so a borrowed rate would just mislead.
                 const own = (r: Rate) => (r.basis === 'sku' ? pct(r.value, 1) : `under ${MIN_SAMPLE} closed`)
                 return (
                   <div key={pay}>
                     <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · last 30 days</dt>
-                    <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(e.rates[pay].value, 1)}</dd>
-                    <dd className="mt-1 text-sm text-ink-3">{basisNote(e.rates[pay], store.name, 'closed orders')}</dd>
+                    <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(rate.value, 1)}</dd>
+                    <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, store.name, 'closed orders')}</dd>
                     <dd className="mt-1 text-sm text-ink-2">7 days {own(week)} · lifetime {own(life)}</dd>
                   </div>
                 )

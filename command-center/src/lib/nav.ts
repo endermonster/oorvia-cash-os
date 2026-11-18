@@ -1,5 +1,4 @@
 import { PERIODS, type PeriodId } from './metrics'
-import { STORES } from './mock'
 import type { StoreId } from './types'
 
 export type StoreFilter = 'all' | StoreId
@@ -16,11 +15,11 @@ export type ViewState = { store: StoreFilter; period: PeriodId }
 
 type RawParams = { [key: string]: string | string[] | undefined }
 
-export function readView(params: RawParams): ViewState {
+export function readView(params: RawParams, stores: { id: string }[]): ViewState {
   const s = typeof params.store === 'string' ? params.store : 'all'
   const p = typeof params.period === 'string' ? params.period : '7d'
   return {
-    store: STORES.some((x) => x.id === s) ? (s as StoreId) : 'all',
+    store: stores.some((x) => x.id === s) ? (s as StoreId) : 'all',
     period: PERIODS.some((x) => x.id === p) ? (p as PeriodId) : '7d',
   }
 }

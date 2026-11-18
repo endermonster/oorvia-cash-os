@@ -1,22 +1,19 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import {
-  borrowedRates, calls, cash, fmtX, gst, inr, MIN_SAMPLE, minutesAgo, ownerShare, pct, portfolio, recentOrders, series, type Period, type StoreStats,
-} from '@/lib/metrics'
-import { STORES, storeById } from '@/lib/mock'
+import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import { Calls } from './Calls'
 import { PaceChart } from './PaceChart'
 import { Headline, Signed, StoreDot } from './bits'
 
-export function HomeView({ view, period }: { view: ViewState; period: Period }) {
-  const pf = portfolio(period)
-  const ids = STORES.map((s) => s.id)
-  const pts = series(ids, period)
-  const c = cash()
-  const g = gst()
-  const share = ownerShare()
-  const borrowed = borrowedRates().map((s) => s.name)
+export function HomeView({ view, period, m }: { view: ViewState; period: Period; m: Metrics }) {
+  const pf = m.portfolio(period)
+  const ids = m.stores.map((s) => s.id)
+  const pts = m.series(ids, period)
+  const c = m.cash()
+  const g = m.gst()
+  const share = m.ownerShare()
+  const borrowed = m.borrowedRates().map((s) => s.name)
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
@@ -36,7 +33,7 @@ export function HomeView({ view, period }: { view: ViewState; period: Period }) 
         </section>
 
         <div className="lg:col-span-5">
-          <Calls calls={calls(period)} />
+          <Calls calls={m.calls(period)} />
         </div>
       </div>
 
@@ -45,18 +42,24 @@ export function HomeView({ view, period }: { view: ViewState; period: Period }) 
           <PaceChart points={pts} title={`Pace · ${period.range}`} prevLabel={period.prevLabel} unit={period.id === 'today' ? 'hour' : 'day'} />
         </div>
         <div className="lg:col-span-4">
-          <LiveOrders view={view} />
+          <LiveOrders view={view} m={m} />
         </div>
       </div>
 
       <Scoreboard stores={pf.stores} total={pf.total} view={view} />
 
       <p className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-6 text-sm text-ink-2">
-        <span>Cash <span className="font-semibold text-ink">{inr(c.total)}</span>{c.coversDays !== null && <> · covers {Math.floor(c.coversDays)} days of spend</>}</span>
-        <span aria-hidden className="text-ink-3">·</span>
-        <span>GST {new Date(`${g.month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })} <span className="font-semibold text-ink">{inr(g.owed)}</span> due {new Date(`${g.dueDate}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span>
-        <span aria-hidden className="text-ink-3">·</span>
-        <span>Your share (50%) this month <Signed value={share.share} className="font-semibold text-ink" /></span>
+        {c && g && share ? (
+          <>
+            <span>Cash <span className="font-semibold text-ink">{inr(c.total)}</span>{c.coversDays !== null && <> · covers {Math.floor(c.coversDays)} days of spend</>}</span>
+            <span aria-hidden className="text-ink-3">·</span>
+            <span>GST {new Date(`${g.month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })} <span className="font-semibold text-ink">{inr(g.owed)}</span> due {new Date(`${g.dueDate}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span>
+            <span aria-hidden className="text-ink-3">·</span>
+            <span>Your share (50%) this month <Signed value={share.share} className="font-semibold text-ink" /></span>
+          </>
+        ) : (
+          <span className="text-ink-3">Cash, GST and your share connect in a later stage</span>
+        )}
         <Link href={href('/money', view)} className="ml-auto inline-flex items-center gap-1 font-semibold text-ink hover:underline">
           Money <ArrowRight className="size-4" aria-hidden />
         </Link>
@@ -77,8 +80,8 @@ function verdict(stores: StoreStats[]) {
   return `${list(paying)} ${paying.length === 1 ? 'is' : 'are'} paying for ${paying.length === 1 ? 'itself' : 'themselves'}. ${list(losing)} ${losing.length === 1 ? 'isn’t' : 'aren’t'}, yet.`
 }
 
-function LiveOrders({ view }: { view: ViewState }) {
-  const orders = recentOrders(STORES.map((s) => s.id), 5)
+function LiveOrders({ view, m }: { view: ViewState; m: Metrics }) {
+  const orders = m.recentOrders(m.stores.map((s) => s.id), 5)
   return (
     <section aria-labelledby="orders-h">
       <div className="flex items-baseline justify-between">
@@ -94,14 +97,14 @@ function LiveOrders({ view }: { view: ViewState }) {
           {orders.map((o) => (
             <li key={o.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 py-3">
               <div className="min-w-0">
-                <p className="flex items-center gap-2 font-semibold text-ink"><StoreDot id={o.storeId} />{storeById(o.storeId).name}<span className="truncate font-normal text-ink-3">· {o.city}</span></p>
+                <p className="flex items-center gap-2 font-semibold text-ink"><StoreDot id={o.storeId} />{m.storeById(o.storeId).name}<span className="truncate font-normal text-ink-3">· {o.city}</span></p>
                 <p className="mt-0.5 truncate text-sm text-ink-2">{o.product}</p>
               </div>
               <div className="text-right">
                 <p className="font-semibold text-ink">{inr(o.value)}</p>
                 <p className="mt-0.5 text-sm">
                   <span className={o.payment === 'cod' ? 'text-cod' : 'text-prepaid'}>{o.payment === 'cod' ? 'COD' : 'Prepaid'}</span>
-                  <span className="text-ink-3"> · {ago(minutesAgo(o.placedAt))}</span>
+                  <span className="text-ink-3"> · {ago(m.minutesAgo(o.placedAt))}</span>
                 </p>
               </div>
             </li>
@@ -116,6 +119,14 @@ const ago = (m: number) => (m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h a
 
 function RoasBar({ s }: { s: StoreStats }) {
   if (s.roas === null) return <span className="text-sm text-ink-3">No ads</span>
+  if (s.economics === null) {
+    return (
+      <div className="min-w-48">
+        <p className="text-sm"><span className="font-semibold text-ink">{fmtX(s.roas)}</span></p>
+        <p className="mt-1.5 text-xs text-warn">Breakeven needs a product cost</p>
+      </div>
+    )
+  }
   const { breakevenRoas: be, targetRoas: target } = s.economics
   const max = Math.max(target * 1.15, s.roas * 1.05)
   const at = (v: number) => `${(v / max) * 100}%`
@@ -137,7 +148,7 @@ function RoasBar({ s }: { s: StoreStats }) {
   )
 }
 
-function Scoreboard({ stores, total, view }: { stores: StoreStats[]; total: ReturnType<typeof portfolio>['total']; view: ViewState }) {
+function Scoreboard({ stores, total, view }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState }) {
   const th = 'pb-3 text-left font-semibold label'
   return (
     <section aria-labelledby="score-h" className="mt-14 border-t border-line pt-10">

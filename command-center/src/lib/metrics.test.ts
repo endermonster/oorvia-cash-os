@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, CAMPAIGN_DAYS, CAMPAIGN_HOURS, CAMPAIGNS, COGS_HISTORY, cogsOn, ORDERS, PRODUCTS, productOf, RESOLVED, STORES, TODAY } from './mock'
 import {
-  campaigns, deliveryRate, MIN_SAMPLE, profitBeforeAds, resolvePeriod, series, skuEconomics, storeStats, type RateWindow,
-} from './metrics'
+  addDays, CAMPAIGN_DAYS, CAMPAIGN_HOURS, CAMPAIGNS, COGS_HISTORY, cogsOn, MOCK, NOW_HOUR, NOW_MINUTE, ORDER_HOURS_YESTERDAY, ORDERS, PRODUCTS,
+  RESOLVED, STORES, TODAY,
+} from './mock'
+import { createMetrics, MIN_SAMPLE, type RateWindow } from './metrics'
 import type { ResolvedDay, StoreId } from './types'
+
+const m = createMetrics(MOCK)
+const { campaigns, deliveryRate, profitBeforeAds, productOf, resolvePeriod, series, skuEconomics, storeStats } = m
 
 const from: Record<RateWindow, string> = { '7d': addDays(TODAY, -6), '30d': addDays(TODAY, -29), lifetime: '' }
 const own = (storeId: StoreId, sku: string, pay: 'cod' | 'prepaid', w: RateWindow) => {
@@ -59,7 +63,7 @@ describe('order costs', () => {
   const base = { storeId: 'kaiven' as const, sku: 'KV-DHS', payment: 'cod' as const, orders: 1, revenue: 2998 }
 
   it("a 2-unit order pays both units' COGS and the extra shipping slab", () => {
-    const d = skuEconomics('kaiven', 'KV-DHS').rates.cod.value
+    const d = skuEconomics('kaiven', 'KV-DHS')!.rates.cod.value
     const oneUnitCosts = profitBeforeAds({ ...base, units: 2, cogs: 300, slabs500: 1, slabsKg: 1 })
     const fullCosts = profitBeforeAds({ ...base, units: 2, cogs: 600, slabs500: 2, slabsKg: 1 })
     // Extra COGS: lost on delivery, 10% lost on RTO. Extra slab: ₹58 out, ₹3 packing, ₹58 back on RTO.
@@ -71,11 +75,11 @@ describe('order costs', () => {
     const p = productOf('kaiven', 'KV-DHS')
     const period = resolvePeriod('30d')
     const before = storeStats('kaiven', period).contribution
-    p.cogs += 100
+    p.cogs = p.cogs! + 100
     try {
       expect(storeStats('kaiven', period).contribution).toBe(before)
     } finally {
-      p.cogs -= 100
+      p.cogs = p.cogs! - 100
     }
   })
 
@@ -104,7 +108,7 @@ describe('campaigns', () => {
   })
 
   it('flag spend with zero orders as a loss once it passes one breakeven CPA', () => {
-    const beCpa = skuEconomics('kaiven', 'KV-DHS').breakevenCpa
+    const beCpa = skuEconomics('kaiven', 'KV-DHS')!.breakevenCpa
     const test = { id: 'kv-test', storeId: 'kaiven' as const, sku: 'KV-DHS', name: 'Zero-sale test' }
     const day = (spend: number) => ({
       date: addDays(TODAY, -1), storeId: 'kaiven' as const, campaignId: test.id, sku: 'KV-DHS',
@@ -147,5 +151,192 @@ describe("today's pace chart", () => {
     const pts = series(STORES.map((s) => s.id), today)
     const rev = ORDERS.filter((r) => r.date === TODAY).reduce((t, r) => t + r.revenue, 0)
     expect(pts[pts.length - 1].cumRevenue).toBeCloseTo(rev, 6)
+  })
+})
+
+describe("the Today comparison is yesterday up to now", () => {
+  /** Yesterday's rows before the current hour in full, plus the current hour pro rata. */
+  const expectedPrev = (hour: number, minute: number, storeId: string) => {
+    const f = (h: number) => (h < hour ? 1 : h === hour ? minute / 60 : 0)
+    const orders = ORDER_HOURS_YESTERDAY.filter((r) => r.storeId === storeId)
+    const spend = MOCK.campaignHoursYesterday.filter((r) => r.storeId === storeId)
+    return {
+      revenue: orders.reduce((t, r) => t + r.revenue * f(r.hour), 0),
+      orders: orders.reduce((t, r) => t + r.orders * f(r.hour), 0),
+      spend: spend.reduce((t, r) => t + r.spend * f(r.hour), 0),
+    }
+  }
+
+  it('uses the real mock clock: hours before nowHour whole, the nowHour row by minutes elapsed', () => {
+    expect(MOCK.nowHour).toBe(NOW_HOUR)
+    expect(MOCK.nowMinute).toBe(NOW_MINUTE)
+    for (const s of STORES) {
+      const stats = storeStats(s.id, resolvePeriod('today'))
+      const e = expectedPrev(NOW_HOUR, NOW_MINUTE, s.id)
+      expect(stats.prev.revenue).toBeCloseTo(e.revenue, 6)
+      expect(stats.prev.orders).toBeCloseTo(e.orders, 6)
+      expect(stats.prev.spend).toBeCloseTo(e.spend, 6)
+    }
+  })
+
+  for (const [hour, minute] of [[0, 30], [23, 59], [9, 0], [14, 45]] as const) {
+    it(`holds at ${hour}:${String(minute).padStart(2, '0')}`, () => {
+      const at = createMetrics({ ...MOCK, nowHour: hour, nowMinute: minute })
+      for (const s of STORES) {
+        const stats = at.storeStats(s.id, at.resolvePeriod('today'))
+        const e = expectedPrev(hour, minute, s.id)
+        expect(stats.prev.revenue).toBeCloseTo(e.revenue, 6)
+        expect(stats.prev.spend).toBeCloseTo(e.spend, 6)
+      }
+    })
+  }
+
+  it('at the top of hour 0 nothing of yesterday has happened yet', () => {
+    const at = createMetrics({ ...MOCK, nowHour: 0, nowMinute: 0 })
+    for (const s of STORES) expect(at.storeStats(s.id, at.resolvePeriod('today')).prev.revenue).toBe(0)
+  })
+
+  it('yesterday hours carry all 24 hours and add up to the day', () => {
+    for (const s of STORES) {
+      const day = ORDERS.filter((r) => r.storeId === s.id && r.date === addDays(TODAY, -1)).reduce((t, r) => t + r.revenue, 0)
+      const hours = ORDER_HOURS_YESTERDAY.filter((r) => r.storeId === s.id)
+      expect(hours.reduce((t, r) => t + r.revenue, 0)).toBeCloseTo(day, 6)
+      expect(Math.max(0, ...hours.map((r) => r.hour))).toBeLessThanOrEqual(23)
+    }
+  })
+
+  it("the pace chart's dashed line is yesterday's cumulative revenue, the current hour pro rata", () => {
+    const ids = STORES.map((s) => s.id)
+    const pts = series(ids, resolvePeriod('today'))
+    for (const p of pts) {
+      const h = Number(p.key)
+      const expected = ORDER_HOURS_YESTERDAY.filter((r) => r.hour <= h).reduce((t, r) => t + r.revenue * (r.hour < NOW_HOUR ? 1 : r.hour === NOW_HOUR ? NOW_MINUTE / 60 : 0), 0)
+      expect(p.prevCumRevenue).toBeCloseTo(expected, 6)
+    }
+    const last = pts[pts.length - 1]
+    expect(last.key).toBe(String(NOW_HOUR))
+    expect(last.prevCumRevenue).toBeCloseTo(ids.reduce((t, id) => t + storeStats(id, resolvePeriod('today')).prev.revenue, 0), 6)
+  })
+})
+
+describe('the Month comparison stays inside last month', () => {
+  const at = (today: string) => createMetrics({ ...MOCK, today }).resolvePeriod('month')
+
+  it('31 Mar compares with 1-28 Feb, never March', () => {
+    expect(at('2026-03-31')).toMatchObject({ from: '2026-03-01', prevFrom: '2026-02-01', prevTo: '2026-02-28' })
+  })
+  it('29 Feb in a leap year compares with 1-29 Jan', () => {
+    expect(at('2028-02-29')).toMatchObject({ prevFrom: '2028-01-01', prevTo: '2028-01-29' })
+  })
+  it('31 Mar in a leap year compares with 1-29 Feb', () => {
+    expect(at('2028-03-31')).toMatchObject({ prevFrom: '2028-02-01', prevTo: '2028-02-29' })
+  })
+  it('30 May compares with 1-30 Apr', () => {
+    expect(at('2026-05-30')).toMatchObject({ prevFrom: '2026-04-01', prevTo: '2026-04-30' })
+  })
+  it('31 May compares with 1-30 Apr (April has no 31st)', () => {
+    expect(at('2026-05-31')).toMatchObject({ prevFrom: '2026-04-01', prevTo: '2026-04-30' })
+  })
+  it('a mid-month date compares with the same days', () => {
+    expect(at('2026-11-18')).toMatchObject({ prevFrom: '2026-10-01', prevTo: '2026-10-18' })
+  })
+  it('January compares with December of the year before', () => {
+    expect(at('2026-01-15')).toMatchObject({ prevFrom: '2025-12-01', prevTo: '2025-12-15' })
+  })
+})
+
+describe('products and orders that are not set up', () => {
+  const week = resolvePeriod('7d')
+  const ghost = {
+    date: addDays(TODAY, -1), storeId: 'kaiven' as const, sku: 'GHOST-1', payment: 'cod' as const,
+    orders: 2, units: 2, revenue: 2998, cogs: 600, slabs500: 2, slabsKg: 2,
+  }
+
+  it('an order for an unknown SKU does not throw, is counted, and is listed', () => {
+    const before = storeStats('kaiven', week)
+    expect(before.unknownSkus).toEqual([])
+    ORDERS.push(ghost)
+    try {
+      const after = storeStats('kaiven', week)
+      expect(after.orders).toBe(before.orders + 2)
+      expect(after.revenue).toBeCloseTo(before.revenue + 2998, 6)
+      expect(after.unknownSkus).toEqual(['GHOST-1'])
+      expect(Number.isFinite(after.contribution)).toBe(true)
+      expect(() => m.portfolio(week)).not.toThrow()
+      expect(() => m.calls(week)).not.toThrow()
+    } finally {
+      ORDERS.splice(ORDERS.indexOf(ghost), 1)
+    }
+  })
+
+  it('profit before ads for an unknown SKU matches the same order for a known SKU', () => {
+    const known = profitBeforeAds({ ...ghost, sku: 'KV-DHS' })
+    expect(profitBeforeAds(ghost)).toBeCloseTo(known, 6)
+  })
+
+  it('a product with no cost raises no error in any metric, and is skipped for breakeven', () => {
+    const noCost = createMetrics({
+      ...MOCK,
+      products: MOCK.products.map((p) => (p.storeId === 'kaiven' ? { ...p, cogs: null } : p)),
+    })
+    for (const id of ['today', '7d', '30d', 'month'] as const) {
+      const per = noCost.resolvePeriod(id)
+      expect(() => noCost.portfolio(per)).not.toThrow()
+      expect(() => noCost.calls(per)).not.toThrow()
+      expect(() => noCost.series(['kaiven'], per)).not.toThrow()
+      expect(() => noCost.campaigns('kaiven', per)).not.toThrow()
+    }
+    expect(noCost.skuEconomics('kaiven', 'KV-DHS')).toBeNull()
+    expect(noCost.storeEconomics('kaiven')).toBeNull()
+    expect(noCost.storeEconomics('oorvia')).not.toBeNull()
+    expect(noCost.borrowedRates().map((s) => s.id)).not.toContain('kaiven')
+    const s = noCost.storeStats('kaiven', week)
+    expect(s.economics).toBeNull()
+    expect(s.zone).toBeNull()
+    expect(s.orders).toBeGreaterThan(0)
+    expect(Number.isFinite(s.contribution)).toBe(true)
+    expect(noCost.products.filter((p) => p.cogs === null).map((p) => p.sku)).toEqual(['KV-DHS'])
+    for (const c of noCost.campaigns('kaiven', week)) {
+      expect(c.vsBreakeven).toBeNull()
+      expect(c.noSalesLoss).toBe(false)
+    }
+  })
+
+  it('a store breakeven weights only the costed products', () => {
+    const two = {
+      ...MOCK,
+      products: [...MOCK.products, { ...MOCK.products.find((p) => p.storeId === 'kaiven')!, sku: 'KV-NOCOST', cogs: null }],
+    }
+    expect(createMetrics(two).storeEconomics('kaiven')).toEqual(m.storeEconomics('kaiven'))
+  })
+})
+
+describe('orders missing a cost', () => {
+  it('sum into the period stats, and are 0 in the mock', () => {
+    const week = resolvePeriod('7d')
+    expect(storeStats('kaiven', week).ordersMissingCogs).toBe(0)
+    const row = { date: addDays(TODAY, -1), storeId: 'kaiven' as const, sku: 'KV-DHS', payment: 'cod' as const, orders: 3, units: 3, revenue: 4497, cogs: 600, slabs500: 3, slabsKg: 3, ordersMissingCogs: 2 }
+    ORDERS.push(row)
+    try {
+      expect(storeStats('kaiven', week).ordersMissingCogs).toBe(2)
+    } finally {
+      ORDERS.splice(ORDERS.indexOf(row), 1)
+    }
+  })
+})
+
+describe('sources not wired yet', () => {
+  const bare = createMetrics({ ...MOCK, cash: null, gst: null, fixedCostsMonthly: null })
+
+  it('return null instead of figures', () => {
+    expect(bare.cash()).toBeNull()
+    expect(bare.gst()).toBeNull()
+    expect(bare.ownerShare()).toBeNull()
+  })
+
+  it('skip the cash-low call', () => {
+    const low = createMetrics({ ...MOCK, cash: { ...MOCK.cash!, bank: { amount: 0, enteredAt: '' }, settlements: [], vfulfillWallet: 0, codDue: 1 } })
+    expect(low.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(true)
+    expect(bare.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(false)
   })
 })

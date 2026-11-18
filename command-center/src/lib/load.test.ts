@@ -1,0 +1,207 @@
+import { describe, expect, it } from 'vitest'
+import { istNow } from './dates'
+import {
+  currentCogs, mapCampaign, mapCampaignDay, mapCampaignHour, mapOrderDay, mapOrderHour, mapProduct, mapRecentOrder, mapResolvedDay, mapStore,
+  mapSync, sortStores,
+} from './load'
+import type { Product } from './types'
+
+// Fixtures are hand-written PostgREST rows: numeric columns as strings where Postgres numeric comes back that way.
+
+const product: Product = {
+  sku: 'KV-DHS', storeId: 'kaiven', name: 'Scalp Serum', price: 1499, cogs: 300, packedWeightGrams: 500, liveSince: '2026-11-10',
+  handle: 'deoxyribose-scalp-serum', stage: 'testing',
+}
+
+describe('mapStore', () => {
+  it('maps names and coerces the gateway fee', () => {
+    expect(mapStore({ id: 'kaiven', name: 'Kaiven', live_since: '2026-11-10', gateways: ['Razorpay', 'PayU'], gateway_pct: '0.0200' })).toEqual({
+      id: 'kaiven', name: 'Kaiven', liveSince: '2026-11-10', gateways: ['Razorpay', 'PayU'], gatewayPct: 0.02,
+    })
+  })
+})
+
+describe('currentCogs and mapProduct', () => {
+  const rows = [
+    { store_id: 'kaiven', sku: 'KV-DHS', cogs_paise: 30000, effective_from: '2026-01-01' },
+    { store_id: 'kaiven', sku: 'KV-DHS', cogs_paise: '40050', effective_from: '2026-11-15' },
+    { store_id: 'kaiven', sku: 'KV-DHS', cogs_paise: 99900, effective_from: '2026-12-01' },
+    { store_id: 'selnova', sku: 'KV-DHS', cogs_paise: 11100, effective_from: '2026-01-01' },
+  ]
+
+  it('takes the latest entry on or before today, per store and SKU, in rupees', () => {
+    const c = currentCogs(rows, '2026-11-18')
+    expect(c.get('kaiven:KV-DHS')).toBe(400.5)
+    expect(c.get('selnova:KV-DHS')).toBe(111)
+    expect(currentCogs(rows, '2026-11-14').get('kaiven:KV-DHS')).toBe(300)
+    expect(currentCogs(rows, '2026-11-15').get('kaiven:KV-DHS')).toBe(400.5)
+  })
+
+  it('converts paise to rupees and attaches the current cost', () => {
+    const p = mapProduct(
+      { store_id: 'kaiven', sku: 'KV-DHS', name: 'Scalp Serum', price_paise: '149900', packed_weight_grams: '500', handle: 'deoxyribose-scalp-serum', stage: 'testing', live_since: '2026-11-10' },
+      currentCogs(rows, '2026-11-18'),
+    )
+    expect(p).toEqual({ ...product, cogs: 400.5 })
+  })
+
+  it('gives a product with no cost on record null, never 0, and does not throw', () => {
+    const p = mapProduct({ store_id: 'oorvia', sku: 'X', name: 'X', price_paise: 100, packed_weight_grams: 1, handle: 'x', stage: 'live', live_since: null }, new Map())
+    expect(p.cogs).toBeNull()
+    expect(p.liveSince).toBe('')
+  })
+})
+
+const orderAmounts = { store_id: 'kaiven', sku: 'KV-DHS', payment: 'cod', orders: '2', units: '3', revenue: '4497.50', cogs: '900', slabs500: '3', slabs_kg: '2' }
+const dayExpected = { storeId: 'kaiven', sku: 'KV-DHS', payment: 'cod', orders: 2, units: 3, revenue: 4497.5, cogs: 900, slabs500: 3, slabsKg: 2 }
+
+describe('order rows', () => {
+  it('mapOrderDay renames slabs_kg and coerces numbers', () => {
+    expect(mapOrderDay({ date: '2026-11-17', ...orderAmounts })).toEqual({ date: '2026-11-17', ...dayExpected, ordersMissingCogs: 0 })
+  })
+
+  it('mapOrderDay reads orders_missing_cogs', () => {
+    expect(mapOrderDay({ date: '2026-11-17', ...orderAmounts, orders_missing_cogs: '2' }).ordersMissingCogs).toBe(2)
+  })
+
+  it('mapOrderHour carries the hour as a number and no date', () => {
+    const h = mapOrderHour({ date: '2026-11-17', hour: '14', ...orderAmounts })
+    expect(h).toEqual({ hour: 14, ...dayExpected })
+    expect('date' in h).toBe(false)
+  })
+})
+
+describe('mapResolvedDay', () => {
+  it('renames closed_on and coerces counts', () => {
+    expect(mapResolvedDay({ closed_on: '2026-11-17', store_id: 'oorvia', sku: 'OMS-1M', payment: 'prepaid', delivered: '5', rto: 1 })).toEqual({
+      closedOn: '2026-11-17', storeId: 'oorvia', sku: 'OMS-1M', payment: 'prepaid', delivered: 5, rto: 1,
+    })
+  })
+})
+
+const campRow = { store_id: 'kaiven', campaign_id: '1200', sku: 'KV-DHS', spend: '1234.5', impressions: '10000', clicks: '210', meta_purchases: '3', attributed_orders: '2' }
+const campExpected = { storeId: 'kaiven', campaignId: '1200', sku: 'KV-DHS', spend: 1234.5, impressions: 10000, clicks: 210, metaPurchases: 3, attributedOrders: 2 }
+
+describe('campaign rows', () => {
+  it('mapCampaignDay maps every field to the contract names', () => {
+    expect(mapCampaignDay({ date: '2026-11-17', ...campRow })).toEqual({ date: '2026-11-17', ...campExpected })
+  })
+
+  it('keeps a null SKU null (handle matched no product)', () => {
+    expect(mapCampaignDay({ date: '2026-11-17', ...campRow, sku: null }).sku).toBeNull()
+  })
+
+  it('mapCampaignHour carries the hour and no date', () => {
+    const h = mapCampaignHour({ date: '2026-11-17', hour: '9', ...campRow })
+    expect(h).toEqual({ hour: 9, ...campExpected })
+    expect('date' in h).toBe(false)
+  })
+})
+
+describe('mapCampaign', () => {
+  it('resolves the SKU from the landing handle within the same store', () => {
+    expect(mapCampaign({ campaign_id: 'C1', store_id: 'kaiven', name: 'Broad', landing_handle: 'deoxyribose-scalp-serum' }, [product])).toEqual({
+      id: 'C1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Broad',
+    })
+  })
+
+  it('gives a null SKU when the handle is unknown, missing, or belongs to another store', () => {
+    const base = { campaign_id: 'C1', store_id: 'kaiven', name: 'Broad' }
+    expect(mapCampaign({ ...base, landing_handle: 'nope' }, [product]).sku).toBeNull()
+    expect(mapCampaign({ ...base, landing_handle: null }, [product]).sku).toBeNull()
+    expect(mapCampaign({ ...base, store_id: 'selnova', landing_handle: 'deoxyribose-scalp-serum' }, [product]).sku).toBeNull()
+  })
+})
+
+describe('mapRecentOrder', () => {
+  const row = { store_id: 'kaiven', order_name: '#KAI1001', placed_at: '2026-11-17T14:30:00+00:00', payment: 'prepaid', total_paise: '139900', primary_sku: 'KV-DHS', city: 'Pune' }
+
+  it('converts paise to rupees, looks up the product name and normalises the timestamp', () => {
+    expect(mapRecentOrder(row, [product])).toEqual({
+      id: 'kaiven:#KAI1001', storeId: 'kaiven', placedAt: '2026-11-17T14:30:00.000Z', sku: 'KV-DHS', product: 'Scalp Serum', value: 1399, payment: 'prepaid', city: 'Pune',
+    })
+  })
+
+  it('shows a dash for a missing city and falls back to the SKU for an unknown product', () => {
+    const o = mapRecentOrder({ ...row, city: null, primary_sku: 'GONE' }, [product])
+    expect(o.city).toBe('—')
+    expect(o.product).toBe('GONE')
+  })
+})
+
+describe('mapSync', () => {
+  const now = new Date('2026-11-18T10:00:00Z')
+  const run = (source: string, finished_at: string, store_id: string | null = 'kaiven', ok = true) => ({ source, store_id, finished_at, ok })
+  const stores = ['kaiven', 'selnova']
+
+  it('uses the latest successful run per source', () => {
+    const s = mapSync([
+      run('meta', '2026-11-18T09:56:00Z'), run('meta', '2026-11-18T09:00:00Z'), run('meta', '2026-11-18T09:57:00Z', 'selnova'),
+      run('shopify_webhook', '2026-11-18T09:59:00Z'), run('shopify_webhook', '2026-11-18T09:59:50Z', 'kaiven', false),
+      run('shopify_webhook', '2026-11-18T09:58:00Z', 'selnova'),
+      run('vf_shipments', '2026-11-14T09:00:00Z'), run('vf_shipments', '2026-11-14T09:00:00Z', 'selnova'),
+    ], stores, now)
+    expect(s).toEqual({ metaMinutesAgo: 4, shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4 })
+  })
+
+  it('counts either shopify_webhook or shopify_backfill as Shopify freshness', () => {
+    const s = mapSync([
+      run('shopify_webhook', '2026-11-18T08:00:00Z'), run('shopify_backfill', '2026-11-18T09:30:00Z'),
+      run('shopify_webhook', '2026-11-18T09:40:00Z', 'selnova'),
+    ], stores, now)
+    expect(s.shopifyMinutesAgo).toBe(30) // kaiven 30 min (backfill), selnova 20 min: the oldest of the two stores
+  })
+
+  it('ignores shopify_products and vf_transactions', () => {
+    const s = mapSync([
+      run('shopify_products', '2026-11-18T09:59:00Z'), run('shopify_products', '2026-11-18T09:59:00Z', 'selnova'),
+      run('vf_transactions', '2026-11-18T09:59:00Z'), run('vf_transactions', '2026-11-18T09:59:00Z', 'selnova'),
+    ], stores, now)
+    expect(s).toEqual({ metaMinutesAgo: null, shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+  })
+
+  it('one stale store makes the whole source stale', () => {
+    const s = mapSync([
+      run('shopify_webhook', '2026-11-18T09:59:00Z'), run('shopify_webhook', '2026-11-18T07:00:00Z', 'selnova'),
+    ], stores, now)
+    expect(s.shopifyMinutesAgo).toBe(180)
+  })
+
+  it('one never-synced store makes the whole source never synced', () => {
+    expect(mapSync([run('vf_shipments', '2026-11-18T09:59:00Z')], stores, now).vfulfillImportDaysAgo).toBeNull()
+  })
+
+  it('a run with no store counts for every store', () => {
+    const s = mapSync([run('vf_shipments', '2026-11-16T09:00:00Z', null)], stores, now)
+    expect(s.vfulfillImportDaysAgo).toBe(2)
+  })
+
+  it('ignores failed runs', () => {
+    expect(mapSync([run('meta', '2026-11-18T09:59:00Z', 'kaiven', false)], ['kaiven'], now).metaMinutesAgo).toBeNull()
+  })
+
+  it('expects Meta only from stores that have an ad account', () => {
+    const s = mapSync([run('meta', '2026-11-18T09:50:00Z')], stores, now, ['kaiven'])
+    expect(s.metaMinutesAgo).toBe(10)
+  })
+
+  it('reports null for every source when nothing ever ran', () => {
+    expect(mapSync([], stores, now)).toEqual({ metaMinutesAgo: null, shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+  })
+})
+
+describe('sortStores', () => {
+  it('orders by live_since, then name', () => {
+    const st = (name: string, liveSince: string) => ({ id: name.toLowerCase() as 'oorvia', name, liveSince, gateways: [], gatewayPct: 0.02 })
+    expect(sortStores([st('Selnova', '2026-11-13'), st('Kaiven', '2026-11-10'), st('Oorvia', '2026-03-21'), st('Aaa', '2026-11-10')]).map((x) => x.name))
+      .toEqual(['Oorvia', 'Aaa', 'Kaiven', 'Selnova'])
+  })
+})
+
+describe('istNow', () => {
+  it('reads the date and hour in India, across the UTC date line', () => {
+    expect(istNow(new Date('2026-11-18T09:50:00Z'))).toEqual({ today: '2026-11-18', hour: 15, minute: 20 })
+    expect(istNow(new Date('2026-11-17T20:00:00Z'))).toEqual({ today: '2026-11-18', hour: 1, minute: 30 })
+    expect(istNow(new Date('2026-11-18T18:29:00Z'))).toEqual({ today: '2026-11-18', hour: 23, minute: 59 })
+  })
+})
