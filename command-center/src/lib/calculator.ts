@@ -76,11 +76,17 @@ export const SHEET_ASSUMPTIONS: Assumptions = {
 export type ProductEconomics = {
   /** Listed (COD) price, incl. GST. */
   price: number
-  /** Product cost, ex-GST. */
+  /** Cost of goods per order, ex-GST (one unit for a breakeven; every line item for real orders). */
   cogs: number
   packedWeightGrams: number
   deliveryRate: number
   codShare: number
+  /**
+   * Shipping slabs per order, when known from real orders (averages are fine: every
+   * slab-based charge is linear). Otherwise derived from `packedWeightGrams`.
+   */
+  slabs500?: number
+  slabsKg?: number
 }
 
 export type Breakeven = {
@@ -103,8 +109,8 @@ export function breakeven(p: ProductEconomics, a: Assumptions = SHEET_ASSUMPTION
   const avgPricePaid = p.price - (1 - cod) * prepaidOff
   const prepaidPrice = p.price - prepaidOff
 
-  const slabs500 = Math.max(1, Math.ceil(p.packedWeightGrams / 500))
-  const slabsKg = Math.max(1, Math.ceil(p.packedWeightGrams / 1000))
+  const slabs500 = p.slabs500 ?? Math.max(1, Math.ceil(p.packedWeightGrams / 500))
+  const slabsKg = p.slabsKg ?? Math.max(1, Math.ceil(p.packedWeightGrams / 1000))
   const m = a.vfMult
 
   const inward = a.inwardFee * m
@@ -132,12 +138,35 @@ export function breakeven(p: ProductEconomics, a: Assumptions = SHEET_ASSUMPTION
   const breakevenCpa =
     revenue + gst + cogs + vfDelivered + codFee + convFee + checkout + gateway + overheads + vfAllOrders + rtoLoss
 
+  return fromCpa(avgPricePaid, breakevenCpa, a)
+}
+
+/** Breakeven ROAS and target from a price paid and a profit-before-ads per order. */
+export function fromCpa(avgPricePaid: number, breakevenCpa: number, a: Assumptions = SHEET_ASSUMPTIONS): Breakeven {
   const breakevenRoas = avgPricePaid / breakevenCpa
   const breakevenRoasExGst = breakevenRoas / (1 + a.gstRate)
   const targetRoasExGst = breakevenRoasExGst + TARGET_BUFFER_EX_GST
   const targetRoas = targetRoasExGst * (1 + a.gstRate)
-
   return { avgPricePaid, breakevenCpa, breakevenRoas, breakevenRoasExGst, targetRoas, targetRoasExGst }
+}
+
+/**
+ * Breakeven for a COD/prepaid mix where each payment type has its own delivery
+ * rate. Computes an all-COD order and an all-prepaid order, then weights them.
+ */
+export function blendedBreakeven(
+  p: Omit<ProductEconomics, 'deliveryRate' | 'codShare'>,
+  codShare: number,
+  rates: { cod: number; prepaid: number },
+  a: Assumptions = SHEET_ASSUMPTIONS,
+): Breakeven {
+  const cod = breakeven({ ...p, deliveryRate: rates.cod, codShare: 1 }, a)
+  const pre = breakeven({ ...p, deliveryRate: rates.prepaid, codShare: 0 }, a)
+  return fromCpa(
+    codShare * cod.avgPricePaid + (1 - codShare) * pre.avgPricePaid,
+    codShare * cod.breakevenCpa + (1 - codShare) * pre.breakevenCpa,
+    a,
+  )
 }
 
 export type RoasZone = 'below' | 'covering' | 'profit'

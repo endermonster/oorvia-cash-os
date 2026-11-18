@@ -28,6 +28,27 @@ export function Delta({ now, prev, goodWhenUp = true, neutral = false, suffix }:
   )
 }
 
+/** The two headline numbers: booked revenue (Shopify) and ad spend (Meta), each vs the previous period. */
+export function Headline({ short, scope, prevLabel, revenue, prevRevenue, spend, prevSpend }: {
+  short: string; scope: string; prevLabel: string; revenue: number; prevRevenue: number; spend: number; prevSpend: number
+}) {
+  const big = 'rise mt-3 text-[clamp(2.75rem,6vw,4.75rem)] font-extrabold leading-[0.95] tracking-[-0.04em] text-ink'
+  return (
+    <div className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
+      <div>
+        <p className="label">Revenue · {short} · {scope} · Shopify</p>
+        <p className={big}><Signed value={revenue} /></p>
+        <div className="mt-3"><Delta now={revenue} prev={prevRevenue} suffix={`vs ${prevLabel}`} /></div>
+      </div>
+      <div>
+        <p className="label">Ad spend · {short} · {scope} · Meta</p>
+        <p className={big}><Signed value={spend} /></p>
+        <div className="mt-3"><Delta now={spend} prev={prevSpend} neutral suffix={`vs ${prevLabel}`} /></div>
+      </div>
+    </div>
+  )
+}
+
 export function Signed({ value, className = '' }: { value: number; className?: string }) {
   const neg = value < 0
   return (

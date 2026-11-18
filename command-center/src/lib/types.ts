@@ -8,39 +8,92 @@ export type StoreId = 'oorvia' | 'kaiven' | 'selnova'
 export type Store = {
   id: StoreId
   name: string
-  /** Live date of the store's current product. */
   liveSince: string
-  product: { name: string; price: number; cogs: number; packedWeightGrams: number }
-  /** Delivered ÷ (delivered + RTO). Source: vFulfill shipments import. */
-  deliveryRate: { value: number; assumedFrom: StoreId | null }
-  /** Source: Shopify orders. */
-  codShare: { value: number; assumedFrom: StoreId | null }
   gateways: string[]
+  /** Blended gateway fee on prepaid orders, ex-GST. Source: the store's gateway settlement reports. */
+  gatewayPct: number
 }
 
-/** One store, one day. Spend/impressions/clicks/purchases: Meta. Orders/revenue: Shopify. */
-export type DailyRow = {
+/** One sellable SKU. A store has one or more. Source: Shopify products + `cogs_history`. */
+export type Product = {
+  sku: string
+  storeId: StoreId
+  name: string
+  /** COD list price, incl. GST. Prepaid pays this minus the prepaid discount. */
+  price: number
+  /** Ex-GST, today's cost. Used for breakeven (forward-looking) only; past orders carry their own cost in `OrderDay.cogs`. */
+  cogs: number
+  packedWeightGrams: number
+  liveSince: string
+  /** Shopify product handle. A Meta campaign maps to this SKU when its ads land on `/products/{handle}`. */
+  handle: string
+  /** Set by hand: Testing while ads test it, Live once stock lands in India. Labels only; no math reads it. */
+  stage: ProductStage
+}
+
+export type ProductStage = 'testing' | 'live' | 'out_of_stock' | 'failed'
+
+export type PaymentType = 'cod' | 'prepaid'
+
+/**
+ * Shipments that closed (delivered or RTO) on one day, per SKU × payment type.
+ * Counted by close date, so any window (7 days, 30 days, lifetime) is a sum of
+ * days. Source: vFulfill shipments export (`Closed On`, `Shipment Status`)
+ * joined to Shopify orders, which carry the payment type from the moment they
+ * are placed.
+ */
+export type ResolvedDay = { closedOn: string; storeId: StoreId; sku: string; payment: PaymentType; delivered: number; rto: number }
+
+/**
+ * Shopify orders placed on one day, for one store × SKU × payment type. An order belongs to the SKU of its
+ * highest-value line item, but its costs cover **every** line item, so a 2-unit or mixed order is costed whole.
+ * A product is identified by (storeId, sku): two stores may use the same SKU.
+ */
+export type OrderDay = {
   date: string // YYYY-MM-DD, IST
   storeId: StoreId
+  sku: string
+  payment: PaymentType
+  orders: number
+  /** Units across all line items. */
+  units: number
+  /** Booked, incl. GST (`current_total_price`). */
+  revenue: number
+  /** Ex-GST, all line items, each at the cost effective on the order date (`cogs_history`). */
+  cogs: number
+  /** Σ over orders of ceil(whole order's packed grams / 500), and / 1000: vFulfill's shipping and storage slabs. */
+  slabs500: number
+  slabsKg: number
+}
+
+/**
+ * One Meta campaign, one day. Spend/impressions/clicks/purchases: Meta Insights. `attributedOrders`: Shopify orders
+ * whose `landing_page_url` (written by the Fastrr checkout) carries this `campaign_id`. Orders without one stay
+ * unattributed: they count for their SKU, never for a campaign.
+ */
+export type CampaignDay = {
+  date: string
+  storeId: StoreId
+  campaignId: string
+  /** The SKU the campaign's ads land on. Null only if that handle matches no product (handle changed, not synced). */
+  sku: string | null
   spend: number
   impressions: number
   clicks: number
   metaPurchases: number
-  orders: number
-  codOrders: number
-  revenue: number // booked, incl. GST
+  attributedOrders: number
 }
 
-/** Same shape as DailyRow, for the hours of today. */
-export type HourlyRow = Omit<DailyRow, 'date'> & { hour: number }
+/** The same rows for the hours of today. */
+export type OrderHour = Omit<OrderDay, 'date'> & { hour: number }
+export type CampaignHour = Omit<CampaignDay, 'date'> & { hour: number }
 
 export type Campaign = {
   id: string
   storeId: StoreId
+  /** From the ads' landing URL (`/products/{handle}`). One campaign sells one SKU. Null only if the handle matches no product. */
+  sku: string | null
   name: string
-  /** Mock only: share of the store's spend, and how its CPA compares with the store's. */
-  spendShare: number
-  cpaFactor: number
 }
 
 /** Source: Shopify webhooks. */
@@ -48,9 +101,10 @@ export type RecentOrder = {
   id: string
   storeId: StoreId
   placedAt: string // ISO
+  sku: string
   product: string
   value: number
-  payment: 'cod' | 'prepaid'
+  payment: PaymentType
   city: string
 }
 

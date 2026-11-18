@@ -1,15 +1,26 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
-import { campaigns, fmtX, inr, pct, series, storeStats, type Period, type StoreStats } from '@/lib/metrics'
-import { DAILY, storeById } from '@/lib/mock'
+import {
+  campaigns, deliveryRate, fmtX, inr, MIN_SAMPLE, pct, series, skuEconomics, storeStats, type Period, type Rate, type StoreStats,
+} from '@/lib/metrics'
+import { ORDERS, PRODUCTS, storeById } from '@/lib/mock'
 import { href, type ViewState } from '@/lib/nav'
-import type { StoreId } from '@/lib/types'
+import type { ProductStage, StoreId } from '@/lib/types'
 import { PaceChart } from './PaceChart'
-import { Delta, Signed, StoreDot } from './bits'
+import { Delta, Headline, Signed, StoreDot } from './bits'
+
+const STAGE: Record<ProductStage, { label: string; tone: string }> = {
+  testing: { label: 'Testing', tone: 'text-ink-3' },
+  live: { label: 'Live', tone: 'text-good' },
+  out_of_stock: { label: 'Out of stock', tone: 'text-warn' },
+  failed: { label: 'Failed', tone: 'text-bad' },
+}
 
 export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; period: Period }) {
   const s = storeStats(id, period)
   const store = storeById(id)
+  const products = PRODUCTS.filter((p) => p.storeId === id)
+  const productNames = products.map((p) => p.name).join(', ')
   const pts = series([id], period)
   const camps = campaigns(id, period)
 
@@ -17,16 +28,27 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-8">
         <h1 className="flex items-center gap-3 text-2xl font-extrabold tracking-tight text-ink"><StoreDot id={id} size={12} />{store.name}</h1>
-        <p className="text-ink-2">{store.product.name} · {inr(store.product.price)} · live since {new Date(`${store.liveSince}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>
+        <p className="text-ink-2">{products.map((p) => <span key={p.sku}>{p.name} {inr(p.price)} <span className={`text-sm font-semibold ${STAGE[p.stage].tone}`}>{STAGE[p.stage].label}</span> · </span>)}store live since {new Date(`${store.liveSince}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>
       </div>
 
-      <div className="mt-8 grid gap-x-12 gap-y-10 lg:grid-cols-12">
+      <section className="mt-8 max-w-[880px]" aria-label="Revenue and ad spend">
+        <Headline
+          short={period.short} scope={store.name} prevLabel={period.prevLabel}
+          revenue={s.revenue} prevRevenue={s.prev.revenue} spend={s.spend} prevSpend={s.prev.spend}
+        />
+        <p className="mt-6 text-ink-2">
+          {s.orders} orders · profit (est.) <Signed value={s.contribution} className="font-semibold text-ink" />
+          {s.unmappedSpend > 0 && <> · <span className="text-warn">{inr(s.unmappedSpend)} spend whose ad URL matches no product, check the handle</span></>}
+        </p>
+      </section>
+
+      <div className="mt-14 grid gap-x-12 gap-y-10 border-t border-line pt-10 lg:grid-cols-12">
         <section className="lg:col-span-6" aria-labelledby="roas-h">
           <h2 id="roas-h" className="label">ROAS · {period.short} · Meta (incl. GST)</h2>
           {s.roas === null ? (
             <div className="mt-6 rounded-xl bg-raised p-8">
               <p className="text-xl font-semibold text-ink">No ads ran in this period.</p>
-              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. Breakeven for {store.product.name} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</p>
+              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. Breakeven for {productNames} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</p>
             </div>
           ) : (
             <Gauge s={s} />
@@ -34,15 +56,11 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
         </section>
 
         <section className="lg:col-span-6" aria-label="Meta numbers">
-          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line">
-            <Stat label={`Spend · ${period.short} · Meta`} value={inr(s.spend)} sub={<Delta now={s.spend} prev={s.prev.spend} neutral suffix={`vs ${period.prevLabel}`} />} />
+          <dl className="grid gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-3">
             <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">breakeven {inr(s.economics.breakevenCpa)} per order</span>} />
             <Stat label="CPM" value={s.cpm ? inr(s.cpm) : '—'} sub={s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null} />
             <Stat label="CTR" value={s.ctr ? pct(s.ctr, 1) : '—'} sub={<span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span>} />
           </dl>
-          <p className="mt-4 text-sm text-ink-3">
-            Profit (estimate) <Signed value={s.contribution} className="font-semibold text-ink" /> · realised so far <Signed value={s.realised} className="text-ink-2" />
-          </p>
         </section>
       </div>
 
@@ -60,13 +78,14 @@ export function StoreView({ id, view, period }: { id: StoreId; view: ViewState; 
           ) : (
             <ul className="mt-3 divide-y divide-line">
               {camps.sort((a, b) => b.spend - a.spend).map((c) => {
-                const over = c.vsBreakeven !== null && c.vsBreakeven > 1
+                const over = (c.vsBreakeven !== null && c.vsBreakeven > 1) || c.noSalesLoss
                 return (
                   <li key={c.id} className="py-3">
                     <p className="font-semibold text-ink">{c.name}</p>
                     <p className="mt-0.5 text-sm text-ink-2">
                       {inr(c.spend)} · {c.orders} orders · CPA <span className={over ? 'font-semibold text-bad' : 'font-semibold text-ink'}>{c.cpa ? inr(c.cpa) : '—'}</span>
-                      {over && <span className="text-bad"> · over breakeven CPA</span>}
+                      {c.noSalesLoss ? <span className="text-bad"> · {inr(c.spend)} spent, no orders</span> : over && <span className="text-bad"> · over breakeven CPA</span>}
+                      {c.sku === null && <span className="text-warn"> · URL matches no product</span>}
                     </p>
                   </li>
                 )
@@ -140,10 +159,10 @@ function Gauge({ s }: { s: StoreStats }) {
 
 function OrdersStrip({ s, period }: { s: StoreStats; period: Period }) {
   const store = s.store
-  const rows = DAILY.filter((r) => r.storeId === store.id && r.date >= period.from && r.date <= period.to)
+  const rows = ORDERS.filter((r) => r.storeId === store.id && r.date >= period.from && r.date <= period.to)
   const dots: ('cod' | 'prepaid')[] = []
   for (const r of rows) {
-    for (let i = 0; i < r.orders; i++) dots.push(i < r.codOrders ? 'cod' : 'prepaid')
+    for (let i = 0; i < r.orders; i++) dots.push(r.payment)
   }
   const shown = dots.slice(0, 120)
   return (
@@ -163,22 +182,45 @@ function OrdersStrip({ s, period }: { s: StoreStats; period: Period }) {
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
       )}
-      <dl className="mt-8 grid gap-x-12 gap-y-6 sm:grid-cols-3">
-        <div>
-          <dt className="label">COD share</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-ink">{s.orders ? pct(s.codOrders / s.orders) : '—'}</dd>
-        </div>
-        <div>
-          <dt className="label">Delivery rate</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(store.deliveryRate.value, 1)}</dd>
-          <dd className="mt-1 text-sm text-ink-3">{store.deliveryRate.assumedFrom ? `Assumed from ${storeById(store.deliveryRate.assumedFrom).name}: no ${store.name} history yet` : 'From vFulfill shipments, since March'}</dd>
-        </div>
-        <div>
-          <dt className="label">RTO</dt>
-          <dd className="mt-1 text-2xl font-extrabold text-ink">{store.deliveryRate.assumedFrom ? '—' : pct(1 - store.deliveryRate.value, 1)}</dd>
-          <dd className="mt-1 text-sm text-ink-3">{store.deliveryRate.assumedFrom ? 'Appears once orders resolve' : 'Share of resolved orders returned'}</dd>
-        </div>
-      </dl>
+      {PRODUCTS.filter((p) => p.storeId === store.id).map((p, _, all) => {
+        const e = skuEconomics(p.storeId, p.sku)
+        return (
+          <div key={p.sku} className="mt-8">
+            {all.length > 1 && <h3 className="mb-3 font-semibold text-ink">{p.name}</h3>}
+            <dl className="grid gap-x-12 gap-y-6 sm:grid-cols-3">
+              <div>
+                <dt className="label">COD share · last 30 days</dt>
+                <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(e.codShare.value)}</dd>
+                <dd className="mt-1 text-sm text-ink-3">{basisNote(e.codShare, store.name, 'orders')}</dd>
+              </div>
+              {(['cod', 'prepaid'] as const).map((pay) => {
+                const week = deliveryRate(p.storeId, p.sku, pay, '7d')
+                const life = deliveryRate(p.storeId, p.sku, pay, 'lifetime')
+                // Shown for reading only; no math uses them, so a borrowed rate would just mislead.
+                const own = (r: Rate) => (r.basis === 'sku' ? pct(r.value, 1) : `under ${MIN_SAMPLE} closed`)
+                return (
+                  <div key={pay}>
+                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · last 30 days</dt>
+                    <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(e.rates[pay].value, 1)}</dd>
+                    <dd className="mt-1 text-sm text-ink-3">{basisNote(e.rates[pay], store.name, 'closed orders')}</dd>
+                    <dd className="mt-1 text-sm text-ink-2">7 days {own(week)} · lifetime {own(life)}</dd>
+                  </div>
+                )
+              })}
+            </dl>
+          </div>
+        )
+      })}
     </section>
   )
+}
+
+/** Where a rate came from, in plain words. */
+function basisNote(r: Rate, storeName: string, unit: string) {
+  switch (r.basis) {
+    case 'sku': return `${r.n} ${unit}`
+    case 'store': return `${storeName} average · ${r.n} ${unit}`
+    case 'vxp': return `VXP average · ${storeName} has under ${MIN_SAMPLE} ${unit} yet`
+    default: return 'Pricing sheet default · no history yet'
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { breakeven, roasZone } from './calculator'
+import { blendedBreakeven, breakeven, roasZone } from './calculator'
 
 // Expected values are the cached results of the "Oorvia Pricing Master" sheet
 // (Calculator tab, 2026-11-18): 90% delivery, 70% COD, 500 g, sheet defaults.
@@ -23,6 +23,20 @@ describe('breakeven (Pricing Master port)', () => {
     const b = breakeven({ price: 1299, cogs: 221, packedWeightGrams: 500, deliveryRate: 0.9, codShare: 0.7 })
     expect(b.targetRoasExGst).toBeCloseTo(1.94102023559941 + 1.5, 6)
     expect(b.targetRoas).toBeCloseTo((1.94102023559941 + 1.5) * 1.18, 6)
+  })
+
+  it('blended breakeven with equal rates matches the sheet', () => {
+    const p = { price: 2299, cogs: 581, packedWeightGrams: 500 }
+    const b = blendedBreakeven(p, 0.7, { cod: 0.9, prepaid: 0.9 })
+    expect(b.avgPricePaid).toBeCloseTo(2269, 6)
+    expect(b.breakevenCpa).toBeCloseTo(927.820330338983, 6)
+  })
+
+  it('blended breakeven rises when COD delivers worse than prepaid', () => {
+    const p = { price: 1499, cogs: 233, packedWeightGrams: 500 }
+    const flat = blendedBreakeven(p, 0.68, { cod: 0.848, prepaid: 0.848 })
+    const split = blendedBreakeven(p, 0.68, { cod: 0.8, prepaid: 0.95 })
+    expect(split.breakevenRoas).not.toBeCloseTo(flat.breakevenRoas, 3)
   })
 
   it('classifies ROAS into three zones', () => {

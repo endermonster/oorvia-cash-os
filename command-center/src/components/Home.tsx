@@ -1,13 +1,13 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import {
-  calls, cash, fmtX, gst, inr, minutesAgo, ownerShare, pct, portfolio, recentOrders, series, type Period, type StoreStats,
+  borrowedRates, calls, cash, fmtX, gst, inr, MIN_SAMPLE, minutesAgo, ownerShare, pct, portfolio, recentOrders, series, type Period, type StoreStats,
 } from '@/lib/metrics'
 import { STORES, storeById } from '@/lib/mock'
 import { href, type ViewState } from '@/lib/nav'
 import { Calls } from './Calls'
 import { PaceChart } from './PaceChart'
-import { Delta, Signed, StoreDot } from './bits'
+import { Headline, Signed, StoreDot } from './bits'
 
 export function HomeView({ view, period }: { view: ViewState; period: Period }) {
   const pf = portfolio(period)
@@ -16,21 +16,22 @@ export function HomeView({ view, period }: { view: ViewState; period: Period }) 
   const c = cash()
   const g = gst()
   const share = ownerShare()
-  const assumed = STORES.filter((s) => s.deliveryRate.assumedFrom).map((s) => s.name)
+  const borrowed = borrowedRates().map((s) => s.name)
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
       <div className="grid gap-x-12 gap-y-10 pt-10 lg:grid-cols-12">
-        <section className="lg:col-span-7" aria-labelledby="hero-h">
-          <p id="hero-h" className="label">Projected profit · {period.short} · all stores</p>
-          <p className={`rise mt-3 text-[clamp(3.5rem,8vw,6rem)] font-extrabold leading-[0.95] tracking-[-0.04em] ${pf.total.contribution < 0 ? 'text-bad' : 'text-ink'}`}>
-            <Signed value={pf.total.contribution} />
+        <section className="lg:col-span-7" aria-label="Revenue and ad spend">
+          <Headline
+            short={period.short} scope="all stores" prevLabel={period.prevLabel}
+            revenue={pf.total.revenue} prevRevenue={pf.total.prevRevenue} spend={pf.total.spend} prevSpend={pf.total.prevSpend}
+          />
+          <p className="mt-8 text-ink-2">
+            {pf.total.orders} orders · {pf.total.roas !== null ? `${fmtX(pf.total.roas)} blended ROAS` : 'no ads'} · profit (est.) <Signed value={pf.total.contribution} className="font-semibold text-ink" />
           </p>
-          <div className="mt-3"><Delta now={pf.total.contribution} prev={pf.total.prevContribution} suffix={`vs ${period.prevLabel}`} /></div>
-          <p className="mt-6 max-w-[34ch] text-2xl font-semibold leading-snug text-ink text-balance">{verdict(pf.stores)}</p>
-          <p className="mt-3 max-w-[70ch] text-sm text-ink-3">
-            Realised so far {inr(pf.total.realised)}. The estimate uses each store’s delivery rate ({pct(STORES[0].deliveryRate.value, 1)}
-            {assumed.length > 0 && <>; {assumed.join(' and ')} assumed from Oorvia</>}).
+          <p className="mt-2 max-w-[70ch] text-sm text-ink-3">
+            {verdict(pf.stores)} Profit uses each product’s own delivery rate, COD and prepaid separately
+            {borrowed.length > 0 && <>; {borrowed.join(' and ')} {borrowed.length === 1 ? 'uses' : 'use'} VXP rates until {MIN_SAMPLE} orders resolve</>}.
           </p>
         </section>
 

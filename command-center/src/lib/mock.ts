@@ -1,11 +1,14 @@
 /**
  * MOCK DATA. Deterministic, shaped like the real sources, so the screen can be
- * judged before any backend exists. Oorvia's delivery rate (84.8%) and COD share
- * (68%) are real (old Cash OS, Mar–Aug 2026); everything else is invented.
+ * judged before any backend exists. Products, prices and costs are real (Shopify,
+ * 2026-11-18) except Selnova's placeholders. The generator's 84.8% delivery and 68%
+ * COD share are Oorvia's real Mar–Aug averages (old Cash OS, mostly Yubi). Orders,
+ * spend and resolved counts are invented.
  */
 import { breakeven } from './calculator'
 import type {
-  Campaign, CashPosition, DailyRow, GstPosition, HourlyRow, RecentOrder, Store, StoreId, SyncStatus,
+  Campaign, CampaignDay, CampaignHour, CashPosition, GstPosition, OrderDay, OrderHour, PaymentType, Product, RecentOrder,
+  ResolvedDay, Store, StoreId, SyncStatus,
 } from './types'
 
 /** The mock's fixed "now": 18 Nov 2026, 3:20 PM IST. */
@@ -13,31 +16,50 @@ export const NOW = new Date('2026-11-18T15:20:00+05:30')
 export const TODAY = '2026-11-18'
 export const NOW_HOUR = 15
 
+// Gateway fees: the sheet's 2% for every store until settlement reports are wired.
 export const STORES: Store[] = [
-  {
-    id: 'oorvia', name: 'Oorvia', liveSince: '2026-03-21',
-    product: { name: 'Microinfusion System', price: 2299, cogs: 581, packedWeightGrams: 500 },
-    deliveryRate: { value: 0.848, assumedFrom: null },
-    codShare: { value: 0.68, assumedFrom: null },
-    gateways: ['Cashfree', 'Razorpay'],
-  },
-  {
-    id: 'kaiven', name: 'Kaiven', liveSince: '2026-11-10',
-    product: { name: 'Deoxyribose Scalp Serum', price: 1499, cogs: 233, packedWeightGrams: 500 },
-    deliveryRate: { value: 0.848, assumedFrom: 'oorvia' },
-    codShare: { value: 0.68, assumedFrom: 'oorvia' },
-    gateways: ['Razorpay', 'PayU'],
-  },
-  {
-    id: 'selnova', name: 'Selnova', liveSince: '2026-11-13',
-    product: { name: 'PDRN Ampoule', price: 1699, cogs: 350, packedWeightGrams: 500 },
-    deliveryRate: { value: 0.848, assumedFrom: 'oorvia' },
-    codShare: { value: 0.68, assumedFrom: 'oorvia' },
-    gateways: ['Razorpay'],
-  },
+  { id: 'oorvia', name: 'Oorvia', liveSince: '2026-03-21', gateways: ['Cashfree', 'Razorpay'], gatewayPct: 0.02 },
+  { id: 'kaiven', name: 'Kaiven', liveSince: '2026-11-10', gateways: ['Razorpay', 'PayU'], gatewayPct: 0.02 },
+  { id: 'selnova', name: 'Selnova', liveSince: '2026-11-13', gateways: ['Razorpay'], gatewayPct: 0.02 },
 ]
 
 export const storeById = (id: StoreId) => STORES.find((s) => s.id === id)!
+
+export const PRODUCTS: Product[] = [
+  // Oorvia: Shopify (2026-11-18). 11 other products are still Active there but have no orders since Aug
+  // (Yubi YB31 was the last seller, 16 Aug); left out until they sell again.
+  { sku: 'OMS-1M', storeId: 'oorvia', name: 'Microinfusion System', price: 2499, cogs: 581, packedWeightGrams: 500, liveSince: '2026-09-16', handle: 'oorvia-microinfusion-system', stage: 'live' },
+  // Kaiven and Selnova: active products from Shopify (2026-11-18). Drafts left out (DermFirm Eye Lift, Pillowcast).
+  // Shopify weight is 0 on both, so the sheet's 500 g stands. Selnova has no SKU and no cost per item in Shopify yet:
+  // 'SN-PDRN' and ₹350 are placeholders.
+  { sku: 'KV-DHS', storeId: 'kaiven', name: 'Medicube Deoxyribose Scalp Serum', price: 1499, cogs: 300, packedWeightGrams: 500, liveSince: '2026-11-10', handle: 'deoxyribose-scalp-serum', stage: 'testing' },
+  { sku: 'SN-PDRN', storeId: 'selnova', name: 'PDRN Pink Vitamin Glow Ampoule', price: 1499, cogs: 350, packedWeightGrams: 500, liveSince: '2026-11-13', handle: 'pdrn-ampoule', stage: 'testing' },
+]
+
+/** A product is (store, SKU): two stores may sell the same SKU. */
+export function productOf(storeId: StoreId, sku: string): Product {
+  const p = PRODUCTS.find((x) => x.storeId === storeId && x.sku === sku)
+  if (!p) throw new Error(`No product ${sku} in ${storeId}`)
+  return p
+}
+
+/** Time-versioned COGS (ex-GST), as `cogs_history`. One entry each: no cost change is on record yet. */
+export const COGS_HISTORY: { storeId: StoreId; sku: string; cogs: number; from: string }[] =
+  PRODUCTS.map((p) => ({ storeId: p.storeId, sku: p.sku, cogs: p.cogs, from: '2026-01-01' }))
+
+/** The cost effective on a date: the latest entry starting on or before it. */
+export function cogsOn(storeId: StoreId, sku: string, date: string): number {
+  const hit = COGS_HISTORY
+    .filter((c) => c.storeId === storeId && c.sku === sku && c.from <= date)
+    .sort((a, b) => b.from.localeCompare(a.from))[0]
+  if (!hit) throw new Error(`No cost for ${sku} in ${storeId} on ${date}`)
+  return hit.cogs
+}
+
+/** What the generator assumes the true rates are. Not visible to the screen. */
+const GEN = { deliveryRate: 0.848, codShare: 0.68 }
+/** Invented true delivery rates per payment type, used to resolve the mock's orders. */
+const GEN_DELIVERY: Record<PaymentType, number> = { cod: 0.8, prepaid: 0.95 }
 
 function mulberry32(seed: number) {
   return () => {
@@ -86,100 +108,183 @@ function plan(storeId: StoreId, date: string, rnd: () => number): { spend: numbe
   return { spend: 1200 + age * 160 + rnd() * 300, roasMult: late ? 0.72 + rnd() * 0.08 : 1.08 + rnd() * 0.12, organic: 0.1 }
 }
 
-function buildDaily(): DailyRow[] {
-  const rows: DailyRow[] = []
-  for (const store of STORES) {
-    const be = breakeven({ ...store.product, deliveryRate: store.deliveryRate.value, codShare: store.codShare.value })
-    const rnd = mulberry32(store.id.length * 7919 + store.product.price)
+/** Every campaign lands on one product page. */
+export const CAMPAIGNS: Campaign[] = [
+  { id: 'kv1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Broad' },
+  { id: 'kv2', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Hair fall 25–40' },
+  { id: 'kv3', storeId: 'kaiven', sku: 'KV-DHS', name: 'DHS – Creative test' },
+  { id: 'sn1', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Broad' },
+  { id: 'sn2', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Glass skin 22–35' },
+  { id: 'ov1', storeId: 'oorvia', sku: 'OMS-1M', name: 'MI – Broad (paused 10 Nov)' },
+]
+/** Mock only: each campaign's share of its product's spend, and how its CPA compares with the product's. */
+const CAMPAIGN_GEN: Record<string, { spendShare: number; cpaFactor: number }> = {
+  kv1: { spendShare: 0.58, cpaFactor: 0.9 }, kv2: { spendShare: 0.3, cpaFactor: 1.02 }, kv3: { spendShare: 0.12, cpaFactor: 1.6 },
+  sn1: { spendShare: 0.64, cpaFactor: 0.94 }, sn2: { spendShare: 0.36, cpaFactor: 1.12 },
+  ov1: { spendShare: 1, cpaFactor: 1 },
+}
+
+/** Splits `total` whole units across weights (largest remainder), so the parts add up exactly. */
+function allocate(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((s, w) => s + w, 0)
+  const raw = weights.map((w) => (sum > 0 ? (total * w) / sum : 0))
+  const out = raw.map(Math.floor)
+  const order = raw.map((r, i) => [r - Math.floor(r), i] as const).sort((a, b) => b[0] - a[0])
+  const left = total - out.reduce((s, x) => s + x, 0)
+  for (let k = 0; k < left; k++) out[order[k][1]]++
+  return out
+}
+
+/** 8% of orders are 2 units (mock). Prepaid pays ₹100 less per order. */
+function buildOrdersAndSpend(): { orders: OrderDay[]; spend: CampaignDay[] } {
+  const orders: OrderDay[] = []
+  const spendRows: CampaignDay[] = []
+  for (const product of PRODUCTS) {
+    const store = storeById(product.storeId)
+    const be = breakeven({ ...product, ...GEN })
+    const camps = CAMPAIGNS.filter((c) => c.storeId === product.storeId && c.sku === product.sku)
+    const rnd = mulberry32(store.id.length * 7919 + product.price)
     for (let date = '2026-09-15'; date <= TODAY; date = addDays(date, 1)) {
       const p = plan(store.id, date, rnd)
       const partial = date === TODAY ? SHARE_UNTIL_NOW : 1
       const spend = Math.round(p.spend * partial)
-      const avgPaid = be.avgPricePaid
       // Near-deterministic so each store's story (above / below breakeven) survives small daily counts.
-      const mean = (spend * be.breakevenRoas * p.roasMult) / avgPaid
+      const mean = (spend * be.breakevenRoas * p.roasMult) / be.avgPricePaid
       const paidOrders = spend > 0 ? Math.max(0, Math.round(mean + (rnd() - 0.5) * 0.9)) : 0
-      const orders = paidOrders + poisson(p.organic * partial, rnd)
-      let codOrders = 0
-      for (let i = 0; i < orders; i++) if (rnd() < store.codShare.value) codOrders++
-      const revenue = codOrders * store.product.price + (orders - codOrders) * (store.product.price - 100)
+      const count = paidOrders + poisson(p.organic * partial, rnd)
+
+      const empty = (payment: PaymentType): OrderDay =>
+        ({ date, storeId: store.id, sku: product.sku, payment, orders: 0, units: 0, revenue: 0, cogs: 0, slabs500: 0, slabsKg: 0 })
+      const byPay: Record<PaymentType, OrderDay> = { cod: empty('cod'), prepaid: empty('prepaid') }
+      for (let i = 0; i < count; i++) {
+        const row = byPay[rnd() < GEN.codShare ? 'cod' : 'prepaid']
+        const units = rnd() < 0.08 ? 2 : 1
+        const grams = product.packedWeightGrams * units
+        row.orders++
+        row.units += units
+        row.revenue += product.price * units - (row.payment === 'prepaid' ? 100 : 0)
+        row.cogs += cogsOn(product.storeId, product.sku, date) * units
+        row.slabs500 += Math.max(1, Math.ceil(grams / 500))
+        row.slabsKg += Math.max(1, Math.ceil(grams / 1000))
+      }
+      for (const row of Object.values(byPay)) if (row.orders > 0) orders.push(row)
+
+      if (spend === 0 || camps.length === 0) continue
       const late = date >= '2026-11-15'
       const cpm = store.id === 'kaiven' && late ? 400 + rnd() * 40 : 320 + rnd() * 50
-      const impressions = Math.round((spend / cpm) * 1000)
-      const clicks = Math.round(impressions * (0.016 + rnd() * 0.005))
-      const metaPurchases = Math.max(0, paidOrders - (rnd() < 0.25 ? 1 : 0))
-      rows.push({ date, storeId: store.id, spend, impressions, clicks, metaPurchases, orders, codOrders, revenue })
-    }
-  }
-  return rows
-}
-
-export const DAILY: DailyRow[] = buildDaily()
-
-/** Today's rows split by hour, up to the current hour. */
-function buildHourly(): HourlyRow[] {
-  const rows: HourlyRow[] = []
-  const w = HOUR_WEIGHTS.slice(0, NOW_HOUR + 1)
-  const wSum = w.reduce((s, x) => s + x, 0)
-  for (const d of DAILY.filter((r) => r.date === TODAY)) {
-    const rnd = mulberry32(d.storeId.length * 31 + d.orders)
-    const orderHours = Array.from({ length: d.orders }, () => {
-      let x = rnd() * wSum
-      for (let h = 0; h < w.length; h++) { x -= w[h]; if (x <= 0) return h }
-      return NOW_HOUR
-    })
-    const codHours = orderHours.slice(0, d.codOrders)
-    const price = storeById(d.storeId).product.price
-    let spendLeft = d.spend
-    for (let hour = 0; hour <= NOW_HOUR; hour++) {
-      const share = w[hour] / wSum
-      const orders = orderHours.filter((h) => h === hour).length
-      const codOrders = codHours.filter((h) => h === hour).length
-      const spend = hour === NOW_HOUR ? spendLeft : Math.round(d.spend * share)
-      spendLeft -= spend
-      rows.push({
-        hour, storeId: d.storeId,
-        spend,
-        impressions: Math.round(d.impressions * share),
-        clicks: Math.round(d.clicks * share),
-        metaPurchases: orders,
-        orders, codOrders,
-        revenue: codOrders * price + (orders - codOrders) * (price - 100),
+      const ctr = 0.016 + rnd() * 0.005
+      // About 1 day in 10, one paid order loses its campaign ID on the way through checkout.
+      const lost = rnd() < 0.1 ? 1 : 0
+      const attributed = allocate(Math.max(0, paidOrders - lost), camps.map((c) => CAMPAIGN_GEN[c.id].spendShare / CAMPAIGN_GEN[c.id].cpaFactor))
+      const spends = allocate(spend, camps.map((c) => CAMPAIGN_GEN[c.id].spendShare))
+      camps.forEach((c, i) => {
+        const impressions = Math.round((spends[i] / cpm) * 1000)
+        spendRows.push({
+          date, storeId: store.id, campaignId: c.id, sku: c.sku,
+          spend: spends[i], impressions, clicks: Math.round(impressions * ctr),
+          metaPurchases: Math.max(0, attributed[i] - (rnd() < 0.25 ? 1 : 0)),
+          attributedOrders: attributed[i],
+        })
       })
     }
   }
-  return rows
+  return { orders, spend: spendRows }
 }
 
-export const HOURLY_TODAY: HourlyRow[] = buildHourly()
+const BUILT = buildOrdersAndSpend()
+export const ORDERS: OrderDay[] = BUILT.orders
+export const CAMPAIGN_DAYS: CampaignDay[] = BUILT.spend
 
-export const CAMPAIGNS: Campaign[] = [
-  { id: 'kv1', storeId: 'kaiven', name: 'Scalp – Broad', spendShare: 0.58, cpaFactor: 0.9 },
-  { id: 'kv2', storeId: 'kaiven', name: 'Scalp – Hair fall 25–40', spendShare: 0.3, cpaFactor: 1.02 },
-  { id: 'kv3', storeId: 'kaiven', name: 'DHS – Creative test', spendShare: 0.12, cpaFactor: 1.6 },
-  { id: 'sn1', storeId: 'selnova', name: 'PDRN – Broad', spendShare: 0.64, cpaFactor: 0.94 },
-  { id: 'sn2', storeId: 'selnova', name: 'PDRN – Glass skin 22–35', spendShare: 0.36, cpaFactor: 1.12 },
-  { id: 'ov1', storeId: 'oorvia', name: 'MI – Broad (paused 10 Nov)', spendShare: 1, cpaFactor: 1 },
-]
+/** Each mock order resolves: delivered after 4–7 days, RTO after 10–16. Counted on the day it closes. */
+function buildResolved(): ResolvedDay[] {
+  const byKey = new Map<string, ResolvedDay>()
+  const rnd = mulberry32(9001)
+  for (const r of ORDERS) {
+    for (let i = 0; i < r.orders; i++) {
+      const delivered = rnd() < GEN_DELIVERY[r.payment]
+      const closedOn = addDays(r.date, delivered ? 4 + Math.floor(rnd() * 4) : 10 + Math.floor(rnd() * 7))
+      if (closedOn > TODAY) continue
+      const key = `${closedOn}|${r.storeId}|${r.sku}|${r.payment}`
+      const row = byKey.get(key) ?? { closedOn, storeId: r.storeId, sku: r.sku, payment: r.payment, delivered: 0, rto: 0 }
+      if (delivered) row.delivered++
+      else row.rto++
+      byKey.set(key, row)
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.closedOn.localeCompare(b.closedOn))
+}
+
+/** All invented: old Cash OS stops at 24 Aug, before Microinfusion launched. */
+export const RESOLVED: ResolvedDay[] = buildResolved()
+
+const HOUR_W = HOUR_WEIGHTS.slice(0, NOW_HOUR + 1)
+const HOUR_W_SUM = HOUR_W.reduce((s, x) => s + x, 0)
+function pickHour(rnd: () => number) {
+  let x = rnd() * HOUR_W_SUM
+  for (let h = 0; h < HOUR_W.length; h++) { x -= HOUR_W[h]; if (x <= 0) return h }
+  return NOW_HOUR
+}
+
+/** Today's orders by hour: each order gets an hour; a row's amounts split in proportion to its orders. */
+function buildOrderHours(): OrderHour[] {
+  const out: OrderHour[] = []
+  const rnd = mulberry32(31)
+  for (const r of ORDERS.filter((x) => x.date === TODAY)) {
+    const perHour = new Array<number>(NOW_HOUR + 1).fill(0)
+    for (let i = 0; i < r.orders; i++) perHour[pickHour(rnd)]++
+    perHour.forEach((n, hour) => {
+      if (n === 0) return
+      const k = n / r.orders
+      out.push({
+        hour, storeId: r.storeId, sku: r.sku, payment: r.payment, orders: n,
+        units: r.units * k, revenue: r.revenue * k, cogs: r.cogs * k, slabs500: r.slabs500 * k, slabsKg: r.slabsKg * k,
+      })
+    })
+  }
+  return out
+}
+
+/** Today's spend by hour, along the hour-of-day curve. Every campaign row is kept, orders or not. */
+function buildCampaignHours(): CampaignHour[] {
+  const out: CampaignHour[] = []
+  const rnd = mulberry32(37)
+  for (const r of CAMPAIGN_DAYS.filter((x) => x.date === TODAY)) {
+    const spends = allocate(r.spend, HOUR_W)
+    const attributed = new Array<number>(NOW_HOUR + 1).fill(0)
+    for (let i = 0; i < r.attributedOrders; i++) attributed[pickHour(rnd)]++
+    spends.forEach((spend, hour) => {
+      const k = HOUR_W[hour] / HOUR_W_SUM
+      out.push({
+        hour, storeId: r.storeId, campaignId: r.campaignId, sku: r.sku, spend,
+        impressions: Math.round(r.impressions * k), clicks: Math.round(r.clicks * k),
+        metaPurchases: Math.min(attributed[hour], Math.round(r.metaPurchases * k)), attributedOrders: attributed[hour],
+      })
+    })
+  }
+  return out
+}
+
+export const ORDER_HOURS: OrderHour[] = buildOrderHours()
+export const CAMPAIGN_HOURS: CampaignHour[] = buildCampaignHours()
 
 const CITIES = ['Bengaluru', 'Mumbai', 'Pune', 'Delhi', 'Hyderabad', 'Jaipur', 'Lucknow', 'Kochi', 'Indore', 'Chennai', 'Ahmedabad', 'Surat', 'Nagpur', 'Kolkata', 'Chandigarh']
 
 function buildRecentOrders(): RecentOrder[] {
   const out: RecentOrder[] = []
   const rnd = mulberry32(4242)
-  for (const h of HOURLY_TODAY) {
-    const store = storeById(h.storeId)
+  for (const h of ORDER_HOURS) {
+    const product = productOf(h.storeId, h.sku)
     for (let i = 0; i < h.orders; i++) {
       const minute = h.hour === NOW_HOUR ? Math.floor(rnd() * 18) : Math.floor(rnd() * 60)
       const placed = new Date(`${TODAY}T${String(h.hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+05:30`)
-      const payment = i < h.codOrders ? 'cod' : 'prepaid'
       out.push({
-        id: `${store.id}-${h.hour}-${i}`,
-        storeId: store.id,
+        id: `${h.storeId}-${h.hour}-${h.payment}-${i}`,
+        storeId: h.storeId,
         placedAt: placed.toISOString(),
-        product: store.product.name,
-        value: payment === 'cod' ? store.product.price : store.product.price - 100,
-        payment,
+        sku: product.sku,
+        product: product.name,
+        value: Math.round(h.revenue / h.orders),
+        payment: h.payment,
         city: CITIES[Math.floor(rnd() * CITIES.length)],
       })
     }
