@@ -47,3 +47,6 @@ next-env.d.ts
 !/.impeccable/mocks/
 /.impeccable/mocks/*
 !/.impeccable/mocks/round2/
+
+# Supabase CLI local state
+supabase/.temp/

@@ -289,7 +289,8 @@ describe('products and orders that are not set up', () => {
     expect(noCost.skuEconomics('kaiven', 'KV-DHS')).toBeNull()
     expect(noCost.storeEconomics('kaiven')).toBeNull()
     expect(noCost.storeEconomics('oorvia')).not.toBeNull()
-    expect(noCost.borrowedRates().map((s) => s.id)).not.toContain('kaiven')
+    // Rates do not depend on cost, so a cost-less product still counts for the borrowed-rates check.
+    expect(noCost.borrowedRates().map((s) => s.id)).toEqual(m.borrowedRates().map((s) => s.id))
     const s = noCost.storeStats('kaiven', week)
     expect(s.economics).toBeNull()
     expect(s.zone).toBeNull()
@@ -338,5 +339,65 @@ describe('sources not wired yet', () => {
     const low = createMetrics({ ...MOCK, cash: { ...MOCK.cash!, bank: { amount: 0, enteredAt: '' }, settlements: [], vfulfillWallet: 0, codDue: 1 } })
     expect(low.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(true)
     expect(bare.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(false)
+  })
+})
+
+describe('relevant products', () => {
+  const week = resolvePeriod('7d')
+  const dormant = { ...MOCK.products.find((p) => p.storeId === 'oorvia')!, sku: 'OLD-1', handle: 'old-1', name: 'Old', stage: 'testing' as const }
+  const withDormant = createMetrics({ ...MOCK, products: [...MOCK.products, dormant] })
+
+  it('keeps products with orders or spend in the period, and any live product', () => {
+    expect(m.relevantProducts('kaiven', week).map((p) => p.sku)).toEqual(['KV-DHS'])
+    expect(withDormant.relevantProducts('oorvia', week).map((p) => p.sku)).toEqual(['OMS-1M']) // live; the dormant one is out
+  })
+
+  it('includes a dormant product once it has orders or spend in the period', () => {
+    const row = { date: addDays(TODAY, -1), storeId: 'oorvia' as const, sku: 'OLD-1', payment: 'cod' as const, orders: 1, units: 1, revenue: 2499, cogs: 581, slabs500: 1, slabsKg: 1 }
+    const spend = { date: addDays(TODAY, -1), storeId: 'oorvia' as const, campaignId: 'x', sku: 'OLD-1', spend: 10, impressions: 1, clicks: 1, metaPurchases: 0, attributedOrders: 0 }
+    const a = createMetrics({ ...MOCK, products: [...MOCK.products, dormant], orders: [...ORDERS, row] })
+    const b = createMetrics({ ...MOCK, products: [...MOCK.products, dormant], campaignDays: [...CAMPAIGN_DAYS, spend] })
+    expect(a.relevantProducts('oorvia', week).map((p) => p.sku)).toContain('OLD-1')
+    expect(b.relevantProducts('oorvia', week).map((p) => p.sku)).toContain('OLD-1')
+  })
+
+  it('a dormant catalogue item does not dilute the store breakeven or the borrowed-rates check', () => {
+    expect(withDormant.storeEconomics('oorvia')).toEqual(m.storeEconomics('oorvia'))
+    expect(withDormant.borrowedRates(undefined, week).map((s) => s.id)).toEqual(m.borrowedRates(undefined, week).map((s) => s.id))
+  })
+
+  it('with no orders in 30 days, weights the relevant costed products equally, not the whole catalogue', () => {
+    const quiet = createMetrics({
+      ...MOCK, orders: MOCK.orders.filter((r) => r.storeId !== 'oorvia'),
+      products: [...MOCK.products, dormant, { ...dormant, sku: 'OLD-2', handle: 'old-2' }],
+    })
+    const onlyLive = createMetrics({ ...MOCK, orders: MOCK.orders.filter((r) => r.storeId !== 'oorvia') })
+    expect(quiet.storeEconomics('oorvia')).toEqual(onlyLive.storeEconomics('oorvia'))
+  })
+})
+
+describe('breakeven names and borrowed rates', () => {
+  const week = resolvePeriod('7d')
+
+  it('storeEconomics names the products it weighted, never an empty list', () => {
+    for (const s of STORES) {
+      const e = m.storeEconomics(s.id)!
+      expect(e.weightedNames.length).toBeGreaterThan(0)
+    }
+    expect(m.storeEconomics('kaiven')!.weightedNames).toEqual(['Medicube Deoxyribose Scalp Serum'])
+  })
+
+  it('with no orders, names only the relevant costed products', () => {
+    const dormant = { ...MOCK.products.find((p) => p.storeId === 'oorvia')!, sku: 'OLD-1', handle: 'old-1', name: 'Old', stage: 'testing' as const }
+    const quiet = createMetrics({ ...MOCK, orders: MOCK.orders.filter((r) => r.storeId !== 'oorvia'), products: [...MOCK.products, dormant] })
+    expect(quiet.storeEconomics('oorvia')!.weightedNames).toEqual(['Microinfusion System'])
+  })
+
+  it('borrowedRates counts a SKU that has orders but no product', () => {
+    const orphaned = createMetrics({ ...MOCK, products: MOCK.products.filter((p) => p.storeId !== 'kaiven') })
+    expect(orphaned.storeStats('kaiven', week).unknownSkus).toEqual(['KV-DHS'])
+    const basis = (['cod', 'prepaid'] as const).map((pay) => orphaned.deliveryRate('kaiven', 'KV-DHS', pay).basis)
+    expect(basis.some((x) => x === 'vxp' || x === 'sheet')).toBe(true) // Kaiven is too young to have its own rates
+    expect(orphaned.borrowedRates(['kaiven'], week).map((x) => x.id)).toEqual(['kaiven'])
   })
 })

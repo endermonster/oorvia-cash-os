@@ -79,7 +79,7 @@ shows a warning to check the handle, and the backend never guesses the SKU.
 | Breakeven CPA | Pricing Master formula (`blendedBreakeven`) using the SKU's price, COGS and weight, the store's gateway fee, the SKU's COD share and both delivery rates. Other fees come from the sheet's Assumptions tab | — | — |
 | Breakeven ROAS | Average price paid ÷ breakeven CPA. This is Meta's scale, because revenue includes GST | — | — |
 | Target ROAS | (breakeven ROAS ÷ 1.18 + 1.5) × 1.18 | — | — |
-| Store breakeven | Each SKU's breakeven CPA and average price paid, weighted by that SKU's orders in the last 30 days | Last 30 days | Equal weights if no orders |
+| Store breakeven | Each SKU's breakeven CPA and average price paid, weighted by that SKU's orders in the last 30 days. Products with no cost on record are left out | Last 30 days | No orders: equal weights over the relevant costed products (orders or spend in the period, or Live); none relevant: all costed products |
 | Profit before ads, for a set of orders | For each product × payment type: orders × breakeven CPA, using that group's actual average price paid, its delivery rate, and its **own** costs per order (COGS of every line item at order date, average shipping slabs). `profitBeforeAds` | The orders in view | — |
 | Profit (est.) | Profit before ads − spend | The period | — |
 
@@ -114,7 +114,7 @@ In Transit → still open. Payment type always comes from Shopify, never from vF
 
 | # | On screen | Formula | Source |
 |---|---|---|---|
-| S1 | Product line | Each SKU with orders or spend in the period: name, price, stage tag. "Store live since" | Products |
+| S1 | Product line | Each SKU with orders or spend in the period, **plus any product whose stage is Live** (so a live product on a quiet day still shows): name, price, stage tag. "Store live since" | Products |
 | S2 | **Revenue**, **Ad spend** + change % | As H1 and H2, this store only | Shopify, Meta |
 | S3 | Orders · profit (est.) | As H3 and H5. A warning appears only if some spend's handle matches no product | Derived |
 | S4 | ROAS gauge | ROAS = revenue ÷ spend, against store breakeven and target. Shows zone and "X short of target". With no spend: a "No ads ran" card with organic orders and the breakeven | Derived |

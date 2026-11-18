@@ -16,8 +16,7 @@ const STAGE: Record<ProductStage, { label: string; tone: string }> = {
 export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: ViewState; period: Period; m: Metrics; orders: OrderDay[] }) {
   const s = m.storeStats(id, period)
   const store = m.storeById(id)
-  const products = m.products.filter((p) => p.storeId === id)
-  const productNames = products.map((p) => p.name).join(', ')
+  const products = m.relevantProducts(id, period)
   const pts = m.series([id], period)
   const camps = m.campaigns(id, period)
   const warnings = [
@@ -53,7 +52,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
           {s.roas === null ? (
             <div className="mt-6 rounded-xl bg-raised p-8">
               <p className="text-xl font-semibold text-ink">No ads ran in this period.</p>
-              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics ? <>Breakeven for {productNames} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</> : 'Breakeven needs a product cost.'}</p>
+              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics ? <>Breakeven for {s.economics.weightedNames.join(', ')} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</> : 'Breakeven needs a product cost.'}</p>
             </div>
           ) : (
             <Gauge s={s} />
@@ -195,7 +194,7 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
       )}
-      {m.products.filter((p) => p.storeId === store.id).map((p, _, all) => {
+      {m.relevantProducts(store.id, period).map((p, _, all) => {
         const share = m.codShare(p.storeId, p.sku)
         return (
           <div key={p.sku} className="mt-8">

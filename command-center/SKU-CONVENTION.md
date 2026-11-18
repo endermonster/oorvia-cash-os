@@ -27,6 +27,18 @@ Do all five in Shopify before launching a campaign:
 4. **Set the weight** to the packed weight (box included). vFulfill charges shipping by 500 g slab. If it's left at 0, the dashboard assumes 500 g.
 5. **Set the stage to Testing** in the Command Center. Switch it to Live once stock lands in India.
 
+## A/B tests (duplicating a product)
+
+Shopify's **Duplicate** copies the SKU. Before running ads to the copy, give it its own SKU with a test
+suffix: `KV-DHS` → `KV-DHS-T2` (the next test is `-T3`).
+
+- The dashboard then shows each version as its own product (orders, profit, delivery, breakeven), side by side.
+- Each copy has its own handle, so its campaign maps to it automatically.
+- The cost per item copies over, so the copy's cost is already set. Check it.
+- When the test ends, set the losing version to **Draft**. Its history stays under its own SKU.
+
+If a copy keeps the original's SKU, the sync updates **neither** product and reports it until one is changed.
+
 ## Never
 
 - **Rename a live SKU.** Past orders keep the old SKU, so the product's history splits in two. If it really must change, create a new product.
@@ -40,6 +52,6 @@ Do all five in Shopify before launching a campaign:
 |---|---|---|---|
 | Oorvia | Microinfusion System | `OMS-1M` | Predates this convention. **Keep as is**: renaming would split its history |
 | Kaiven | Medicube Deoxyribose Scalp Serum | `KV-DHS` | Fits |
-| Selnova | PDRN Pink Vitamin Glow Ampoule | **none in Shopify** | **To do:** set SKU `SN-PDRN` and its cost per item |
+| Selnova | PDRN Pink Vitamin Glow Ampoule | `SN-PDRN` | Fits (cost ₹345) |
 
 All three products have weight 0 in Shopify, so the dashboard uses 500 g until a real packed weight is set.

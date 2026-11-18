@@ -117,6 +117,9 @@ const META_SOURCES = ['meta']
  * store), then the OLDEST across stores, so one stale store makes the whole source stale. Null = never.
  * Meta is only expected for `metaStoreIds` (stores with an ad account).
  */
+// A quiet store (no orders for days) has no recent webhook, so "the oldest store" can look stale although nothing is
+// wrong. The daily cron (deploy stage) runs `--orders --since yesterday` per store, which writes a shopify_backfill
+// run for every store and keeps this honest.
 export function mapSync(runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds): SyncStatus {
   const oldestLatest = (sources: string[], ids: string[]): number | null => {
     let oldest: number | null = null

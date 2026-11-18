@@ -13,7 +13,7 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
   const c = m.cash()
   const g = m.gst()
   const share = m.ownerShare()
-  const borrowed = m.borrowedRates().map((s) => s.name)
+  const borrowed = m.borrowedRates(undefined, period).map((s) => s.name)
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">

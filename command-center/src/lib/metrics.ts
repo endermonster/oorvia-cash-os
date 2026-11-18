@@ -85,10 +85,13 @@ function totalsOf(s: Slice): Totals {
 
 const ratio = (a: number, b: number) => (b > 0 ? a / b : null)
 
+/** A store's breakeven plus the products it was actually weighted over (never an empty list). */
+export type StoreBreakeven = Breakeven & { weightedNames: string[] }
+
 export type StoreStats = Totals & {
   store: Store
   /** Null when no product in the store has a cost on record. */
-  economics: Breakeven | null
+  economics: StoreBreakeven | null
   roas: number | null
   zone: RoasZone | null
   cpa: number | null
@@ -142,6 +145,23 @@ export function createMetrics(d: Data) {
   const windowStart: Record<RateWindow, string> = { '7d': addDays(TODAY, -6), '30d': addDays(TODAY, -29), lifetime: '' }
 
   const storeById = (id: StoreId) => d.stores.find((s) => s.id === id)!
+
+  /**
+   * The products worth showing for a store in a period: those with orders or spend in it, plus any
+   * product marked live. A store with a long tail of dormant catalogue items stays readable.
+   */
+  function relevantProducts(storeId: StoreId, p: Period) {
+    const active = new Set<string>()
+    for (const r of d.orders) if (r.storeId === storeId && r.date >= p.from && r.date <= p.to) active.add(r.sku)
+    for (const r of d.campaignDays) if (r.storeId === storeId && r.sku !== null && r.date >= p.from && r.date <= p.to) active.add(r.sku)
+    return d.products.filter((x) => x.storeId === storeId && (x.stage === 'live' || active.has(x.sku)))
+  }
+
+  /** SKUs in a store's order rows for a date range that have no product set up in that store. */
+  function unknownSkusIn(storeId: StoreId, from: string, to: string): string[] {
+    const known = new Set(d.products.filter((p) => p.storeId === storeId).map((p) => p.sku))
+    return [...new Set(d.orders.filter((r) => r.storeId === storeId && r.date >= from && r.date <= to).map((r) => r.sku))].filter((sku) => !known.has(sku)).sort()
+  }
 
   /** A product is (store, SKU): two stores may sell the same SKU. */
   function productOf(storeId: StoreId, sku: string) {
@@ -224,19 +244,27 @@ export function createMetrics(d: Data) {
    * A store's breakeven: its costed products' economics weighted by their last 30 days of orders.
    * Null when no product in the store has a cost on record.
    */
-  function storeEconomics(storeId: StoreId): Breakeven | null {
+  function storeEconomics(storeId: StoreId): StoreBreakeven | null {
     const costed = d.products.filter((p) => p.storeId === storeId && p.cogs !== null).map((p) => p.sku)
     const entries = costed.map((sku) => [sku, skuEconomics(storeId, sku)] as const).filter((e): e is [string, SkuEconomics] => e[1] !== null)
     if (entries.length === 0) return null
     const recent = d.orders.filter((r) => r.storeId === storeId && r.date >= addDays(TODAY, -29))
     const w = entries.map(([sku]) => recent.filter((r) => r.sku === sku).reduce((s, r) => s + r.orders, 0))
     const wSum = w.reduce((s, x) => s + x, 0)
-    const share = (i: number) => (wSum > 0 ? w[i] / wSum : 1 / entries.length)
-    return fromCpa(
-      entries.reduce((s, [, e], i) => s + share(i) * e.avgPricePaid, 0),
-      entries.reduce((s, [, e], i) => s + share(i) * e.breakevenCpa, 0),
-      assumptionsFor(storeId),
-    )
+    // No orders in 30 days: weight the relevant costed products equally, not the whole catalogue.
+    const relevant = new Set(relevantProducts(storeId, resolvePeriod('30d')).map((x) => x.sku))
+    const pool = entries.some(([sku]) => relevant.has(sku)) ? entries.map(([sku]) => relevant.has(sku)) : entries.map(() => true)
+    const poolSize = pool.filter(Boolean).length
+    const share = (i: number) => (wSum > 0 ? w[i] / wSum : pool[i] ? 1 / poolSize : 0)
+    const names = entries.filter((_, i) => share(i) > 0).map(([sku]) => productOf(storeId, sku).name)
+    return {
+      ...fromCpa(
+        entries.reduce((s, [, e], i) => s + share(i) * e.avgPricePaid, 0),
+        entries.reduce((s, [, e], i) => s + share(i) * e.breakevenCpa, 0),
+        assumptionsFor(storeId),
+      ),
+      weightedNames: names,
+    }
   }
 
   /**
@@ -265,14 +293,19 @@ export function createMetrics(d: Data) {
   }
 
   /** Stores whose profit estimate borrows delivery rates from VXP or the sheet. */
-  function borrowedRates(storeIds: StoreId[] = d.stores.map((s) => s.id)): Store[] {
-    return storeIds.filter((id) => d.products.some((p) => {
-      if (p.storeId !== id) return false
-      const eco = skuEconomics(p.storeId, p.sku)
-      if (!eco) return false
-      const { rates } = eco
-      return rates.cod.basis === 'vxp' || rates.cod.basis === 'sheet' || rates.prepaid.basis === 'vxp' || rates.prepaid.basis === 'sheet'
-    })).map(storeById)
+  function borrowedRates(storeIds: StoreId[] = d.stores.map((s) => s.id), period?: Period): Store[] {
+    const borrows = (id: StoreId, sku: string) =>
+      (['cod', 'prepaid'] as const).some((pay) => {
+        const basis = deliveryRate(id, sku, pay).basis
+        return basis === 'vxp' || basis === 'sheet'
+      })
+    // Rates are checked directly, so products without a cost and SKUs with no product (orders still use their rates) count too.
+    return storeIds.filter((id) => {
+      const skus = period
+        ? [...relevantProducts(id, period).map((p) => p.sku), ...unknownSkusIn(id, period.from, period.to)]
+        : d.products.filter((p) => p.storeId === id).map((p) => p.sku)
+      return skus.some((sku) => borrows(id, sku))
+    }).map(storeById)
   }
 
   // ── Aggregation ────────────────────────────────────────────────────────────
@@ -486,7 +519,7 @@ export function createMetrics(d: Data) {
 
   return {
     resolvePeriod, deliveryRate, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
-    series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, minutesAgo,
+    series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
   }
 }
