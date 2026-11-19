@@ -9,7 +9,7 @@ import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
 import type {
-  Campaign, CampaignDay, CampaignHour, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
+  Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
 } from './types'
 
@@ -41,6 +41,9 @@ export type OrderRow = {
   store_id: string; order_name: string; placed_at: string; payment: string; total_paise: Num; primary_sku: string; city: string | null
 }
 export type SyncRunRow = { source: string; store_id: string | null; finished_at: string; ok: boolean }
+export type WalletRow = { balance: Num; last_txn_date: string | null; transactions: Num }
+export type CodDueRow = { store_id: string; orders: Num; paise: Num }
+export type BankRow = { amount_paise: Num; entered_on: string }
 
 // ── Pure mapping ─────────────────────────────────────────────────────────────
 
@@ -162,6 +165,39 @@ export const metaStoresAmong = (storeIds: string[]): string[] => metaStoreIds().
 const HISTORY_DAYS = 70
 const RECENT_LIMIT = 20
 
+/**
+ * Cash from the vFulfill ledger (cc_vf_wallet), COD due (cc_cod_due) and the latest hand-entered bank balance.
+ * Gateway settlements are not connected yet (null). Null when no source has any data at all.
+ */
+export function mapCash(wallet: WalletRow | null, codDue: CodDueRow[], bank: BankRow | null, now: Date): CashPosition | null {
+  const hasWallet = wallet !== null && n(wallet.transactions) > 0
+  if (!hasWallet && !bank) return null
+  return {
+    asOf: now.toISOString(),
+    bank: bank ? { amount: n(bank.amount_paise) / 100, enteredAt: bank.entered_on } : null,
+    settlements: null,
+    // The view sums exact amounts; round once, to the paisa, as vFulfill shows it.
+    vfulfillWallet: hasWallet ? Math.round(n(wallet!.balance) * 100) / 100 : 0,
+    vfulfillAsOf: hasWallet ? wallet!.last_txn_date : null,
+    codDue: codDue.reduce((s, r) => s + n(r.paise), 0) / 100,
+    codDueOrders: codDue.reduce((s, r) => s + n(r.orders), 0),
+  }
+}
+
+async function readCash(sb: Client, now: Date): Promise<CashPosition | null> {
+  const one = async <T>(q: PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> => {
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    return data ?? []
+  }
+  const [wallet, codDue, bank] = await Promise.all([
+    one<WalletRow>(sb.from('cc_vf_wallet').select('balance, last_txn_date, transactions')),
+    one<CodDueRow>(sb.from('cc_cod_due').select('store_id, orders, paise')),
+    one<BankRow>(sb.from('cc_bank_balances').select('amount_paise, entered_on').order('entered_on', { ascending: false }).order('created_at', { ascending: false }).limit(1)),
+  ])
+  return mapCash(wallet[0] ?? null, codDue, bank[0] ?? null, now)
+}
+
 type Client = Awaited<ReturnType<typeof getClient>>
 async function getClient() {
   // Lazy: keeps the server-only client out of anything that only needs the mapping functions.
@@ -242,7 +278,7 @@ export async function loadData(): Promise<Data> {
     campaignHoursYesterday: campsYesterday.map(mapCampaignHour),
     resolved: resolved.map(mapResolvedDay),
     recentOrders: recent.map((r) => mapRecentOrder(r, products)),
-    cash: null, gst: null, fixedCostsMonthly: null,
+    cash: await readCash(sb, now), gst: null, fixedCostsMonthly: null,
     sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now),
   }
 }

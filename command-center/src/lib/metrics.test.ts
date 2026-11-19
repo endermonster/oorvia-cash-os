@@ -342,6 +342,28 @@ describe('sources not wired yet', () => {
   })
 })
 
+describe('cash with parts not connected', () => {
+  const partial = createMetrics({ ...MOCK, cash: { ...MOCK.cash!, bank: null, settlements: null, vfulfillWallet: 1000, codDue: 200 } })
+
+  it('totals only what is connected and names what is missing', () => {
+    const c = partial.cash()!
+    expect(c.total).toBe(1200)
+    expect(c.missing).toEqual(['bank', 'gateway settlements'])
+    expect(c.included).toEqual(['vFulfill wallet', 'COD due'])
+  })
+
+  it('never raises the cash-low alarm without a bank balance (the total is only part of the cash)', () => {
+    expect(partial.cash()!.coversDays).toBeLessThan(10)
+    expect(partial.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(false)
+  })
+
+  it('with a bank balance but no gateways, the alarm counts and says what it covered', () => {
+    const noGw = createMetrics({ ...MOCK, cash: { ...MOCK.cash!, bank: { amount: 100, enteredAt: '2026-11-19' }, settlements: null, vfulfillWallet: 0, codDue: 0 } })
+    const call = noGw.calls(resolvePeriod('7d')).find((c) => c.id === 'cash')!
+    expect(call.detail).toBe('₹100 across bank, vFulfill wallet, COD due')
+  })
+})
+
 describe('relevant products', () => {
   const week = resolvePeriod('7d')
   const dormant = { ...MOCK.products.find((p) => p.storeId === 'oorvia')!, sku: 'OLD-1', handle: 'old-1', name: 'Old', stage: 'testing' as const }

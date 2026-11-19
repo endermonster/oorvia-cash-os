@@ -311,7 +311,9 @@ export const CASH: CashPosition = {
     { gateway: 'Cashfree', storeId: 'oorvia', amount: 2950 },
   ],
   vfulfillWallet: 14800,
+  vfulfillAsOf: '2026-11-16',
   codDue: 38900,
+  codDueOrders: 27,
 }
 
 export const GST: GstPosition = { month: '2026-11', outputTax: 16940, inputCredit: 5660, dueDate: '2026-12-20' }

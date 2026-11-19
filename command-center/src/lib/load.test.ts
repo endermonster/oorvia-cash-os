@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { istNow } from './dates'
 import {
-  currentCogs, mapCampaign, mapCampaignDay, mapCampaignHour, mapOrderDay, mapOrderHour, mapProduct, mapRecentOrder, mapResolvedDay, mapStore,
+  currentCogs, mapCampaign, mapCash, mapCampaignDay, mapCampaignHour, mapOrderDay, mapOrderHour, mapProduct, mapRecentOrder, mapResolvedDay, mapStore,
   mapSync, metaStoresAmong, sortStores,
 } from './load'
 import type { Product } from './types'
@@ -230,5 +230,30 @@ describe('istNow', () => {
     expect(istNow(new Date('2026-11-18T09:50:00Z'))).toEqual({ today: '2026-11-18', hour: 15, minute: 20 })
     expect(istNow(new Date('2026-11-17T20:00:00Z'))).toEqual({ today: '2026-11-18', hour: 1, minute: 30 })
     expect(istNow(new Date('2026-11-18T18:29:00Z'))).toEqual({ today: '2026-11-18', hour: 23, minute: 59 })
+  })
+})
+
+describe('mapCash', () => {
+  const now = new Date('2026-11-19T10:00:00Z')
+  const wallet = { balance: '190545.1746', last_txn_date: '2026-11-19', transactions: '3333' }
+
+  it('wallet rounded once to the paisa, COD due summed over stores, bank from the latest entry', () => {
+    expect(mapCash(wallet, [{ store_id: 'oorvia', orders: '2', paise: '279800' }, { store_id: 'kaiven', orders: 1, paise: 149900 }], { amount_paise: '5805000', entered_on: '2026-11-19' }, now)).toEqual({
+      asOf: now.toISOString(), bank: { amount: 58050, enteredAt: '2026-11-19' }, settlements: null,
+      vfulfillWallet: 190545.17, vfulfillAsOf: '2026-11-19', codDue: 4297, codDueOrders: 3,
+    })
+  })
+
+  it('no bank entered yet: bank is null, never 0', () => {
+    expect(mapCash(wallet, [], null, now)!.bank).toBeNull()
+  })
+
+  it('null when nothing is wired at all', () => {
+    expect(mapCash({ balance: 0, last_txn_date: null, transactions: 0 }, [], null, now)).toBeNull()
+    expect(mapCash(null, [], null, now)).toBeNull()
+  })
+
+  it('a bank balance alone is enough to show cash', () => {
+    expect(mapCash(null, [], { amount_paise: 100, entered_on: '2026-11-19' }, now)).toMatchObject({ bank: { amount: 1 }, vfulfillWallet: 0, vfulfillAsOf: null })
   })
 })

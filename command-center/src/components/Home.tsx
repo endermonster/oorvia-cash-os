@@ -53,23 +53,32 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
       <Scoreboard stores={pf.stores} total={pf.total} view={view} notConnected={m.metaNotConnected} />
 
       <p className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-6 text-sm text-ink-2">
-        {c && g && share ? (
-          <>
-            <span>Cash <span className="font-semibold text-ink">{inr(c.total)}</span>{c.coversDays !== null && <> · covers {Math.floor(c.coversDays)} days of spend</>}</span>
-            <span aria-hidden className="text-ink-3">·</span>
-            <span>GST {new Date(`${g.month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })} <span className="font-semibold text-ink">{inr(g.owed)}</span> due {new Date(`${g.dueDate}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span>
-            <span aria-hidden className="text-ink-3">·</span>
-            <span>Your share (50%) this month <Signed value={share.share} className="font-semibold text-ink" /></span>
-          </>
-        ) : (
-          <span className="text-ink-3">Cash, GST and your share connect in a later stage</span>
-        )}
+        {/* Each part shows as soon as its source is wired; the rest are named as still to come. */}
+        {[
+          c && (
+            <span key="cash">
+              Cash <span className="font-semibold text-ink">{inr(c.total)}</span>
+              {c.missing.length > 0 && <span className="text-ink-3"> without {c.missing.join(' and ')}</span>}
+              {c.bank && c.coversDays !== null && <> · covers {Math.floor(c.coversDays)} days of spend</>}
+            </span>
+          ),
+          g && <span key="gst">GST {new Date(`${g.month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })} <span className="font-semibold text-ink">{inr(g.owed)}</span> due {new Date(`${g.dueDate}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span>,
+          share && <span key="share">Your share (50%) this month <Signed value={share.share} className="font-semibold text-ink" /></span>,
+          (!c || !g || !share) && <span key="later" className="text-ink-3">{laterParts(!c, !g, !share)} connect in a later stage</span>,
+        ].filter(Boolean).flatMap((part, i) => (i === 0 ? [part] : [<span key={`sep${i}`} aria-hidden className="text-ink-3">·</span>, part]))}
         <Link href={href('/money', view)} className="ml-auto inline-flex items-center gap-1 font-semibold text-ink hover:underline">
           Money <ArrowRight className="size-4" aria-hidden />
         </Link>
       </p>
     </main>
   )
+}
+
+/** "Cash, GST and your share" with only the parts still missing, capitalised. */
+export function laterParts(cash: boolean, gst: boolean, share: boolean): string {
+  const parts = [cash && 'cash', gst && 'GST', share && 'your share'].filter((p): p is string => !!p)
+  const s = parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 /** The store page's "no cost on record" warning, for every store at once; null when every order line has a cost. */

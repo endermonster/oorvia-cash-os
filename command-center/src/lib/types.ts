@@ -118,10 +118,17 @@ export type RecentOrder = {
 
 export type CashPosition = {
   asOf: string
-  bank: { amount: number; enteredAt: string } // typed in by hand
-  settlements: { gateway: string; storeId: StoreId; amount: number }[] // Razorpay / PayU / Cashfree APIs
-  vfulfillWallet: number // vFulfill import
-  codDue: number // vFulfill import
+  /** Typed in by hand (scripts/bank-balance.ts); null until first entered. */
+  bank: { amount: number; enteredAt: string } | null
+  /** Razorpay / PayU / Cashfree APIs; null until they are connected. */
+  settlements: { gateway: string; storeId: StoreId; amount: number }[] | null
+  /** vFulfill transactions import: credits − debits. */
+  vfulfillWallet: number
+  /** Date of the newest vFulfill transaction (YYYY-MM-DD); null if none imported. */
+  vfulfillAsOf: string | null
+  /** COD orders vFulfill delivered but has not remitted yet (shipments + transactions imports). */
+  codDue: number
+  codDueOrders: number
 }
 
 export type GstPosition = {

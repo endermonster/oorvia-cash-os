@@ -499,21 +499,27 @@ export function createMetrics(d: Data) {
       })
     }
     const c = cash()
-    if (c && c.coversDays !== null && c.coversDays < 10) {
-      out.push({ id: 'cash', tone: 'bad', title: `Cash covers ${Math.floor(c.coversDays)} days of spend`, detail: `${inr(c.total)} across bank, gateways and vFulfill` })
+    // Without a bank balance the total is a fraction of the cash: no alarm on it.
+    if (c && c.bank && c.coversDays !== null && c.coversDays < 10) {
+      out.push({ id: 'cash', tone: 'bad', title: `Cash covers ${Math.floor(c.coversDays)} days of spend`, detail: `${inr(c.total)} across ${c.included.join(', ')}` })
     }
     const rank = { bad: 0, warn: 1, good: 2 }
     return out.sort((a, b) => rank[a.tone] - rank[b.tone]).slice(0, 3)
   }
 
-  /** Null until the cash sources are wired. */
+  /**
+   * Cash on hand: bank + gateway settlements due + vFulfill wallet + COD due. Parts not connected yet are left out
+   * of the total and named in `missing`, so a partial figure always says it is partial. Null until any source is wired.
+   */
   function cash() {
     if (!d.cash) return null
-    const settlements = d.cash.settlements.reduce((s, x) => s + x.amount, 0)
-    const total = d.cash.bank.amount + settlements + d.cash.vfulfillWallet + d.cash.codDue
+    const settlements = d.cash.settlements?.reduce((s, x) => s + x.amount, 0) ?? 0
+    const total = (d.cash.bank?.amount ?? 0) + settlements + d.cash.vfulfillWallet + d.cash.codDue
+    const included = [...(d.cash.bank ? ['bank'] : []), ...(d.cash.settlements ? ['gateways'] : []), 'vFulfill wallet', 'COD due']
+    const missing = [...(d.cash.bank ? [] : ['bank']), ...(d.cash.settlements ? [] : ['gateway settlements'])]
     const weekSpend = d.campaignDays.filter((r) => r.date >= addDays(TODAY, -7) && r.date <= addDays(TODAY, -1)).reduce((s, r) => s + r.spend, 0)
     const dailySpend = weekSpend / 7
-    return { ...d.cash, settlementsTotal: settlements, total, dailySpend, coversDays: dailySpend > 0 ? total / dailySpend : null }
+    return { ...d.cash, settlementsTotal: settlements, total, included, missing, dailySpend, coversDays: dailySpend > 0 ? total / dailySpend : null }
   }
 
   function gst() {
