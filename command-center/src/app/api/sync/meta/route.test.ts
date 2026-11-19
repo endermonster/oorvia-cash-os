@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({
   calls: [] as { store: string; opts: { deadlineAt?: number; requestTimeoutMs?: number } }[],
   answers: {} as Record<string, object | Error>,
+  signedIn: true,
 }))
+vi.mock('@/lib/auth/server', () => ({ allowedUser: async () => (h.signedIn ? { id: 'u1', email: 'owner@example.com' } : null) }))
 vi.mock('@/lib/meta/sync', () => ({
   syncMeta: async (store: string, opts: { deadlineAt?: number; requestTimeoutMs?: number }) => {
     h.calls.push({ store, opts })
@@ -15,9 +17,16 @@ vi.mock('@/lib/meta/sync', () => ({
 
 const { POST } = await import('./route')
 
-beforeEach(() => { h.calls = []; h.answers = {} })
+beforeEach(() => { h.calls = []; h.answers = {}; h.signedIn = true })
 
 describe('POST /api/sync/meta', () => {
+  it('refuses without an allowed session and calls Meta for no store (the gate is not only the proxy)', async () => {
+    h.signedIn = false
+    const res = await POST()
+    expect(res.status).toBe(401)
+    expect(h.calls).toEqual([])
+  })
+
   it('syncs every store under one shared 50 s budget', async () => {
     const before = Date.now()
     const res = await POST()

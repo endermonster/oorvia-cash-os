@@ -1,3 +1,4 @@
+import { allowedUser } from '@/lib/auth/server'
 import { metaStoreIds } from '@/lib/meta/accounts'
 import { syncMeta, type MetaResult } from '@/lib/meta/sync'
 
@@ -15,14 +16,15 @@ type StoreOutcome = { store: string; ok: boolean; error?: string; result?: MetaR
  * Meta ad spend sync, run on demand by the "Sync now" button: every store, default window (the last 7 days
  * plus today, and hourly rows for today and yesterday). All Meta calls share one 50 s budget under the 60 s limit.
  *
- * NOT PUBLIC. It spends Meta API quota and writes to the database, and it does no authentication of its own:
- * the stage 5 login gate (proxy.ts) must cover `/api/sync/meta`.
+ * NOT PUBLIC. It spends Meta API quota and writes to the database: proxy.ts gates it, and it checks the session
+ * itself too, so a matcher change cannot open it.
  *
  * Answers 200 with a per-store summary (a store with no readable account, or an account in the wrong currency or
  * time zone, is `ok: false` with its reasons in `result.skipped`), or 500 if a store's sync threw (network, missing
  * or bad token, database, or a sync of that store already running); the other stores still ran.
  */
 export async function POST() {
+  if (!(await allowedUser())) return Response.json({ error: 'Unauthorized' }, { status: 401 })
   const deadlineAt = Date.now() + DEADLINE_MS
   const stores: StoreOutcome[] = []
   for (const store of metaStoreIds()) {

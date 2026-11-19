@@ -41,9 +41,16 @@ export type Data = {
 /** What the top bar needs on every page, including the placeholder tabs: no figures. */
 export type Chrome = Pick<Data, 'now' | 'source' | 'stores' | 'sync'>
 
+/** No figures, mock or real, without an allowed session: the line behind proxy.ts (redirects to /login). */
+async function signedIn() {
+  const { requireUser } = await import('./auth/server')
+  await requireUser()
+}
+
 /** Light read for pages that show no figures: the store list and sync status only. */
 export async function getChrome(): Promise<Chrome> {
   await connection()
+  await signedIn()
   if (process.env.DATA_SOURCE !== 'supabase') {
     const { MOCK } = await import('./mock')
     return MOCK
@@ -55,6 +62,7 @@ export async function getChrome(): Promise<Chrome> {
 export async function getData(): Promise<Data> {
   // Request-time data: under Cache Components this must run inside a <Suspense> boundary.
   await connection()
+  await signedIn()
   if (process.env.DATA_SOURCE !== 'supabase') {
     const { MOCK } = await import('./mock')
     return MOCK

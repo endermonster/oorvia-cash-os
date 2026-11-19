@@ -76,6 +76,9 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
               {noMeta ? 'Meta not connected' : s.metaMinutesAgo === null ? 'Never synced' : `Synced ${s.metaMinutesAgo} min ago`}
             </div>
             {d.source === 'supabase' && <SyncButton />}
+            <form action="/auth/signout" method="post">
+              <button type="submit" className="rounded-md px-2 py-1 text-xs font-medium text-ink-3 transition-colors hover:text-ink">Sign out</button>
+            </form>
           </div>
           {d.source === 'mock' && (
             <span className="rounded border border-warn/40 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-warn" title={`Fake numbers, frozen at ${d.now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`}>
