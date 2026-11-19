@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import { breaksEven, noBreakevenText } from '@/lib/calculator'
 import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Rate, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { OrderDay, ProductStage, StoreId } from '@/lib/types'
@@ -52,7 +53,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
           {s.roas === null ? (
             <div className="mt-6 rounded-xl bg-raised p-8">
               <p className="text-xl font-semibold text-ink">{m.metaNotConnected(id) ? 'Meta not connected for this store.' : 'No ads ran in this period.'}</p>
-              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics ? <>Breakeven for {s.economics.weightedNames.join(', ')} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</> : 'Breakeven needs a product cost.'}</p>
+              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics === null ? 'Breakeven needs a product cost.' : !breaksEven(s.economics) ? `${s.economics.weightedNames.join(', ')}: ${noBreakevenText(s.economics)}.` : <>Breakeven for {s.economics.weightedNames.join(', ')} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</>}</p>
             </div>
           ) : (
             <Gauge s={s} />
@@ -61,7 +62,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
 
         <section className="lg:col-span-6" aria-label="Meta numbers">
           <dl className="grid gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-3">
-            <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">{s.economics ? `breakeven ${inr(s.economics.breakevenCpa)} per order` : 'Breakeven needs a product cost'}</span>} />
+            <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">{s.economics === null ? 'Breakeven needs a product cost' : breaksEven(s.economics) ? `breakeven ${inr(s.economics.breakevenCpa)} per order` : `loses ${inr(-s.economics.breakevenCpa)} per order before ads`}</span>} />
             <Stat label="CPM" value={s.cpm ? inr(s.cpm) : '—'} sub={s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null} />
             <Stat label="CTR" value={s.ctr ? pct(s.ctr, 1) : '—'} sub={<span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span>} />
           </dl>
@@ -122,6 +123,15 @@ function Gauge({ s }: { s: StoreStats }) {
       <div className="mt-4 rounded-xl bg-raised p-8">
         <p className="text-5xl font-extrabold tracking-tight text-ink">{fmtX(roas)}</p>
         <p className="mt-2 text-ink-2">{s.orders} orders · {inr(s.spend)} spent · Breakeven needs a product cost</p>
+      </div>
+    )
+  }
+  if (!breaksEven(s.economics)) {
+    return (
+      <div className="mt-4 rounded-xl bg-raised p-8">
+        <p className="text-5xl font-extrabold tracking-tight text-ink">{fmtX(roas)}</p>
+        <p className="mt-2 text-lg font-semibold text-bad">{noBreakevenText(s.economics)}</p>
+        <p className="mt-1 text-ink-2">{s.orders} orders · {inr(s.spend)} spent · check the cost, price and delivery rate</p>
       </div>
     )
   }

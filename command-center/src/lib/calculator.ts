@@ -141,9 +141,12 @@ export function breakeven(p: ProductEconomics, a: Assumptions = SHEET_ASSUMPTION
   return fromCpa(avgPricePaid, breakevenCpa, a)
 }
 
-/** Breakeven ROAS and target from a price paid and a profit-before-ads per order. */
+/**
+ * Breakeven ROAS and target from a price paid and a profit-before-ads per order. A product that loses money
+ * before any ad (`breakevenCpa` ≤ 0) breaks even at no ROAS: both come out as Infinity, so every ROAS is "below".
+ */
 export function fromCpa(avgPricePaid: number, breakevenCpa: number, a: Assumptions = SHEET_ASSUMPTIONS): Breakeven {
-  const breakevenRoas = avgPricePaid / breakevenCpa
+  const breakevenRoas = breakevenCpa > 0 ? avgPricePaid / breakevenCpa : Infinity
   const breakevenRoasExGst = breakevenRoas / (1 + a.gstRate)
   const targetRoasExGst = breakevenRoasExGst + TARGET_BUFFER_EX_GST
   const targetRoas = targetRoasExGst * (1 + a.gstRate)
@@ -168,6 +171,13 @@ export function blendedBreakeven(
     a,
   )
 }
+
+/** False when the product loses money before ads, so no ROAS can break even. */
+export const breaksEven = (b: Pick<Breakeven, 'breakevenRoas'>) => Number.isFinite(b.breakevenRoas)
+
+/** "No ROAS breaks even: loses ₹X per order before ads", for screens that would show a breakeven. */
+export const noBreakevenText = (b: Pick<Breakeven, 'breakevenCpa'>) =>
+  `No ROAS breaks even: loses ₹${Math.max(0, Math.round(-b.breakevenCpa)).toLocaleString('en-IN')} per order before ads`
 
 export type RoasZone = 'below' | 'covering' | 'profit'
 

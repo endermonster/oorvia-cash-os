@@ -3,7 +3,7 @@
  * ./types. Pure functions over the Data passed to createMetrics; no I/O.
  */
 import {
-  blendedBreakeven, breakeven, fromCpa, roasZone, SHEET_ASSUMPTIONS, type Assumptions, type Breakeven, type RoasZone,
+  blendedBreakeven, breakeven, breaksEven, fromCpa, noBreakevenText, roasZone, SHEET_ASSUMPTIONS, type Assumptions, type Breakeven, type RoasZone,
 } from './calculator'
 import { addDays } from './dates'
 import type { Data } from './data'
@@ -405,7 +405,11 @@ export function createMetrics(d: Data) {
       const days: string[] = []
       for (let day = p.from; day <= p.to; day = addDays(day, 1)) days.push(day)
       buckets = days.map((day) => ({ key: day, label: fmtDay(day), ...bucket(sliceIn(storeIds, day, day)) }))
-      prev = days.map((_, i) => totalsOf(sliceIn(storeIds, p.prevFrom, addDays(p.prevFrom, i))).revenue)
+      // Capped at prevTo: after a shorter month the comparison must not run on into the current one.
+      prev = days.map((_, i) => {
+        const end = addDays(p.prevFrom, i)
+        return totalsOf(sliceIn(storeIds, p.prevFrom, end > p.prevTo ? p.prevTo : end)).revenue
+      })
     }
     let cr = 0, cs = 0, cp = 0
     return buckets.map((b, i) => {
@@ -427,8 +431,10 @@ export function createMetrics(d: Data) {
       if (eco && daysWithSpend === 3 && t.spend > 0 && t.revenue / t.spend < eco.breakevenRoas) {
         out.push({
           id: `${id}-below`, tone: 'bad', storeId: id,
-          title: `${store.name} below breakeven over the last 3 days`,
-          detail: `ROAS ${fmtX(t.revenue / t.spend)} vs ${fmtX(eco.breakevenRoas)} breakeven · ${t.orders} orders · ${inr(t.spend)} spent`,
+          title: breaksEven(eco) ? `${store.name} below breakeven over the last 3 days` : `${store.name} loses money on every order, before ads`,
+          detail: breaksEven(eco)
+            ? `ROAS ${fmtX(t.revenue / t.spend)} vs ${fmtX(eco.breakevenRoas)} breakeven · ${t.orders} orders · ${inr(t.spend)} spent`
+            : `${noBreakevenText(eco)} · ROAS ${fmtX(t.revenue / t.spend)} · ${inr(t.spend)} spent`,
         })
       }
       const s = storeStats(id, p)
@@ -504,7 +510,8 @@ export function createMetrics(d: Data) {
       const beCpa = c.sku ? skuEconomics(storeId, c.sku)?.breakevenCpa ?? null : null
       return {
         ...c, spend, orders, cpa,
-        vsBreakeven: cpa !== null && beCpa ? cpa / beCpa : null,
+        // A product that loses money before ads is over breakeven at any CPA.
+        vsBreakeven: cpa === null || beCpa === null ? null : beCpa > 0 ? cpa / beCpa : Infinity,
         /** Zero orders but spent more than one order's breakeven CPA: a total loss, not a missing number. */
         noSalesLoss: orders === 0 && beCpa !== null && spend > beCpa,
       }

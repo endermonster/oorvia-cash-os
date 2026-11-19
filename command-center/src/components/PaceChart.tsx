@@ -66,7 +66,16 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
   }, [points, w])
 
   const H = PAD.t + TOP_H + GAP + BOT_H + PAD.b
-  const last = points[points.length - 1]
+  const last = points.at(-1)
+  // A quiet store today (no orders, no spend yet) has no buckets: say so instead of drawing an empty chart.
+  if (!last) {
+    return (
+      <figure className="m-0">
+        <figcaption><h2 className="text-base font-semibold text-ink">{title}</h2></figcaption>
+        <p className="mt-4 rounded-xl bg-raised p-8 text-ink-2">No orders or ad spend {unit === 'hour' ? 'yet today' : 'in this period'}.</p>
+      </figure>
+    )
+  }
   const hp = hover === null ? null : points[hover]
 
   function onMove(e: React.PointerEvent<SVGRectElement>) {

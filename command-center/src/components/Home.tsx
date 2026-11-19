@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
+import { breaksEven, noBreakevenText } from '@/lib/calculator'
 import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { StoreId } from '@/lib/types'
@@ -15,6 +16,7 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
   const g = m.gst()
   const share = m.ownerShare()
   const borrowed = m.borrowedRates(undefined, period).map((s) => s.name)
+  const missing = missingCosts(pf.stores)
 
   return (
     <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
@@ -27,6 +29,7 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
           <p className="mt-8 text-ink-2">
             {pf.total.orders} orders · {pf.total.roas !== null ? `${fmtX(pf.total.roas)} blended ROAS` : 'no ads'} · profit (est.) <Signed value={pf.total.contribution} className="font-semibold text-ink" />
           </p>
+          {missing && <p className="mt-2 max-w-[70ch] text-sm text-warn">{missing}</p>}
           <p className="mt-2 max-w-[70ch] text-sm text-ink-3">
             {verdict(pf.stores, m.metaNotConnected)} Profit uses each product’s own delivery rate, COD and prepaid separately
             {borrowed.length > 0 && <>; {borrowed.join(' and ')} {borrowed.length === 1 ? 'uses' : 'use'} VXP rates until {MIN_SAMPLE} orders resolve</>}.
@@ -69,10 +72,25 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
   )
 }
 
-/** One plain sentence about which stores are paying for their ads. */
-function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boolean) {
+/** The store page's "no cost on record" warning, for every store at once; null when every order line has a cost. */
+export function missingCosts(stores: StoreStats[]): string | null {
+  const hit = stores.filter((s) => s.ordersMissingCogs > 0)
+  if (hit.length === 0) return null
+  const parts = hit.map((s) => `${s.store.name} ${s.ordersMissingCogs} ${s.ordersMissingCogs === 1 ? 'order' : 'orders'}`)
+  return `Profit is overstated: ${parts.join(', ')} with a line that has no cost on record.`
+}
+
+/** One plain sentence about which stores are paying for their ads. A store with uncosted orders only "looks" like it is. */
+export function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boolean): string {
   const withAds = stores.filter((s) => s.spend > 0)
   if (withAds.length === 0) return stores.some((s) => notConnected(s.store.id)) ? 'No ad data: Meta is not connected for some stores.' : 'No ads ran in this period.'
+  const unsure = withAds.filter((s) => s.contribution >= 0 && s.ordersMissingCogs > 0)
+  if (unsure.length > 0) {
+    const others = withAds.filter((s) => !unsure.includes(s))
+    const names = unsure.map((s) => s.store.name)
+    const who = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+    return `${who} ${names.length === 1 ? 'looks' : 'look'} profitable, but costs are missing.${others.length > 0 ? ` ${verdict(others, notConnected)}` : ''}`
+  }
   const paying = withAds.filter((s) => s.contribution >= 0).map((s) => s.store.name)
   const losing = withAds.filter((s) => s.contribution < 0).map((s) => s.store.name)
   const list = (n: string[]) => (n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`)
@@ -125,6 +143,14 @@ function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
       <div className="min-w-48">
         <p className="text-sm"><span className="font-semibold text-ink">{fmtX(s.roas)}</span></p>
         <p className="mt-1.5 text-xs text-warn">Breakeven needs a product cost</p>
+      </div>
+    )
+  }
+  if (!breaksEven(s.economics)) {
+    return (
+      <div className="min-w-48">
+        <p className="text-sm"><span className="font-semibold text-ink">{fmtX(s.roas)}</span><span className="text-ink-3"> · Below breakeven</span></p>
+        <p className="mt-1.5 text-xs text-bad">{noBreakevenText(s.economics)}</p>
       </div>
     )
   }
