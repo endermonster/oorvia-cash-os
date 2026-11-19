@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { istNow } from './dates'
 import {
   currentCogs, mapCampaign, mapCampaignDay, mapCampaignHour, mapOrderDay, mapOrderHour, mapProduct, mapRecentOrder, mapResolvedDay, mapStore,
-  mapSync, sortStores,
+  mapSync, metaStoresAmong, sortStores,
 } from './load'
 import type { Product } from './types'
 
@@ -141,7 +141,7 @@ describe('mapSync', () => {
       run('shopify_webhook', '2026-11-18T09:58:00Z', 'selnova'),
       run('vf_shipments', '2026-11-14T09:00:00Z'), run('vf_shipments', '2026-11-14T09:00:00Z', 'selnova'),
     ], stores, now)
-    expect(s).toEqual({ metaMinutesAgo: 4, shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4 })
+    expect(s).toEqual({ metaMinutesAgo: 4, metaNotConnected: [], shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4 })
   })
 
   it('counts either shopify_webhook or shopify_backfill as Shopify freshness', () => {
@@ -157,7 +157,7 @@ describe('mapSync', () => {
       run('shopify_products', '2026-11-18T09:59:00Z'), run('shopify_products', '2026-11-18T09:59:00Z', 'selnova'),
       run('vf_transactions', '2026-11-18T09:59:00Z'), run('vf_transactions', '2026-11-18T09:59:00Z', 'selnova'),
     ], stores, now)
-    expect(s).toEqual({ metaMinutesAgo: null, shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+    expect(s).toEqual({ metaMinutesAgo: null, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
   })
 
   it('one stale store makes the whole source stale', () => {
@@ -185,8 +185,35 @@ describe('mapSync', () => {
     expect(s.metaMinutesAgo).toBe(10)
   })
 
+  it('skips a never-synced Meta store: the other store sets the age, and the skipped one is listed', () => {
+    const s = mapSync([run('meta', '2026-11-18T09:50:00Z', 'kaiven')], stores, now)
+    expect(s.metaMinutesAgo).toBe(10)
+    expect(s.metaNotConnected).toEqual(['selnova'])
+  })
+
+  it('is null with every Meta store listed when none has ever synced', () => {
+    const s = mapSync([], stores, now)
+    expect(s.metaMinutesAgo).toBeNull()
+    expect(s.metaNotConnected).toEqual(['kaiven', 'selnova'])
+  })
+
+  it('keeps a store that synced once and lost access: its last ok time goes stale, it is not "not connected"', () => {
+    const s = mapSync([run('meta', '2026-11-18T08:00:00Z', 'kaiven'), run('meta', '2026-11-18T09:59:00Z', 'selnova')], stores, now)
+    expect(s.metaMinutesAgo).toBe(120)
+    expect(s.metaNotConnected).toEqual([])
+  })
+
   it('reports null for every source when nothing ever ran', () => {
-    expect(mapSync([], stores, now)).toEqual({ metaMinutesAgo: null, shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+    expect(mapSync([], stores, now)).toEqual({ metaMinutesAgo: null, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+  })
+})
+
+describe('metaStoresAmong', () => {
+  it('comes from the ad account allowlist, not from the stores table', () => {
+    expect(metaStoresAmong(['oorvia', 'kaiven', 'selnova'])).toEqual(['kaiven', 'oorvia', 'selnova'])
+  })
+  it('leaves out a store with no allowlisted account', () => {
+    expect(metaStoresAmong(['oorvia', 'newstore'])).toEqual(['oorvia'])
   })
 })
 

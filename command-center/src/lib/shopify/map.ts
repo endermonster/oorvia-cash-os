@@ -195,6 +195,8 @@ export type ExistingProduct = { sku: string; packed_weight_grams: number }
 export type ProductCtx = {
   /** Existing rows for this store, by handle. */
   existingByHandle: ReadonlyMap<string, ExistingProduct>
+  /** Stored SKU of each linked Shopify product of this store, by product ID: catches a SKU changed together with the handle. */
+  skuByProductId?: ReadonlyMap<number, string>
   /** Latest cc_cogs_history entry per SKU in this store, in paise. */
   latestCogsPaise: ReadonlyMap<string, number>
   /** YYYY-MM-DD, IST: the effective date of a new cost entry. */
@@ -211,6 +213,23 @@ export type ProductResult =
   /** Blank SKU in Shopify, row already set up: only attach the Shopify product id. */
   | { action: 'link'; row: { store_id: string; sku: string; shopify_product_id: number }; cogs: null }
   | { action: 'skip'; reason: string }
+
+/**
+ * The handle a product used to have, when Shopify now gives it a different one: `stored` maps a Shopify product id
+ * to the handle in cc_products. Null when the product is new to us, or its handle is unchanged.
+ */
+export function detectRename(stored: ReadonlyMap<number, string>, productId: number, handle: string): string | null {
+  const old = stored.get(productId)
+  return old !== undefined && old !== handle ? old : null
+}
+
+/**
+ * Of the renames found, those safe to record as aliases: the old handle must not be a live handle of a Shopify
+ * product now (a reused handle would send its traffic to the wrong product).
+ */
+export function aliasesToWrite(renames: { old: string; handle: string }[], liveHandles: ReadonlySet<string>): { old: string; handle: string }[] {
+  return renames.filter((r) => !liveHandles.has(r.old))
+}
 
 /**
  * SKUs that more than one Shopify product claims, with those products' labels. Writing either would overwrite
@@ -251,8 +270,10 @@ export function mapProduct(storeId: string, p: GqlProduct, ctx: ProductCtx): Pro
     if (!existing) return { action: 'skip', reason: `${label}: no SKU` }
     return { action: 'link', row: { store_id: storeId, sku: existing.sku, shopify_product_id: shopifyProductId }, cogs: null }
   }
-  if (existing && existing.sku !== shopifySku) {
-    return { action: 'skip', reason: `${label}: set up as SKU ${existing.sku} but Shopify now says ${shopifySku}; fix by hand` }
+  // By handle, or by product ID when the handle changed too (else a second row would be inserted for the same product).
+  const setUpAs = existing?.sku ?? ctx.skuByProductId?.get(shopifyProductId)
+  if (setUpAs !== undefined && setUpAs !== shopifySku) {
+    return { action: 'skip', reason: `${label}: set up as SKU ${setUpAs} but Shopify now says ${shopifySku}; fix by hand` }
   }
 
   const row: ProductRowOut = {

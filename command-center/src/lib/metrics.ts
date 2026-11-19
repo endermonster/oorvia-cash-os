@@ -521,6 +521,8 @@ export function createMetrics(d: Data) {
     resolvePeriod, deliveryRate, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
     series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
+    /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */
+    metaNotConnected: (id: StoreId) => d.sync.metaNotConnected.includes(id),
   }
 }
 

@@ -3,6 +3,7 @@ import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
 import { StoreDot } from './bits'
+import { SyncButton } from './SyncButton'
 
 const pill = 'rounded-md px-3 py-1.5 text-sm font-medium transition-colors'
 
@@ -10,6 +11,9 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
   const tabPath = TABS.find((t) => t.id === tab)!.path
   const s = d.sync
   const ago = (n: number | null, unit: string) => (n === null ? 'never' : `${n} ${unit} ago`)
+  const unconnected = s.metaNotConnected.map((id) => d.stores.find((x) => x.id === id)?.name ?? id)
+  const metaNote = unconnected.length > 0 ? ` (not connected: ${unconnected.join(', ')})` : ''
+  const noMeta = s.metaMinutesAgo === null && unconnected.length > 0
   const stores = [{ id: 'all' as const, name: 'All VXP' }, ...d.stores.map((x) => ({ id: x.id, name: x.name }))]
   return (
     <header className="border-b border-line">
@@ -60,12 +64,18 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
               </Link>
             ))}
           </div>
-          <div className="hidden items-center gap-2 text-xs text-ink-3 md:flex" title={`Meta ${ago(s.metaMinutesAgo, 'min')} · Shopify ${ago(s.shopifyMinutesAgo, 'min')} · vFulfill import ${ago(s.vfulfillImportDaysAgo, 'days')}`}>
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-good opacity-40 motion-reduce:hidden" />
-              <span className="relative inline-flex size-2 rounded-full bg-good" />
-            </span>
-            {s.metaMinutesAgo === null ? 'Never synced' : `Synced ${s.metaMinutesAgo} min ago`}
+          <div className="flex items-center gap-2 text-xs text-ink-3">
+            {/* The freshness text is desktop-only; the Sync button is not, so a phone can still sync. */}
+            <div className="hidden items-center gap-2 md:flex" title={`Meta ${noMeta ? 'not connected' : ago(s.metaMinutesAgo, 'min')}${metaNote} · Shopify ${ago(s.shopifyMinutesAgo, 'min')} · vFulfill import ${ago(s.vfulfillImportDaysAgo, 'days')}`}>
+              {!noMeta && (
+                <span className="relative flex size-2">
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-good opacity-40 motion-reduce:hidden" />
+                  <span className="relative inline-flex size-2 rounded-full bg-good" />
+                </span>
+              )}
+              {noMeta ? 'Meta not connected' : s.metaMinutesAgo === null ? 'Never synced' : `Synced ${s.metaMinutesAgo} min ago`}
+            </div>
+            {d.source === 'supabase' && <SyncButton />}
           </div>
           {d.source === 'mock' && (
             <span className="rounded border border-warn/40 px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-warn" title={`Fake numbers, frozen at ${d.now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`}>

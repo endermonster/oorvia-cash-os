@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { verifyShopifyHmac } from './hmac'
-import { classifyGateway, duplicateSkus, mapOrder, mapProduct, parseLandingUrl, tallyGateways, weightGrams, type GqlOrder, type GqlProduct, type ProductCtx } from './map'
+import { aliasesToWrite, classifyGateway, detectRename, duplicateSkus, mapOrder, mapProduct, parseLandingUrl, tallyGateways, weightGrams, type GqlOrder, type GqlProduct, type ProductCtx } from './map'
 
 // Fixtures follow the live shapes (Kaiven #KAI101131, Selnova's blank-SKU product).
 
@@ -243,6 +243,12 @@ describe('mapProduct', () => {
     expect(r).toEqual({ action: 'link', row: { store_id: 'selnova', sku: 'SN-PDRN', shopify_product_id: 222 }, cogs: null })
   })
 
+  it('skips a changed SKU found by product ID when the handle changed too', () => {
+    const r = mapProduct('kaiven', product({ handle: 'brand-new-handle' }), ctx({ skuByProductId: new Map([[111, 'KV-OLD']]) }))
+    expect(r.action === 'skip' && r.reason).toMatch(/set up as SKU KV-OLD but Shopify now says KV-DHS; fix by hand/)
+    expect(mapProduct('kaiven', product({ handle: 'brand-new-handle' }), ctx({ skuByProductId: new Map([[111, 'KV-DHS']]) })).action).toBe('upsert')
+  })
+
   it('with a blank SKU and no existing row, skips and reports "no SKU"', () => {
     const r = mapProduct('selnova', blank, ctx())
     expect(r.action).toBe('skip')
@@ -305,5 +311,23 @@ describe('duplicateSkus', () => {
 
   it('flags nothing once the copy has its own SKU', () => {
     expect(duplicateSkus([{ sku: 'KV-DHS', label: 'a' }, { sku: 'KV-DHS-T2', label: 'b' }]).size).toBe(0)
+  })
+})
+
+describe('detectRename', () => {
+  const stored = new Map([[11, 'old-handle'], [12, 'same']])
+  it('returns the old handle when the product id is known under a different handle', () => {
+    expect(detectRename(stored, 11, 'new-handle')).toBe('old-handle')
+  })
+  it('is null for an unchanged handle or a product not stored yet', () => {
+    expect(detectRename(stored, 12, 'same')).toBeNull()
+    expect(detectRename(stored, 99, 'anything')).toBeNull()
+  })
+})
+
+describe('aliasesToWrite', () => {
+  it('drops a rename whose old handle is now another live product', () => {
+    const renames = [{ old: 'a', handle: 'b' }, { old: 'c', handle: 'd' }]
+    expect(aliasesToWrite(renames, new Set(['b', 'd', 'c']))).toEqual([{ old: 'a', handle: 'b' }])
   })
 })

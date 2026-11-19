@@ -3,44 +3,12 @@ import { istNow } from '../dates'
 import { dbError } from '../db-error'
 import { selectAll } from '../paged'
 import { supabase } from '../supabase'
+import { withRun } from '../sync-run'
 import { gql } from './client'
 import {
-  classifyGateway, duplicateSkus, mapOrder, mapProduct, tallyGateways, type CogsRowOut, type ExistingProduct, type GqlLine, type GqlOrder,
+  aliasesToWrite, classifyGateway, detectRename, duplicateSkus, mapOrder, mapProduct, tallyGateways, type CogsRowOut, type ExistingProduct, type GqlLine, type GqlOrder,
   type GqlProduct, type LineRowOut, type OrderRowOut, type ProductRowOut,
 } from './map'
-
-/** Writes a cc_sync_runs row around `fn`: started now, finished with ok and a JSON detail. Rethrows after recording. */
-async function withRun<T extends object>(source: string, storeId: string, fn: () => Promise<T>): Promise<T> {
-  const sb = supabase()
-  // started_at from this clock too, so started and finished are comparable (the DB default is the DB server's clock).
-  const { data, error, status } = await sb.from('cc_sync_runs').insert({ source, store_id: storeId, started_at: new Date().toISOString() }).select('id').single()
-  if (error) throw dbError('cc_sync_runs', error, status)
-  const id = data.id as number
-  const finish = (ok: boolean, detail: unknown) => recordFinish(id, { finished_at: new Date().toISOString(), ok, detail: JSON.stringify(detail) })
-  let result: T
-  try {
-    result = await fn()
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e)
-    // The work's own error is what matters: a failure to record it is logged, never thrown in its place.
-    await finish(false, { error: message }).catch((r) => console.error(`cc_sync_runs ${id}: could not record the failure: ${r instanceof Error ? r.message : r}`))
-    throw e
-  }
-  // The header's "Synced N min ago" reads this row, so a lost write would show stale freshness: retried, then thrown.
-  await finish(true, result)
-  return result
-}
-
-/** Updates a cc_sync_runs row, retrying transient errors twice (0.5 s, then 1 s). Throws if it still fails. */
-async function recordFinish(id: number, patch: { finished_at: string; ok: boolean; detail: string }): Promise<void> {
-  for (let attempt = 1; ; attempt++) {
-    const { error, status } = await supabase().from('cc_sync_runs').update(patch).eq('id', id)
-    if (!error) return
-    const e = dbError(`cc_sync_runs ${id}`, error, status)
-    if (!e.transient || attempt >= 3) throw e
-    await new Promise((r) => setTimeout(r, 500 * attempt))
-  }
-}
 
 // ── Products ─────────────────────────────────────────────────────────────────
 
@@ -72,6 +40,8 @@ export type ProductsResult = {
   skipped: string[]
   /** Skips on DRAFT or ARCHIVED products: counted, not reported. */
   skipped_inactive: number
+  /** Renamed products (handle changed in Shopify): informational, not a problem. */
+  info: string[]
   /** Dry run only: what each product would do, and the cost entries it would write. */
   plan?: { actions: ProductAction[]; costs: CogsRowOut[] }
 }
@@ -89,10 +59,12 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
   const sb = supabase()
   const { today } = istNow(new Date())
 
-  const existing = await selectAll<{ sku: string; handle: string; packed_weight_grams: number }>(
-    () => sb.from('cc_products').select('sku, handle, packed_weight_grams').eq('store_id', storeId).order('sku'),
+  const existing = await selectAll<{ sku: string; handle: string; packed_weight_grams: number; shopify_product_id: number | string | null }>(
+    () => sb.from('cc_products').select('sku, handle, packed_weight_grams, shopify_product_id').eq('store_id', storeId).order('sku'),
   )
+  const handleByProductId = new Map<number, string>(existing.filter((r) => r.shopify_product_id !== null).map((r) => [Number(r.shopify_product_id), r.handle]))
   const existingByHandle = new Map<string, ExistingProduct>(existing.map((r) => [r.handle, { sku: r.sku, packed_weight_grams: Number(r.packed_weight_grams) }]))
+  const skuByProductId = new Map<number, string>(existing.filter((r) => r.shopify_product_id !== null).map((r) => [Number(r.shopify_product_id), r.sku]))
   const existingSkus = new Set(existing.map((r) => r.sku))
 
   const history = await selectAll<{ sku: string; cogs_paise: number | string; effective_from: string }>(
@@ -102,7 +74,8 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
   for (const h of history) latestCogsPaise.set(h.sku, Number(h.cogs_paise))
 
   // Collected first and written only after every product is seen: a SKU on two products updates neither.
-  const upserts: { label: string; handle: string; matched: ProductAction['matched']; row: ProductRowOut; cogs: CogsRowOut | null }[] = []
+  const upserts: { label: string; handle: string; matched: ProductAction['matched']; row: ProductRowOut; cogs: CogsRowOut | null; renamedFrom: string | null }[] = []
+  const liveHandles = new Set<string>()
   const linkList: { label: string; handle: string; row: { store_id: string; sku: string; shopify_product_id: number } }[] = []
   const skipped: string[] = []
   let skippedInactive = 0
@@ -112,7 +85,8 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
     const page: ProductsPage = await gql<ProductsPage>(storeId, PRODUCTS_QUERY, { after })
     for (const p of page.products.nodes) {
       seen++
-      const r = mapProduct(storeId, p, { existingByHandle, latestCogsPaise, today })
+      liveHandles.add(p.handle)
+      const r = mapProduct(storeId, p, { existingByHandle, skuByProductId, latestCogsPaise, today })
       const byHandle = existingByHandle.has(p.handle)
       const label = `${p.title} (${p.handle})`
       if (r.action === 'skip') {
@@ -122,7 +96,7 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
       } else if (r.action === 'link') {
         linkList.push({ label, handle: p.handle, row: r.row })
       } else {
-        upserts.push({ label, handle: p.handle, matched: byHandle ? 'handle' : existingSkus.has(r.row.sku) ? 'sku' : 'none', row: r.row, cogs: r.cogs })
+        upserts.push({ label, handle: p.handle, matched: byHandle ? 'handle' : existingSkus.has(r.row.sku) ? 'sku' : 'none', row: r.row, cogs: r.cogs, renamedFrom: detectRename(handleByProductId, r.row.shopify_product_id, p.handle) })
       }
     }
     if (!page.products.pageInfo.hasNextPage) break
@@ -135,9 +109,11 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
   }
   const rows = new Map<string, ProductRowOut>()
   const costs: CogsRowOut[] = []
+  const renames: { old: string; handle: string }[] = []
   for (const u of upserts) {
     if (dupes.has(u.row.sku)) { actions.push({ action: 'skip', handle: u.handle, sku: u.row.sku, matched: u.matched, reason: 'duplicate SKU' }); continue }
     rows.set(u.row.sku, u.row)
+    if (u.renamedFrom !== null) renames.push({ old: u.renamedFrom, handle: u.row.handle }) // only for a row this run writes: its handle is what changes
     if (u.cogs) costs.push(u.cogs)
     actions.push({ action: u.matched === 'none' ? 'insert' : 'update', handle: u.handle, sku: u.row.sku, matched: u.matched })
   }
@@ -148,9 +124,38 @@ async function runProducts(storeId: string, dryRun: boolean): Promise<ProductsRe
     actions.push({ action: 'link', handle: l.handle, sku: l.row.sku, matched: 'handle' })
   }
 
-  const result: ProductsResult = { seen, upserted: rows.size, linked: links.length, cost_entries: costs.length, skipped, skipped_inactive: skippedInactive }
+  const aliases = aliasesToWrite(renames, liveHandles)
+  // An alias whose old handle is a live product again (the handle was reused or restored) would send that product's traffic elsewhere.
+  const storedAliases = await selectAll<{ old_handle: string; handle: string }>(
+    () => sb.from('cc_handle_aliases').select('old_handle, handle').eq('store_id', storeId).order('old_handle'),
+  )
+  const revived = storedAliases.filter((a) => liveHandles.has(a.old_handle))
+  const info: string[] = dryRun
+    ? [
+      ...aliases.map((a) => `renamed ${a.old} -> ${a.handle} (would alias it and move its campaigns)`),
+      ...revived.map((a) => `alias ${a.old_handle} -> ${a.handle} would be removed: ${a.old_handle} is a live product again`),
+    ]
+    : []
+  const result: ProductsResult = { seen, upserted: rows.size, linked: links.length, cost_entries: costs.length, skipped, skipped_inactive: skippedInactive, info }
   if (dryRun) return { ...result, plan: { actions, costs } }
 
+  // Aliases and the campaign move go BEFORE the product upsert: if anything below fails, cc_products still holds the old
+  // handle, so the next run detects the same rename again and finishes the job.
+  for (const a of revived) {
+    const { error, status } = await sb.from('cc_handle_aliases').delete().eq('store_id', storeId).eq('old_handle', a.old_handle)
+    if (error) throw dbError('cc_handle_aliases', error, status)
+    info.push(`alias ${a.old_handle} -> ${a.handle} removed: ${a.old_handle} is a live product again`)
+  }
+  for (const a of aliases) {
+    // A rename back (B -> A after A -> B) must not leave a cycle: drop the alias that now points the wrong way.
+    const del = await sb.from('cc_handle_aliases').delete().eq('store_id', storeId).eq('old_handle', a.handle)
+    if (del.error) throw dbError('cc_handle_aliases', del.error, del.status)
+    const { error, status } = await sb.from('cc_handle_aliases').upsert({ store_id: storeId, old_handle: a.old, handle: a.handle }, { onConflict: 'store_id,old_handle' })
+    if (error) throw dbError('cc_handle_aliases', error, status)
+    const moved = await sb.from('cc_campaigns').update({ landing_handle: a.handle }).eq('store_id', storeId).eq('landing_handle', a.old).select('campaign_id')
+    if (moved.error) throw dbError('cc_campaigns', moved.error, moved.status)
+    info.push(`renamed ${a.old} -> ${a.handle}: aliased, ${moved.data?.length ?? 0} campaigns moved`)
+  }
   if (rows.size > 0) {
     const { error } = await sb.from('cc_products').upsert([...rows.values()], { onConflict: 'store_id,sku' })
     if (error) throw new Error(`cc_products: ${error.message}`)

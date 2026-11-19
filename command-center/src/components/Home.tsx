@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
+import type { StoreId } from '@/lib/types'
 import { Calls } from './Calls'
 import { PaceChart } from './PaceChart'
 import { Headline, Signed, StoreDot } from './bits'
@@ -27,7 +28,7 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
             {pf.total.orders} orders · {pf.total.roas !== null ? `${fmtX(pf.total.roas)} blended ROAS` : 'no ads'} · profit (est.) <Signed value={pf.total.contribution} className="font-semibold text-ink" />
           </p>
           <p className="mt-2 max-w-[70ch] text-sm text-ink-3">
-            {verdict(pf.stores)} Profit uses each product’s own delivery rate, COD and prepaid separately
+            {verdict(pf.stores, m.metaNotConnected)} Profit uses each product’s own delivery rate, COD and prepaid separately
             {borrowed.length > 0 && <>; {borrowed.join(' and ')} {borrowed.length === 1 ? 'uses' : 'use'} VXP rates until {MIN_SAMPLE} orders resolve</>}.
           </p>
         </section>
@@ -46,7 +47,7 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
         </div>
       </div>
 
-      <Scoreboard stores={pf.stores} total={pf.total} view={view} />
+      <Scoreboard stores={pf.stores} total={pf.total} view={view} notConnected={m.metaNotConnected} />
 
       <p className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-6 text-sm text-ink-2">
         {c && g && share ? (
@@ -69,9 +70,9 @@ export function HomeView({ view, period, m }: { view: ViewState; period: Period;
 }
 
 /** One plain sentence about which stores are paying for their ads. */
-function verdict(stores: StoreStats[]) {
+function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boolean) {
   const withAds = stores.filter((s) => s.spend > 0)
-  if (withAds.length === 0) return 'No ads ran in this period.'
+  if (withAds.length === 0) return stores.some((s) => notConnected(s.store.id)) ? 'No ad data: Meta is not connected for some stores.' : 'No ads ran in this period.'
   const paying = withAds.filter((s) => s.contribution >= 0).map((s) => s.store.name)
   const losing = withAds.filter((s) => s.contribution < 0).map((s) => s.store.name)
   const list = (n: string[]) => (n.length === 1 ? n[0] : `${n.slice(0, -1).join(', ')} and ${n[n.length - 1]}`)
@@ -117,8 +118,8 @@ function LiveOrders({ view, m }: { view: ViewState; m: Metrics }) {
 
 const ago = (m: number) => (m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ago`)
 
-function RoasBar({ s }: { s: StoreStats }) {
-  if (s.roas === null) return <span className="text-sm text-ink-3">No ads</span>
+function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
+  if (s.roas === null) return <span className="text-sm text-ink-3">{off ? 'Meta not connected' : 'No ads'}</span>
   if (s.economics === null) {
     return (
       <div className="min-w-48">
@@ -148,7 +149,7 @@ function RoasBar({ s }: { s: StoreStats }) {
   )
 }
 
-function Scoreboard({ stores, total, view }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState }) {
+function Scoreboard({ stores, total, view, notConnected }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; notConnected: (id: StoreId) => boolean }) {
   const th = 'pb-3 text-left font-semibold label'
   return (
     <section aria-labelledby="score-h" className="mt-14 border-t border-line pt-10">
@@ -161,7 +162,7 @@ function Scoreboard({ stores, total, view }: { stores: StoreStats[]; total: Port
               <span className="font-semibold text-ink"><Signed value={s.contribution} /> <span className="text-xs font-normal text-ink-3">profit est.</span></span>
             </Link>
             <p className="mt-1 text-sm text-ink-2">{inr(s.spend)} spend · {s.orders} orders · {inr(s.revenue)} booked</p>
-            <div className="mt-3"><RoasBar s={s} /></div>
+            <div className="mt-3"><RoasBar s={s} off={notConnected(s.store.id)} /></div>
           </li>
         ))}
         <li className="flex items-center justify-between py-4 font-extrabold text-ink">
@@ -190,7 +191,7 @@ function Scoreboard({ stores, total, view }: { stores: StoreStats[]; total: Port
                 </td>
                 <td className="py-4 text-right text-ink">{inr(s.spend)}</td>
                 <td className="py-4 text-right text-ink">{s.orders}<span className="block text-xs text-ink-3">{s.orders ? `${pct(s.codOrders / s.orders)} COD` : '—'}</span></td>
-                <td className="py-4 pl-10"><RoasBar s={s} /></td>
+                <td className="py-4 pl-10"><RoasBar s={s} off={notConnected(s.store.id)} /></td>
                 <td className="py-4 text-right text-ink">{inr(s.revenue)}</td>
                 <td className="py-4 text-right font-semibold text-ink"><Signed value={s.contribution} /></td>
               </tr>

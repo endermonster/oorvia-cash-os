@@ -6,6 +6,7 @@
  */
 import type { Chrome, Data } from './data'
 import { addDays, istNow } from './dates'
+import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
 import type {
   Campaign, CampaignDay, CampaignHour, OrderDay, OrderHour, PaymentType, Product, ProductStage, RecentOrder, ResolvedDay,
@@ -17,7 +18,7 @@ type Num = number | string
 // ── Row shapes (snake_case, as the views return them) ───────────────────────
 
 export type StoreRow = {
-  id: string; name: string; live_since: string | null; gateways: string[] | null; gateway_pct: Num; meta_ad_account_id?: string | null
+  id: string; name: string; live_since: string | null; gateways: string[] | null; gateway_pct: Num
 }
 export type ProductRow = {
   store_id: string; sku: string; name: string; price_paise: Num; packed_weight_grams: Num; handle: string; stage: string; live_since: string | null
@@ -115,19 +116,25 @@ const META_SOURCES = ['meta']
 /**
  * Freshness per source: each store's latest successful run (a run with a null store_id counts for every
  * store), then the OLDEST across stores, so one stale store makes the whole source stale. Null = never.
- * Meta is only expected for `metaStoreIds` (stores with an ad account).
+ * Meta is only expected for `metaStoreIds` (stores with an allowlisted ad account); one that never synced is
+ * listed in `metaNotConnected` and does not hold the age back.
  */
 // A quiet store (no orders for days) has no recent webhook, so "the oldest store" can look stale although nothing is
 // wrong. The daily cron (deploy stage) runs `--orders --since yesterday` per store, which writes a shopify_backfill
 // run for every store and keeps this honest.
 export function mapSync(runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds): SyncStatus {
-  const oldestLatest = (sources: string[], ids: string[]): number | null => {
+  // `skipUnseen`: a store with no ok run ever is left out instead of making the whole source "never" (Meta only).
+  const unseen: string[] = []
+  const oldestLatest = (sources: string[], ids: string[], skipUnseen = false): number | null => {
     let oldest: number | null = null
     for (const id of ids) {
       const ts = runs
         .filter((r) => r.ok && sources.includes(r.source) && (r.store_id === id || r.store_id === null))
         .map((r) => Date.parse(r.finished_at))
-      if (ts.length === 0) return null
+      if (ts.length === 0) {
+        if (skipUnseen) { unseen.push(id); continue }
+        return null
+      }
       const latest = Math.max(...ts)
       oldest = oldest === null ? latest : Math.min(oldest, latest)
     }
@@ -136,12 +143,18 @@ export function mapSync(runs: SyncRunRow[], storeIds: string[], now: Date, metaS
   const age = (t: number | null) => (t === null ? null : Math.max(0, now.getTime() - t))
   const minutes = (t: number | null) => { const a = age(t); return a === null ? null : Math.round(a / 60000) }
   const days = (t: number | null) => { const a = age(t); return a === null ? null : Math.floor(a / 864e5) }
+  // A store that synced once and later loses access keeps its last ok time (it goes stale); only a store that never synced is "not connected".
+  const metaMinutesAgo = minutes(oldestLatest(META_SOURCES, metaStoreIds, true))
   return {
-    metaMinutesAgo: minutes(oldestLatest(META_SOURCES, metaStoreIds)),
+    metaMinutesAgo,
+    metaNotConnected: unseen.map(sid),
     shopifyMinutesAgo: minutes(oldestLatest(SHOPIFY_SOURCES, storeIds)),
     vfulfillImportDaysAgo: days(oldestLatest(VFULFILL_SOURCES, storeIds)),
   }
 }
+
+/** Stores a Meta sync is expected for: those with an allowlisted ad account (a constant, not cc_stores.meta_ad_account_id). */
+export const metaStoresAmong = (storeIds: string[]): string[] => metaStoreIds().filter((id) => storeIds.includes(id))
 
 // ── Read ─────────────────────────────────────────────────────────────────────
 
@@ -157,8 +170,8 @@ async function getClient() {
 }
 
 async function readStores(sb: Client): Promise<{ stores: Store[]; metaStoreIds: string[] }> {
-  const rows = await selectAll<StoreRow>(() => sb.from('cc_stores').select('id, name, live_since, gateways, gateway_pct, meta_ad_account_id').order('id'))
-  return { stores: sortStores(rows.map(mapStore)), metaStoreIds: rows.filter((r) => r.meta_ad_account_id).map((r) => r.id) }
+  const rows = await selectAll<StoreRow>(() => sb.from('cc_stores').select('id, name, live_since, gateways, gateway_pct').order('id'))
+  return { stores: sortStores(rows.map(mapStore)), metaStoreIds: metaStoresAmong(rows.map((r) => r.id)) }
 }
 
 /** Latest successful run per (source group, store), one-row queries. A null store_id run counts for every store. */

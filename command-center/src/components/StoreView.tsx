@@ -51,7 +51,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
           <h2 id="roas-h" className="label">ROAS · {period.short} · Meta (incl. GST)</h2>
           {s.roas === null ? (
             <div className="mt-6 rounded-xl bg-raised p-8">
-              <p className="text-xl font-semibold text-ink">No ads ran in this period.</p>
+              <p className="text-xl font-semibold text-ink">{m.metaNotConnected(id) ? 'Meta not connected for this store.' : 'No ads ran in this period.'}</p>
               <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics ? <>Breakeven for {s.economics.weightedNames.join(', ')} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</> : 'Breakeven needs a product cost.'}</p>
             </div>
           ) : (

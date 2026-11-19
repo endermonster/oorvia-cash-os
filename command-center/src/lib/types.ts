@@ -126,8 +126,10 @@ export type GstPosition = {
 }
 
 export type SyncStatus = {
-  /** Age of the oldest store's latest successful run. Null = never synced. */
+  /** Age of the oldest connected store's latest successful run. Null = no store has ever synced. */
   metaMinutesAgo: number | null
+  /** Stores expected to have Meta that have never had a successful sync (no access granted yet). */
+  metaNotConnected: StoreId[]
   shopifyMinutesAgo: number | null
   vfulfillImportDaysAgo: number | null
 }

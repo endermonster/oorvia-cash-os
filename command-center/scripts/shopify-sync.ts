@@ -29,8 +29,9 @@ async function main() {
     console.log(`\n== ${id}${dryRun ? ' (dry run: nothing is written)' : ''}`)
     if (flag('products')) {
       const r = await syncProducts(id, { dryRun })
-      const { plan, skipped, ...counts } = r
+      const { plan, skipped, info, ...counts } = r
       console.log('products', JSON.stringify(counts))
+      for (const i of info) console.log(`  INFO: ${i}`)
       if (plan) {
         for (const a of plan.actions) console.log(`  ${a.action.padEnd(6)} ${a.handle}${a.sku ? ` [${a.sku}]` : ''} matched by ${a.matched}${a.reason ? ` - ${a.reason}` : ''}`)
         for (const c of plan.costs) console.log(`  cost   ${c.sku} -> ${(c.cogs_paise / 100).toFixed(2)} effective ${c.effective_from}`)

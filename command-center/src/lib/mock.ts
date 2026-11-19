@@ -318,7 +318,7 @@ export const GST: GstPosition = { month: '2026-11', outputTax: 16940, inputCredi
 /** Monthly fixed costs (Shopify plans, apps, Claude, etc.). Mock, near April's real ₹14,210. */
 export const FIXED_COSTS_MONTHLY = 14200
 
-export const SYNC: SyncStatus = { metaMinutesAgo: 4, shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4 }
+export const SYNC: SyncStatus = { metaMinutesAgo: 4, metaNotConnected: [], shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4 }
 
 /**
  * The mock as one Data object. Built from the same array instances the named exports
