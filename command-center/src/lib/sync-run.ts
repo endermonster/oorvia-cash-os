@@ -4,11 +4,12 @@ import { supabase } from './supabase'
 
 /**
  * Writes a cc_sync_runs row around `fn`: started now, finished with ok and a JSON detail. Rethrows after recording.
+ * A null `storeId` is a run that covers every store (one vFulfill account serves them all).
  * `isOk` lets a run that finished but found a problem (a Meta store with no readable account) be recorded ok:false
  * with its full result as the detail; by default a run that returns is ok.
  */
 export async function withRun<T extends object>(
-  source: string, storeId: string, fn: () => Promise<T>, isOk: (result: T) => boolean = () => true,
+  source: string, storeId: string | null, fn: () => Promise<T>, isOk: (result: T) => boolean = () => true,
 ): Promise<T> {
   const sb = supabase()
   // started_at from this clock too, so started and finished are comparable (the DB default is the DB server's clock).

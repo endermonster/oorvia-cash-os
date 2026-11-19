@@ -9,7 +9,7 @@ import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
 import type {
-  Campaign, CampaignDay, CampaignHour, OrderDay, OrderHour, PaymentType, Product, ProductStage, RecentOrder, ResolvedDay,
+  Campaign, CampaignDay, CampaignHour, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
 } from './types'
 
@@ -46,7 +46,7 @@ export type SyncRunRow = { source: string; store_id: string | null; finished_at:
 
 const n = (v: Num) => Number(v)
 const sid = (v: string) => v as StoreId
-const pay = (v: string) => v as PaymentType
+const pay = (v: string) => v as OrderPayment
 
 export const mapStore = (r: StoreRow): Store => ({
   id: sid(r.id), name: r.name, liveSince: r.live_since ?? '', gateways: r.gateways ?? [], gatewayPct: n(r.gateway_pct),

@@ -122,7 +122,7 @@ function LiveOrders({ view, m }: { view: ViewState; m: Metrics }) {
               <div className="text-right">
                 <p className="font-semibold text-ink">{inr(o.value)}</p>
                 <p className="mt-0.5 text-sm">
-                  <span className={o.payment === 'cod' ? 'text-cod' : 'text-prepaid'}>{o.payment === 'cod' ? 'COD' : 'Prepaid'}</span>
+                  <span className={o.payment === 'cod' ? 'text-cod' : o.payment === 'prepaid' ? 'text-prepaid' : 'text-ink-3'}>{o.payment === 'cod' ? 'COD' : o.payment === 'prepaid' ? 'Prepaid' : 'Payment unknown'}</span>
                   <span className="text-ink-3"> · {ago(m.minutesAgo(o.placedAt))}</span>
                 </p>
               </div>

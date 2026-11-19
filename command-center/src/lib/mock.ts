@@ -199,6 +199,7 @@ function buildResolved(): ResolvedDay[] {
   const byKey = new Map<string, ResolvedDay>()
   const rnd = mulberry32(9001)
   for (const r of ORDERS) {
+    if (r.payment === 'unknown') continue // mock orders always have a payment type
     for (let i = 0; i < r.orders; i++) {
       const delivered = rnd() < GEN_DELIVERY[r.payment]
       const closedOn = addDays(r.date, delivered ? 4 + Math.floor(rnd() * 4) : 10 + Math.floor(rnd() * 7))

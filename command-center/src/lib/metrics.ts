@@ -7,7 +7,7 @@ import {
 } from './calculator'
 import { addDays } from './dates'
 import type { Data } from './data'
-import type { CampaignDay, OrderDay, PaymentType, Store, StoreId } from './types'
+import type { CampaignDay, OrderDay, PaymentType, ResolvedDay, Store, StoreId } from './types'
 
 export type PeriodId = 'today' | '7d' | '30d' | 'month'
 export const PERIODS: { id: PeriodId; label: string }[] = [
@@ -43,6 +43,10 @@ const SHEET_RATES = { deliveryRate: 0.9, codShare: 0.7 }
 export type RateBasis = 'sku' | 'store' | 'vxp' | 'sheet'
 export type Rate = { value: number; basis: RateBasis; n: number }
 
+export type Closed = { delivered: number; rto: number }
+/** One row of the delivery-rate table: a product (or the store total, sku null), per window and payment type. */
+export type DeliveryRow = { sku: string | null; name: string; cells: Record<RateWindow, Record<PaymentType | 'all', Closed>> }
+
 type Keyed = { storeId: StoreId; sku: string | null }
 /** A product is (store, SKU): the same SKU in two stores never shares a rate at the SKU level. */
 const levels = (storeId: StoreId, sku: string): [RateBasis, (r: Keyed) => boolean][] => [
@@ -61,12 +65,12 @@ type SpendRow = Omit<CampaignDay, 'date'>
 
 type Totals = {
   spend: number; impressions: number; clicks: number; metaPurchases: number
-  orders: number; codOrders: number; revenue: number; codRevenue: number
+  orders: number; codOrders: number; unknownPayOrders: number; revenue: number; codRevenue: number
 }
-const zero = (): Totals => ({ spend: 0, impressions: 0, clicks: 0, metaPurchases: 0, orders: 0, codOrders: 0, revenue: 0, codRevenue: 0 })
+const zero = (): Totals => ({ spend: 0, impressions: 0, clicks: 0, metaPurchases: 0, orders: 0, codOrders: 0, unknownPayOrders: 0, revenue: 0, codRevenue: 0 })
 function add(t: Totals, r: Totals) {
   t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks; t.metaPurchases += r.metaPurchases
-  t.orders += r.orders; t.codOrders += r.codOrders; t.revenue += r.revenue; t.codRevenue += r.codRevenue
+  t.orders += r.orders; t.codOrders += r.codOrders; t.unknownPayOrders += r.unknownPayOrders; t.revenue += r.revenue; t.codRevenue += r.codRevenue
   return t
 }
 
@@ -78,6 +82,7 @@ function totalsOf(s: Slice): Totals {
   for (const o of s.orders) {
     t.orders += o.orders; t.revenue += o.revenue
     if (o.payment === 'cod') { t.codOrders += o.orders; t.codRevenue += o.revenue }
+    if (o.payment === 'unknown') t.unknownPayOrders += o.orders
   }
   for (const c of s.spend) { t.spend += c.spend; t.impressions += c.impressions; t.clicks += c.clicks; t.metaPurchases += c.metaPurchases }
   return t
@@ -207,11 +212,41 @@ export function createMetrics(d: Data) {
     return { value: SHEET_RATES.deliveryRate, basis: 'sheet', n: 0 }
   }
 
+  /**
+   * The store's own closed shipments, for reading: per product with any closed shipment (most first), then the
+   * store total (`sku` null), in each window, by payment type. No fallback and no minimum sample: the count is
+   * shown beside each rate. `all` includes orders whose payment type is unknown.
+   */
+  function deliveryTable(storeId: StoreId): DeliveryRow[] {
+    const own = d.resolved.filter((r) => r.storeId === storeId && r.closedOn <= TODAY)
+    const cellsFor = (rs: ResolvedDay[]): DeliveryRow['cells'] => {
+      const cell = (w: RateWindow) => {
+        const c = { cod: { delivered: 0, rto: 0 }, prepaid: { delivered: 0, rto: 0 }, all: { delivered: 0, rto: 0 } }
+        for (const r of rs) {
+          if (r.closedOn < windowStart[w]) continue
+          for (const k of r.payment === 'unknown' ? (['all'] as const) : ([r.payment, 'all'] as const)) {
+            c[k].delivered += r.delivered; c[k].rto += r.rto
+          }
+        }
+        return c
+      }
+      return { '7d': cell('7d'), '30d': cell('30d'), lifetime: cell('lifetime') }
+    }
+    const closed = new Map<string, number>()
+    for (const r of own) closed.set(r.sku, (closed.get(r.sku) ?? 0) + r.delivered + r.rto)
+    const skus = [...closed].filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([sku]) => sku)
+    if (skus.length === 0) return []
+    return [
+      ...skus.map((sku) => ({ sku, name: d.products.find((x) => x.storeId === storeId && x.sku === sku)?.name ?? sku, cells: cellsFor(own.filter((r) => r.sku === sku)) })),
+      { sku: null, name: `All ${storeById(storeId).name}`, cells: cellsFor(own) },
+    ]
+  }
+
   /** COD share of orders placed, trailing 30 days. Falls back product → store → VXP. */
   function codShare(storeId: StoreId, sku: string): Rate {
     const recent = d.orders.filter((r) => r.date >= addDays(TODAY, -29) && r.date <= TODAY)
     for (const [basis, match] of levels(storeId, sku)) {
-      const rs = recent.filter(match)
+      const rs = recent.filter((r) => r.payment !== 'unknown' && match(r))
       const n = rs.reduce((s, r) => s + r.orders, 0)
       if (n >= MIN_SAMPLE) return { value: rs.filter((r) => r.payment === 'cod').reduce((s, r) => s + r.orders, 0) / n, basis, n }
     }
@@ -278,18 +313,20 @@ export function createMetrics(d: Data) {
     // because the order's own slabs are passed.
     const a = assumptionsFor(r.storeId)
     const pricePaid = r.revenue / r.orders
-    // The calculator takes the COD list price; for prepaid, undo the prepaid discount to get it back.
-    const listPrice = r.payment === 'cod' ? pricePaid : (pricePaid + a.prepaidFlat) / (1 - a.prepaidPct)
-    const perOrder = breakeven({
-      price: listPrice,
+    const perOrderAs = (pay: PaymentType) => breakeven({
+      // The calculator takes the COD list price; for prepaid, undo the prepaid discount to get it back.
+      price: pay === 'cod' ? pricePaid : (pricePaid + a.prepaidFlat) / (1 - a.prepaidPct),
       cogs: r.cogs / r.orders,
       packedWeightGrams: 0,
       slabs500: r.slabs500 / r.orders,
       slabsKg: r.slabsKg / r.orders,
-      deliveryRate: deliveryRate(r.storeId, r.sku, r.payment).value,
-      codShare: r.payment === 'cod' ? 1 : 0,
+      deliveryRate: deliveryRate(r.storeId, r.sku, pay).value,
+      codShare: pay === 'cod' ? 1 : 0,
     }, a).breakevenCpa
-    return r.orders * perOrder
+    if (r.payment !== 'unknown') return r.orders * perOrderAs(r.payment)
+    // Payment never recorded: expect the product's own COD/prepaid mix rather than pick one.
+    const share = codShare(r.storeId, r.sku).value
+    return r.orders * (share * perOrderAs('cod') + (1 - share) * perOrderAs('prepaid'))
   }
 
   /** Stores whose profit estimate borrows delivery rates from VXP or the sheet. */
@@ -525,7 +562,7 @@ export function createMetrics(d: Data) {
   const minutesAgo = (iso: string) => Math.max(0, Math.round((d.now.getTime() - Date.parse(iso)) / 60000))
 
   return {
-    resolvePeriod, deliveryRate, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
+    resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
     series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
     /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */

@@ -1,9 +1,9 @@
 import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
-import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Rate, type StoreStats } from '@/lib/metrics'
+import { fmtX, inr, MIN_SAMPLE, pct, type Closed, type DeliveryRow, type Metrics, type Period, type Rate, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
-import type { OrderDay, ProductStage, StoreId } from '@/lib/types'
+import type { OrderDay, OrderPayment, ProductStage, StoreId } from '@/lib/types'
 import { PaceChart } from './PaceChart'
 import { Delta, Headline, Signed, StoreDot } from './bits'
 
@@ -101,6 +101,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
       </div>
 
       <OrdersStrip s={s} period={period} m={m} orders={orders} />
+      <DeliveryTable rows={m.deliveryTable(id)} />
     </main>
   )
 }
@@ -182,7 +183,8 @@ function Gauge({ s }: { s: StoreStats }) {
 function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; m: Metrics; orders: OrderDay[] }) {
   const store = s.store
   const rows = orders.filter((r) => r.storeId === store.id && r.date >= period.from && r.date <= period.to)
-  const dots: ('cod' | 'prepaid')[] = []
+  const dots: OrderPayment[] = []
+  const prepaid = s.orders - s.codOrders - s.unknownPayOrders
   for (const r of rows) {
     for (let i = 0; i < r.orders; i++) dots.push(r.payment)
   }
@@ -192,15 +194,16 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
       <div className="flex flex-wrap items-baseline justify-between gap-4">
         <h2 id="dots-h" className="text-base font-semibold text-ink">Orders · {period.short} · {s.orders}</h2>
         <ul className="flex gap-5 text-sm text-ink-2" aria-label="Legend">
-          <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-prepaid" />Prepaid {s.orders - s.codOrders}</li>
+          <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-prepaid" />Prepaid {prepaid}</li>
           <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-cod" />COD {s.codOrders}</li>
+          {s.unknownPayOrders > 0 && <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-ink-3" />Payment unknown {s.unknownPayOrders}</li>}
         </ul>
       </div>
       {shown.length === 0 ? (
         <p className="mt-4 text-ink-3">No orders in this period.</p>
       ) : (
-        <div className="mt-4 flex flex-wrap gap-1.5" role="img" aria-label={`${s.orders - s.codOrders} prepaid and ${s.codOrders} COD orders`}>
-          {shown.map((d, i) => <span key={i} className={`size-3.5 rounded-[4px] ${d === 'cod' ? 'bg-cod' : 'bg-prepaid'}`} />)}
+        <div className="mt-4 flex flex-wrap gap-1.5" role="img" aria-label={`${prepaid} prepaid and ${s.codOrders} COD orders${s.unknownPayOrders ? `, ${s.unknownPayOrders} with payment unknown` : ''}`}>
+          {shown.map((d, i) => <span key={i} className={`size-3.5 rounded-[4px] ${d === 'cod' ? 'bg-cod' : d === 'prepaid' ? 'bg-prepaid' : 'bg-ink-3'}`} />)}
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
       )}
@@ -216,17 +219,12 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
                 <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders')}</dd>
               </div>
               {(['cod', 'prepaid'] as const).map((pay) => {
-                const week = m.deliveryRate(p.storeId, p.sku, pay, '7d')
-                const life = m.deliveryRate(p.storeId, p.sku, pay, 'lifetime')
                 const rate = m.deliveryRate(p.storeId, p.sku, pay)
-                // Shown for reading only; no math uses them, so a borrowed rate would just mislead.
-                const own = (r: Rate) => (r.basis === 'sku' ? pct(r.value, 1) : `under ${MIN_SAMPLE} closed`)
                 return (
                   <div key={pay}>
                     <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · last 30 days</dt>
                     <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(rate.value, 1)}</dd>
                     <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, store.name, 'closed orders')}</dd>
-                    <dd className="mt-1 text-sm text-ink-2">7 days {own(week)} · lifetime {own(life)}</dd>
                   </div>
                 )
               })}
@@ -235,6 +233,57 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
         )
       })}
     </section>
+  )
+}
+
+const WINDOWS = [['7d', '7 days'], ['30d', '30 days'], ['lifetime', 'All time']] as const
+const rateOf = (c: Closed) => { const n = c.delivered + c.rto; return n === 0 ? null : c.delivered / n }
+
+/**
+ * Delivered ÷ (delivered + RTO) per product, by the date the shipment closed: the store's own shipments only,
+ * with the count beside each rate, so a rate from a handful of shipments reads as such.
+ */
+export function DeliveryTable({ rows }: { rows: DeliveryRow[] }) {
+  return (
+    <section aria-labelledby="delivery-h" className="mt-14 border-t border-line pt-10">
+      <h2 id="delivery-h" className="text-base font-semibold text-ink">Delivery rate</h2>
+      <p className="mt-1 text-sm text-ink-3">Delivered ÷ (delivered + RTO), by the day the shipment closed. From vFulfill; payment type from Shopify.</p>
+      {rows.length === 0 ? (
+        <p className="mt-4 text-ink-3">No shipments closed yet.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[520px] text-left">
+            <thead>
+              <tr className="border-b border-line">
+                <th scope="col" className="label py-2 pr-4 font-normal">Product</th>
+                {WINDOWS.map(([w, label]) => <th key={w} scope="col" className="label py-2 pr-4 text-right font-normal">{label}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.sku ?? 'all'} className={`border-b border-line align-top ${r.sku === null ? 'font-semibold' : ''}`}>
+                  <th scope="row" className="py-3 pr-4 font-semibold text-ink">{r.name}</th>
+                  {WINDOWS.map(([w]) => <td key={w} className="py-3 pr-4 text-right"><DeliveryCell c={r.cells[w]} /></td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function DeliveryCell({ c }: { c: DeliveryRow['cells']['lifetime'] }) {
+  const all = rateOf(c.all)
+  if (all === null) return <span className="text-ink-3">—</span>
+  const part = (label: string, x: Closed) => { const v = rateOf(x); return `${label} ${v === null ? '—' : pct(v, 1)}` }
+  return (
+    <>
+      <span className="block text-lg font-extrabold text-ink">{pct(all, 1)}</span>
+      <span className="block text-xs text-ink-3">{c.all.delivered + c.all.rto} closed</span>
+      <span className="mt-1 block text-sm font-normal text-ink-2">{part('COD', c.cod)} · {part('Prepaid', c.prepaid)}</span>
+    </>
   )
 }
 

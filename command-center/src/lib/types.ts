@@ -36,13 +36,19 @@ export type ProductStage = 'testing' | 'live' | 'out_of_stock' | 'failed'
 export type PaymentType = 'cod' | 'prepaid'
 
 /**
+ * An order's payment as recorded. `unknown` only for history Shopify cannot settle (no gateway, no
+ * COD charge from vFulfill); never guessed. Delivery rates and COD share use known payments only.
+ */
+export type OrderPayment = PaymentType | 'unknown'
+
+/**
  * Shipments that closed (delivered or RTO) on one day, per SKU × payment type.
  * Counted by close date, so any window (7 days, 30 days, lifetime) is a sum of
  * days. Source: vFulfill shipments export (`Closed On`, `Shipment Status`)
  * joined to Shopify orders, which carry the payment type from the moment they
  * are placed.
  */
-export type ResolvedDay = { closedOn: string; storeId: StoreId; sku: string; payment: PaymentType; delivered: number; rto: number }
+export type ResolvedDay = { closedOn: string; storeId: StoreId; sku: string; payment: OrderPayment; delivered: number; rto: number }
 
 /**
  * Shopify orders placed on one day, for one store × SKU × payment type. An order belongs to the SKU of its
@@ -53,7 +59,7 @@ export type OrderDay = {
   date: string // YYYY-MM-DD, IST
   storeId: StoreId
   sku: string
-  payment: PaymentType
+  payment: OrderPayment
   orders: number
   /** Units across all line items. */
   units: number
@@ -106,7 +112,7 @@ export type RecentOrder = {
   sku: string
   product: string
   value: number
-  payment: PaymentType
+  payment: OrderPayment
   city: string
 }
 
