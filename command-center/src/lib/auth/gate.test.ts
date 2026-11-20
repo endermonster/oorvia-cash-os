@@ -86,5 +86,5 @@ describe('safeNext, exhaustively', () => {
     }
     walk('', 0)
     expect(checked).toBeGreaterThan(170_000)
-  })
+  }, 30_000) // ~180,000 cases: ~3 s alone, up to ~10 s beside the rest of the suite
 })
