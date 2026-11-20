@@ -1,0 +1,8 @@
+# Never upload local secrets or data exports with a CLI deploy.
+.env*
+!.env.example
+*.csv
+.next
+node_modules
+supabase/.temp
+.vercel

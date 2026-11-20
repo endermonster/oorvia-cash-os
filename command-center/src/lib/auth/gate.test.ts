@@ -52,10 +52,14 @@ describe('decide', () => {
     expect(decide('/login', '', false)).toEqual({ kind: 'pass' })
     expect(decide('/login', '', true)).toEqual({ kind: 'home' })
   })
-  it('only the Shopify webhook is exempt, and only exactly', () => {
+  it('only the Shopify webhook and the Meta cron are exempt, and only exactly', () => {
     expect(decide('/api/webhooks/shopify', '', false)).toEqual({ kind: 'pass' })
     expect(decide('/api/webhooks/shopify/x', '', false)).toEqual({ kind: 'unauthorized' })
     expect(decide('/api/webhooks', '', false)).toEqual({ kind: 'unauthorized' })
+    expect(decide('/api/cron/meta', '', false)).toEqual({ kind: 'pass' })
+    expect(decide('/api/cron/meta/x', '', false)).toEqual({ kind: 'unauthorized' })
+    expect(decide('/api/cron', '', false)).toEqual({ kind: 'unauthorized' })
+    expect(decide('/api/sync/meta', '', false)).toEqual({ kind: 'unauthorized' })
   })
   it('signed in: everything passes', () => {
     for (const p of ['/', '/money', '/api/sync/meta']) expect(decide(p, '', true)).toEqual({ kind: 'pass' })
