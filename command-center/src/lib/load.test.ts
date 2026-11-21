@@ -241,6 +241,7 @@ describe('mapCash', () => {
     expect(mapCash(wallet, [{ store_id: 'oorvia', orders: '2', paise: '279800' }, { store_id: 'kaiven', orders: 1, paise: 149900 }], { amount_paise: '5805000', entered_on: '2026-11-19' }, now)).toEqual({
       asOf: now.toISOString(), bank: { amount: 58050, enteredAt: '2026-11-19' }, settlements: null,
       vfulfillWallet: 190545.17, vfulfillAsOf: '2026-11-19', codDue: 4297, codDueOrders: 3,
+      codDueByStore: [{ storeId: 'oorvia', amount: 2798, orders: 2 }, { storeId: 'kaiven', amount: 1499, orders: 1 }],
     })
   })
 

@@ -184,6 +184,7 @@ export function mapCash(
     vfulfillAsOf: hasWallet ? wallet!.last_txn_date : null,
     codDue: codDue.reduce((s, r) => s + n(r.paise), 0) / 100,
     codDueOrders: codDue.reduce((s, r) => s + n(r.orders), 0),
+    codDueByStore: codDue.map((r) => ({ storeId: sid(r.store_id), amount: n(r.paise) / 100, orders: n(r.orders) })),
   }
 }
 

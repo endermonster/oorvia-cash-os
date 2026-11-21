@@ -314,6 +314,11 @@ export const CASH: CashPosition = {
   vfulfillAsOf: '2026-11-16',
   codDue: 38900,
   codDueOrders: 27,
+  codDueByStore: [
+    { storeId: 'oorvia', amount: 24000, orders: 17 },
+    { storeId: 'kaiven', amount: 10400, orders: 7 },
+    { storeId: 'selnova', amount: 4500, orders: 3 },
+  ],
 }
 
 export const GST: GstPosition = { month: '2026-11', outputTax: 16940, inputCredit: 5660, dueDate: '2026-12-20' }

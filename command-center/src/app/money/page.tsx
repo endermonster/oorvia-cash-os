@@ -47,7 +47,7 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
       <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink">Money</h1>
         <div className="mt-8 grid gap-10 lg:grid-cols-12">
-          <div className="lg:col-span-6"><CashCard c={m.cash()} /></div>
+          <div className="lg:col-span-6"><CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} /></div>
           <div className="lg:col-span-6">
             <h2 className="text-base font-semibold text-ink">Coming next</h2>
             <ul className="mt-3 max-w-[60ch] list-disc space-y-2 pl-5 text-ink-2 marker:text-ink-3">

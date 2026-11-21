@@ -44,6 +44,17 @@ describe('CashCard', () => {
     expect(html).toContain('every prepaid order should have settled by now')
   })
 
+  it("one store: only its own COD due and settlements, and says bank and wallet sit in All VXP", () => {
+    const html = renderToStaticMarkup(<CashCard c={createMetrics(MOCK).cash()} store={{ id: 'kaiven', name: 'Kaiven' }} />)
+    expect(html).toContain('Cash · Kaiven')
+    expect(html).toContain('₹26,360') // 10,400 COD + 9,840 + 6,120 settlements
+    expect(html).toContain('7 delivered COD orders not remitted yet')
+    expect(html).toContain('Estimate: 11 prepaid orders')
+    expect(html).toContain('count in All VXP only')
+    expect(html).not.toContain('Covers')
+    expect(html).not.toContain('>Bank<')
+  })
+
   it('no source at all', () => {
     expect(renderToStaticMarkup(<CashCard c={null} />)).toContain('No cash source yet')
   })

@@ -132,6 +132,8 @@ export type CashPosition = {
   /** COD orders vFulfill delivered but has not remitted yet (shipments + transactions imports). */
   codDue: number
   codDueOrders: number
+  /** The same COD due, per store (`codDue` is their sum). */
+  codDueByStore: { storeId: StoreId; amount: number; orders: number }[]
 }
 
 export type GstPosition = {
