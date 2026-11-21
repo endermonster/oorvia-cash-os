@@ -1,4 +1,5 @@
 import type { capitalSummary } from '@/lib/capital'
+import type { Forecast } from '@/lib/forecast'
 import type { GstMonth, GstResult } from '@/lib/gst'
 import { inr } from '@/lib/metrics'
 
@@ -98,7 +99,7 @@ export function CapitalCard({ c }: { c: Capital | null }) {
   const open = c.loans.filter((l) => !l.settled)
   return (
     <section aria-labelledby="capital-h" className="rounded-xl bg-raised p-6">
-      <h2 id="capital-h" className="text-base font-semibold text-ink">Capital &amp; loans</h2>
+      <h2 id="capital-h" className="text-base font-semibold text-ink">Capital &amp; loans · All VXP</h2>
       {c.loans.length === 0 && c.partners.length === 0 ? <p className="mt-2 text-ink-2">Nothing entered yet: add loans and partner capital on Settings.</p> : (
         <>
           <p className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{rs(c.loanTotalDue)}<span className="ml-2 text-base font-semibold text-ink-2">owed on {open.length} {open.length === 1 ? 'loan' : 'loans'}</span></p>
@@ -126,6 +127,78 @@ export function CapitalCard({ c }: { c: Capital | null }) {
           </dl>
         </>
       )}
+    </section>
+  )
+}
+
+const signed = (paise: number) => `${paise < 0 ? '−' : paise > 0 ? '+' : ''}${inr(Math.abs(paise) / 100)}`
+
+/**
+ * Running total of net profit from Day 1 (opening result + every P&L month), and what it takes to clear a loss.
+ * Follows the store switch, like the P&L table above it.
+ */
+export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }) {
+  if (!f) return null
+  const tone = (p: number) => (p < 0 ? 'text-bad' : p > 0 ? 'text-good' : 'text-ink')
+  return (
+    <section aria-labelledby="forecast-h" className="rounded-xl bg-raised p-6">
+      <h2 id="forecast-h" className="text-base font-semibold text-ink">Forecast · {scope}</h2>
+      <p className={`mt-2 text-3xl font-extrabold tracking-tight ${tone(f.cumulative)}`}>{signed(f.cumulative)}<span className="ml-2 text-base font-semibold text-ink-2">running total from Day 1</span></p>
+      <p className="mt-1 max-w-[80ch] text-sm text-ink-2">
+        {f.opening.periodEnd ? <>Opens at {signed(f.opening.netPaise)} up to {day(f.opening.periodEnd)} (old Cash OS, before GST), then </> : <>From </>}
+        every month of the P&amp;L above{f.rows.some((r) => r.partial) ? ', this month as it stands so far' : ''}. Net profit, ex-GST.
+      </p>
+      <div className="mt-6 grid gap-x-10 gap-y-6 border-t border-line pt-5 sm:grid-cols-2">
+        <div>
+          <p className="label">Average finished month</p>
+          {f.average === null ? <p className="mt-1 text-ink-2">No finished month yet.</p> : (
+            <p className="mt-1"><span className={`text-xl font-extrabold tracking-tight ${tone(f.average)}`}>{signed(f.average)}</span><span className="ml-2 text-sm text-ink-3">over {f.finishedMonths} {f.finishedMonths === 1 ? 'month' : 'months'}</span></p>
+          )}
+          {f.breakEven ? <p className="mt-2 text-sm text-good">At that pace the loss is cleared by {monthName(f.breakEven)}.</p>
+            : f.cumulative >= 0 || f.average === null ? null
+              : f.average > 0 ? <p className="mt-2 text-sm text-ink-3">At that pace it takes more than 10 years to clear the loss.</p>
+                : f.average === 0 ? <p className="mt-2 text-sm text-ink-3">At that pace the loss stays where it is: no break-even date until the average turns positive.</p>
+                  : <p className="mt-2 text-sm text-ink-3">At that pace the loss grows: no break-even date until the average turns positive.</p>}
+        </div>
+        {f.needed.length > 0 ? (
+          <div>
+            <p className="label">Net profit needed a month, from next month</p>
+            <dl className="mt-1 space-y-1">
+              {f.needed.map((n) => (
+                <div key={n.months} className="flex items-baseline justify-between gap-6">
+                  <dt className="text-ink-2">To clear it in {n.months} months</dt>
+                  <dd className="font-semibold text-ink tabular-nums">{rs(n.perMonth)}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : <p className="text-good">The running total is not negative: nothing left to win back.</p>}
+      </div>
+      <div className="mt-6 overflow-x-auto">
+        <table className="w-full min-w-[420px] text-left text-sm tabular-nums">
+          <thead>
+            <tr className="border-b border-line">
+              {['Month', 'Net profit', 'Running total'].map((h, i) => <th key={h} scope="col" className={`label py-2 font-normal ${i ? 'text-right' : ''}`}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {f.opening.periodEnd ? (
+              <tr className="border-b border-line">
+                <th scope="row" className="py-2 font-normal text-ink-2">Up to {day(f.opening.periodEnd)}</th>
+                <td className={`py-2 text-right ${tone(f.opening.netPaise)}`}>{signed(f.opening.netPaise)}</td>
+                <td className={`py-2 text-right font-semibold ${tone(f.opening.netPaise)}`}>{signed(f.opening.netPaise)}</td>
+              </tr>
+            ) : null}
+            {f.rows.map((r) => (
+              <tr key={r.month} className="border-b border-line last:border-0">
+                <th scope="row" className="py-2 font-normal text-ink-2">{monthName(r.month)}{r.partial ? ' (so far)' : ''}</th>
+                <td className={`py-2 text-right ${tone(r.net)}`}>{signed(r.net)}</td>
+                <td className={`py-2 text-right font-semibold ${tone(r.cumulative)}`}>{signed(r.cumulative)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   )
 }

@@ -1,4 +1,5 @@
 import 'server-only'
+import type { Baseline } from './forecast'
 import { selectAll } from './paged'
 import { computePnl, orderCogs, type CogsEntry, type FixedCost, type OrderLine, type PnlOrder, type PnlResult, type PnlTxn } from './pnl'
 import { supabase } from './supabase'
@@ -74,4 +75,11 @@ export async function loadPnl(fromMonth: string, toMonth: string, asOf?: string)
   })
   if (unmapped.size > 0) result.warnings.push(`Ad spend from ${unmapped.size} campaign${unmapped.size === 1 ? '' : 's'} with no store left out`)
   return result
+}
+
+/** Each store's result before its first P&L month (Oorvia's pre-GST loss), for the Forecast. */
+export async function loadBaselines(): Promise<Baseline[]> {
+  const rows = await selectAll<{ store_id: string; period_end: string; net_paise: Num; note: string | null }>(
+    () => supabase().from('cc_pnl_baseline').select('store_id, period_end, net_paise, note').order('store_id'))
+  return rows.map((r) => ({ storeId: r.store_id, periodEnd: r.period_end, netPaise: n(r.net_paise), note: r.note }))
 }

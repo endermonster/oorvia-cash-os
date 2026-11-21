@@ -2,7 +2,7 @@ import { Settings } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { CashCard } from '@/components/CashCard'
-import { CapitalCard, GstCard } from '@/components/MoneyParts'
+import { CapitalCard, ForecastCard, GstCard } from '@/components/MoneyParts'
 import { PnlTable } from '@/components/PnlTable'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
@@ -10,10 +10,11 @@ import { getData } from '@/lib/data'
 import { istNow } from '@/lib/dates'
 import { createMetrics } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
+import { computeForecast, type Baseline } from '@/lib/forecast'
 import type { GstResult } from '@/lib/gst'
 import { loadCapital, loadGst } from '@/lib/gst-load'
 import type { PnlResult } from '@/lib/pnl'
-import { loadPnl } from '@/lib/pnl-load'
+import { loadBaselines, loadPnl } from '@/lib/pnl-load'
 
 export default function Page({ searchParams }: PageProps<'/money'>) {
   return (
@@ -45,16 +46,20 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
   let pnlError: string | null = null
   let gst: GstResult | null = null
   let capital: Awaited<ReturnType<typeof loadCapital>> | null = null
+  let baselines: Baseline[] | null = null
   if (d.source === 'supabase') {
-    ;[pnl, gst, capital] = await Promise.all([
+    ;[pnl, gst, capital, baselines] = await Promise.all([
       attempt('pnl', () => loadPnl(firstMonth, currentMonth, today)),
       attempt('gst', () => loadGst(today)),
       attempt('capital', () => loadCapital(today)),
+      attempt('baselines', () => loadBaselines()),
     ])
     if (!pnl) pnlError = 'The P&L could not be loaded. Try again; if it keeps failing, check the server log.'
   }
   const store = view.store === 'all' ? null : view.store
   const storeName = store ? (d.stores.find((s) => s.id === store)?.name ?? store) : 'All VXP'
+  const storeFirst = store ? d.stores.find((s) => s.id === store)?.liveSince.slice(0, 7) || undefined : undefined
+  const forecast = pnl && baselines ? computeForecast(pnl, baselines, store, currentMonth, storeFirst) : null
 
   return (
     <>
@@ -81,6 +86,7 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
               </section>
             )}
           </div>
+          {forecast ? <div className="lg:col-span-12"><ForecastCard f={forecast} scope={storeName} /></div> : null}
         </div>
       </main>
     </>
