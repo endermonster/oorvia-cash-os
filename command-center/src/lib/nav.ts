@@ -11,7 +11,11 @@ export const TABS: { id: Tab; label: string; path: string }[] = [
   { id: 'money', label: 'Money', path: '/money' },
 ]
 
-export type ViewState = { store: StoreFilter; period: PeriodId }
+/**
+ * `keep`: a page's own query (the Orders month and filters) that links back to that same page carry along, so
+ * switching store there doesn't also reset what's on screen. Links to other pages drop it.
+ */
+export type ViewState = { store: StoreFilter; period: PeriodId; keep?: { path: string; params: Record<string, string> } }
 
 type RawParams = { [key: string]: string | string[] | undefined }
 
@@ -28,6 +32,7 @@ export function href(path: string, v: ViewState) {
   const q = new URLSearchParams()
   if (v.store !== 'all') q.set('store', v.store)
   if (v.period !== '7d') q.set('period', v.period)
+  if (v.keep && v.keep.path === path) for (const [k, val] of Object.entries(v.keep.params)) q.set(k, val)
   const s = q.toString()
   return s ? `${path}?${s}` : path
 }
