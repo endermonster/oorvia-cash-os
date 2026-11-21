@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { bearerMatches } from '@/lib/auth/bearer'
 import { syncAllStores } from '@/lib/meta/run'
 
 /** The platform kills the function at this many seconds. */
@@ -14,12 +14,4 @@ export async function GET(request: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
   return syncAllStores()
-}
-
-/** Constant-time compare; hashing first makes both sides the same length. */
-function bearerMatches(header: string | null, secret: string | undefined): boolean {
-  if (!secret || !header) return false
-  const given = createHash('sha256').update(header).digest()
-  const want = createHash('sha256').update(`Bearer ${secret}`).digest()
-  return timingSafeEqual(given, want)
 }

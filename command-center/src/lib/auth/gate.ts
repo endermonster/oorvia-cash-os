@@ -12,9 +12,10 @@ export const PUBLIC_PAGES = ['/login']
 /**
  * Machine endpoints that authenticate themselves, matched exactly. Shopify's webhook checks its HMAC
  * signature (src/app/api/webhooks/shopify/route.ts); the daily Meta cron checks CRON_SECRET
- * (src/app/api/cron/meta/route.ts). Nothing else is exempt.
+ * (src/app/api/cron/meta/route.ts); the finance app's owner-share read checks OWNER_SHARE_SECRET
+ * (src/app/api/owner-share/route.ts). Nothing else is exempt.
  */
-export const MACHINE_PATHS = ['/api/webhooks/shopify', '/api/cron/meta']
+export const MACHINE_PATHS = ['/api/webhooks/shopify', '/api/cron/meta', '/api/owner-share']
 
 export function allowedEmails(raw: string | undefined): Set<string> {
   return new Set((raw ?? '').split(',').map((e) => e.trim().toLowerCase()).filter(Boolean))

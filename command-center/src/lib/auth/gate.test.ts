@@ -52,7 +52,9 @@ describe('decide', () => {
     expect(decide('/login', '', false)).toEqual({ kind: 'pass' })
     expect(decide('/login', '', true)).toEqual({ kind: 'home' })
   })
-  it('only the Shopify webhook and the Meta cron are exempt, and only exactly', () => {
+  it('only the Shopify webhook, the Meta cron and the owner-share read are exempt, and only exactly', () => {
+    expect(decide('/api/owner-share', '', false)).toEqual({ kind: 'pass' })
+    expect(decide('/api/owner-share/x', '', false)).toEqual({ kind: 'unauthorized' })
     expect(decide('/api/webhooks/shopify', '', false)).toEqual({ kind: 'pass' })
     expect(decide('/api/webhooks/shopify/x', '', false)).toEqual({ kind: 'unauthorized' })
     expect(decide('/api/webhooks', '', false)).toEqual({ kind: 'unauthorized' })
