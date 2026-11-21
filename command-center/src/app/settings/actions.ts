@@ -8,7 +8,7 @@ import { refresh } from 'next/cache'
 import { allowedUser } from '@/lib/auth/server'
 import { istNow } from '@/lib/dates'
 import { selectAll } from '@/lib/paged'
-import { parseBank, parseCogs, parseEnd, parseFixedCost, parseStage, type Parsed } from '@/lib/settings'
+import { parseBank, parseCapital, parseCogs, parseEnd, parseFixedCost, parseGstCredit, parseGstEntry, parseRepaid, parseStage, type Parsed } from '@/lib/settings'
 import { supabase } from '@/lib/supabase'
 import { importVfulfill } from '@/lib/vfulfill/import'
 
@@ -108,6 +108,65 @@ export async function deleteFixedCost(_: ActionState, f: FormData): Promise<Acti
   const id = Number(f.get('id'))
   const parsed: Parsed<number> = Number.isSafeInteger(id) && id > 0 ? { ok: true, value: id } : { ok: false, error: 'Unknown cost' }
   return write('fixed cost', parsed, (v) => supabase().from('cc_fixed_costs').delete().eq('id', v), () => 'Cost removed.')
+}
+
+const idOf = (f: FormData): Parsed<number> => {
+  const id = Number(f.get('id'))
+  return Number.isSafeInteger(id) && id > 0 ? { ok: true, value: id } : { ok: false, error: 'Unknown entry' }
+}
+
+/** For a purchase or sale outside what the dashboard reads itself (vFulfill, Meta, fees, fixed costs). */
+export async function addGstEntry(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  return write('GST entry', parseGstEntry(f),
+    (v) => supabase().from('cc_gst_entries').insert(v),
+    (v) => `${v.source}: GST ${rs(v.gst_paise)} in ${v.month.slice(0, 7)} saved.`)
+}
+
+export async function deleteGstEntry(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  return write('GST entry', idOf(f), (v) => supabase().from('cc_gst_entries').delete().eq('id', v), () => 'Entry removed.')
+}
+
+/** The portal's Electronic Credit Ledger total after filing a month. A second entry for the month replaces the first. */
+export async function saveGstCredit(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  return write('credit balance', parseGstCredit(f, istNow(new Date()).today.slice(0, 7)),
+    (v) => supabase().from('cc_gst_credit').upsert(v, { onConflict: 'month' }),
+    (v) => `Credit ledger ${rs(v.balance_paise)} after filing ${v.month.slice(0, 7)} saved.`)
+}
+
+export async function deleteGstCredit(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  const month = String(f.get('month') ?? '')
+  const parsed: Parsed<string> = /^\d{4}-\d{2}$/.test(month) ? { ok: true, value: `${month}-01` } : { ok: false, error: 'Unknown month' }
+  return write('credit balance', parsed, (v) => supabase().from('cc_gst_credit').delete().eq('month', v), () => 'Balance removed.')
+}
+
+export async function addCapital(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  return write('entry', parseCapital(f),
+    (v) => supabase().from('cc_capital').insert(v),
+    (v) => `${v.name}: ${rs(v.amount_paise)} ${v.kind === 'loan' ? 'loan' : 'capital'} from ${v.received_on} saved.`)
+}
+
+/** Total repaid so far on a loan (or capital returned to a partner). */
+export async function saveRepaid(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  const parsed = parseRepaid(f)
+  if (parsed.ok) {
+    const { data } = await supabase().from('cc_capital').select('amount_paise').eq('id', parsed.value.id).maybeSingle()
+    if (!data) return { ok: false, message: 'That entry no longer exists. Reload the page.' }
+    if (parsed.value.repaid_paise > Number(data.amount_paise)) return { ok: false, message: `Repaid is more than the ${rs(Number(data.amount_paise))} received.` }
+  }
+  return write('repaid amount', parsed,
+    (v) => supabase().from('cc_capital').update({ repaid_paise: v.repaid_paise }).eq('id', v.id),
+    (v) => `Repaid so far: ${rs(v.repaid_paise)}.`)
+}
+
+export async function deleteCapital(_: ActionState, f: FormData): Promise<ActionState> {
+  if (!(await allowedUser())) return UNAUTHORIZED
+  return write('entry', idOf(f), (v) => supabase().from('cc_capital').delete().eq('id', v), () => 'Entry removed.')
 }
 
 /** Either export or both. "Check only" reads and reports, writes nothing. */

@@ -2,6 +2,7 @@ import { Settings } from 'lucide-react'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { CashCard } from '@/components/CashCard'
+import { CapitalCard, GstCard } from '@/components/MoneyParts'
 import { PnlTable } from '@/components/PnlTable'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
@@ -9,6 +10,8 @@ import { getData } from '@/lib/data'
 import { istNow } from '@/lib/dates'
 import { createMetrics } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
+import type { GstResult } from '@/lib/gst'
+import { loadCapital, loadGst } from '@/lib/gst-load'
 import type { PnlResult } from '@/lib/pnl'
 import { loadPnl } from '@/lib/pnl-load'
 
@@ -20,7 +23,15 @@ export default function Page({ searchParams }: PageProps<'/money'>) {
   )
 }
 
-const LATER = ['GST for the one GSTIN: output tax, input credit, GSTR-3B due date', 'Your share flowing to the personal finance app']
+/** A failed part shows its own message; the rest of the page still renders. */
+async function attempt<T>(what: string, run: () => Promise<T>): Promise<T | null> {
+  try {
+    return await run()
+  } catch (e) {
+    console.error(`money ${what}: ${e instanceof Error ? e.message : String(e)}`)
+    return null
+  }
+}
 
 async function Money({ searchParams }: { searchParams: PageProps<'/money'>['searchParams'] }) {
   const d = await getData()
@@ -32,13 +43,15 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
 
   let pnl: PnlResult | null = null
   let pnlError: string | null = null
+  let gst: GstResult | null = null
+  let capital: Awaited<ReturnType<typeof loadCapital>> | null = null
   if (d.source === 'supabase') {
-    try {
-      pnl = await loadPnl(firstMonth, currentMonth, today)
-    } catch (e) {
-      console.error(`money pnl: ${e instanceof Error ? e.message : String(e)}`)
-      pnlError = 'The P&L could not be loaded. Try again; if it keeps failing, check the server log.'
-    }
+    ;[pnl, gst, capital] = await Promise.all([
+      attempt('pnl', () => loadPnl(firstMonth, currentMonth, today)),
+      attempt('gst', () => loadGst(today)),
+      attempt('capital', () => loadCapital(today)),
+    ])
+    if (!pnl) pnlError = 'The P&L could not be loaded. Try again; if it keeps failing, check the server log.'
   }
   const store = view.store === 'all' ? null : view.store
   const storeName = store ? (d.stores.find((s) => s.id === store)?.name ?? store) : 'All VXP'
@@ -50,16 +63,14 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
         <div className="flex flex-wrap items-baseline justify-between gap-4">
           <h1 className="text-3xl font-extrabold tracking-tight text-ink">Money</h1>
           {/* Until the top bar has its gear icon. */}
-          <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink"><Settings className="size-4" aria-hidden />Settings: bank, vFulfill, costs</Link>
+          <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink"><Settings className="size-4" aria-hidden />Settings: bank, vFulfill, costs, GST, loans</Link>
         </div>
         <div className="mt-8 grid gap-10 lg:grid-cols-12">
-          <div className="lg:col-span-6"><CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} /></div>
-          <div className="lg:col-span-6">
-            <h2 className="text-base font-semibold text-ink">Coming next</h2>
-            <ul className="mt-3 max-w-[60ch] list-disc space-y-2 pl-5 text-ink-2 marker:text-ink-3">
-              {LATER.map((i) => <li key={i}>{i}</li>)}
-            </ul>
+          <div className="space-y-10 lg:col-span-6">
+            <CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} />
+            {d.source === 'supabase' ? <CapitalCard c={capital} /> : null}
           </div>
+          <div className="lg:col-span-6"><GstCard g={gst} today={today} vfDaysAgo={d.sync.vfulfillImportDaysAgo} /></div>
           <div className="lg:col-span-12">
             {pnl ? (
               <PnlTable pnl={pnl} store={store} storeName={storeName} currentMonth={currentMonth} />

@@ -7,10 +7,14 @@ import { getChrome } from '@/lib/data'
 import { istNow } from '@/lib/dates'
 import { inr } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
-import { STAGE_LABEL, STAGES } from '@/lib/settings'
+import { addMonths } from '@/lib/pnl'
+import { GST_KIND_LABEL, GST_KINDS, STAGE_LABEL, STAGES } from '@/lib/settings'
 import { loadSettings, type SettingsProduct, type SettingsRun } from '@/lib/settings-load'
 import type { StoreId } from '@/lib/types'
-import { addFixedCost, deleteCogs, deleteFixedCost, endFixedCost, importVf, saveBank, saveCogs, saveStage } from './actions'
+import {
+  addCapital, addFixedCost, addGstEntry, deleteCapital, deleteCogs, deleteFixedCost, deleteGstCredit, deleteGstEntry, endFixedCost, importVf,
+  saveBank, saveCogs, saveGstCredit, saveRepaid, saveStage,
+} from './actions'
 
 /** The vFulfill import reads every order and shipment; give its action room (seconds). */
 export const maxDuration = 60
@@ -27,6 +31,9 @@ const rs = (paise: number) => inr(paise / 100)
 const rupees = (paise: number) => (paise / 100).toFixed(2).replace(/\.00$/, '')
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' })
+/** To the paisa, for tax figures. */
+const exact = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const th = 'label px-4 py-3 font-normal whitespace-nowrap'
 // Here, not in SettingsForm: a value exported from a 'use client' file reaches a server component as a client reference, not a string.
 const inputCls = 'rounded-md border border-line-strong bg-raised px-3 py-2 text-ink'
@@ -46,6 +53,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
   const d = await getChrome()
   const view = readView(await searchParams, d.stores)
   const today = istNow(d.now).today
+  const lastMonth = addMonths(today.slice(0, 7), -1)
   const storeName = (id: string | null) => (id === null ? 'All VXP (shared)' : d.stores.find((s) => s.id === id)?.name ?? id)
 
   let s: Awaited<ReturnType<typeof loadSettings>> | null = null
@@ -65,7 +73,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
       <TopBar tab="money" view={view} d={d} />
       <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
         <h1 className="text-3xl font-extrabold tracking-tight text-ink">Settings</h1>
-        <p className="mt-2 max-w-[80ch] text-sm text-ink-3">What only you can tell the dashboard: bank balance, vFulfill exports, product costs and stages, fixed costs.</p>
+        <p className="mt-2 max-w-[80ch] text-sm text-ink-3">What only you can tell the dashboard: bank balance, vFulfill exports, product costs and stages, fixed costs, GST, capital &amp; loans.</p>
 
         {d.source !== 'supabase' ? (
           <p className="mt-8 rounded-xl bg-raised p-6 text-ink-2">Settings edits real data only: set DATA_SOURCE=supabase.</p>
@@ -116,7 +124,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                           <tr key={f.id} className={`border-b border-line align-top last:border-0 ${ended ? 'text-ink-3' : ''}`}>
                             <th scope="row" className="px-4 py-3 font-semibold text-ink">{f.name}{f.note ? <span className="block text-xs font-normal text-ink-3">{f.note}</span> : null}</th>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
-                            <td className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
+                            <td className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
                             <td className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : 'One-time'}</td>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
@@ -154,6 +162,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                 </label>
                 <label className={labelCls}>Amount (₹)<input name="amount" required inputMode="decimal" placeholder="1994" className={`${inputCls} w-32`} /></label>
                 <label className="flex items-center gap-2 self-center pt-5 text-sm text-ink"><input name="gst" type="checkbox" className="size-4" />Amount includes GST</label>
+                <label className="flex items-center gap-2 self-center pt-5 text-sm text-ink"><input name="rcm" type="checkbox" className="size-4" />Billed from abroad (RCM)</label>
                 <label className={labelCls}>Billing
                   <select name="frequency" defaultValue="monthly" className={inputCls}>
                     <option value="monthly">Monthly</option>
@@ -162,6 +171,133 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                 </label>
                 <label className={labelCls}>From<input name="start" type="date" required defaultValue={today} className={inputCls} /></label>
                 <label className={labelCls}>Until (monthly, optional)<input name="end" type="date" className={inputCls} /></label>
+                <label className={labelCls}>Note<input name="note" maxLength={200} placeholder="optional" className={`${inputCls} w-48`} /></label>
+              </SettingsForm>
+            </Section>
+
+            <Section id="gst-h" title="GST" note={<>One GSTIN for every store. Money estimates each return from what it already reads: delivered orders, vFulfill charges, Meta spend, checkout and gateway fees, and RCM on fixed costs billed from abroad. Enter here only what it can&apos;t see.</>}>
+              <h3 className="text-base font-semibold text-ink">Credit ledger after filing</h3>
+              <p className="mt-1 max-w-[80ch] text-sm text-ink-3">After each GSTR-3B, copy the total (IGST + CGST + SGST) from the portal: Services → Ledgers → Electronic Credit Ledger. Money treats the months after the latest one as not filed yet.</p>
+              {s.gst.seeds.length === 0 ? <p className="mt-3 text-warn">No balance entered: Money starts the credit ledger at ₹0 this month.</p> : (
+                <ul className="mt-3 space-y-3 text-sm">
+                  {s.gst.seeds.map((g, i) => (
+                    <li key={g.month} className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                      <span className={i === 0 ? 'font-semibold text-ink' : 'text-ink-2'}>After {monthName(g.month)}: {exact(g.balancePaise)}</span>
+                      {g.note ? <span className="max-w-[80ch] text-xs text-ink-3">{g.note}</span> : null}
+                      <details>
+                        <summary className="cursor-pointer text-ink-3 hover:text-ink">Delete…</summary>
+                        <SettingsForm action={deleteGstCredit} submit="Delete for good" tone="danger" className="mt-2">
+                          <input type="hidden" name="month" value={g.month} />
+                        </SettingsForm>
+                      </details>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <SettingsForm action={saveGstCredit} submit="Save balance" className="mt-4 flex flex-wrap items-end gap-3">
+                <label className={labelCls}>Return filed for<input name="month" type="month" required max={lastMonth} defaultValue={lastMonth} className={inputCls} /></label>
+                <label className={labelCls}>Credit left (₹)<input name="balance" required inputMode="decimal" placeholder="17369.99" className={`${inputCls} w-40`} /></label>
+                <label className={labelCls}>Note<input name="note" maxLength={200} placeholder="optional" className={`${inputCls} w-56`} /></label>
+              </SettingsForm>
+
+              <h3 className="mt-10 text-base font-semibold text-ink">Other GST entries</h3>
+              <p className="mt-1 max-w-[80ch] text-sm text-ink-3">A purchase with GST that Money doesn&apos;t read (packaging, equipment), a sale outside Shopify, or a one-off foreign charge (RCM, e.g. a Shopify app). Never vFulfill, Meta, fees or a fixed cost flagged RCM: those count already.</p>
+              {s.gst.entries.length === 0 ? <p className="mt-3 text-ink-3">No entries yet.</p> : (
+                <div className="mt-3 overflow-x-auto rounded-xl bg-raised">
+                  <table className="w-full min-w-[760px] text-left text-sm tabular-nums">
+                    <thead>
+                      <tr className="border-b border-line">
+                        {['Month', 'Kind', 'Supplier', 'Taxable', 'GST', ''].map((h, i) => <th key={i} scope="col" className={`${th} ${i === 3 || i === 4 ? 'text-right' : ''}`}>{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.gst.entries.map((e) => (
+                        <tr key={e.id} className="border-b border-line align-top last:border-0">
+                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{monthName(e.month)}</td>
+                          <td className="px-4 py-3 text-ink-2">{GST_KIND_LABEL[e.kind]}</td>
+                          <th scope="row" className="px-4 py-3 font-semibold text-ink">{e.source}{e.description || e.note ? <span className="block text-xs font-normal text-ink-3">{[e.description, e.note].filter(Boolean).join(' · ')}</span> : null}</th>
+                          <td className="px-4 py-3 text-right text-ink-2">{exact(e.taxablePaise)}<span className="block text-xs text-ink-3">at {e.rate}%</span></td>
+                          <td className="px-4 py-3 text-right font-semibold text-ink">{exact(e.gstPaise)}</td>
+                          <td className="px-4 py-3">
+                            <details>
+                              <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
+                              <SettingsForm action={deleteGstEntry} submit="Delete for good" tone="danger" className="mt-2">
+                                <input type="hidden" name="id" value={e.id} />
+                              </SettingsForm>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <SettingsForm action={addGstEntry} submit="Add entry" className="mt-4 flex flex-wrap items-end gap-3">
+                <label className={labelCls}>Return month<input name="month" type="month" required defaultValue={today.slice(0, 7)} className={inputCls} /></label>
+                <label className={labelCls}>Kind
+                  <select name="kind" defaultValue="itc" className={inputCls}>
+                    {GST_KINDS.map((k) => <option key={k} value={k}>{GST_KIND_LABEL[k]}</option>)}
+                  </select>
+                </label>
+                <label className={labelCls}>Supplier<input name="source" required maxLength={80} placeholder="Amazon Business" className={`${inputCls} w-44`} /></label>
+                <label className={labelCls}>What<input name="description" maxLength={200} placeholder="optional" className={`${inputCls} w-44`} /></label>
+                <label className={labelCls}>Taxable (₹, ex-GST)<input name="taxable" required inputMode="decimal" placeholder="1000" className={`${inputCls} w-32`} /></label>
+                <label className={labelCls}>GST rate (%)<input name="rate" required inputMode="decimal" defaultValue="18" className={`${inputCls} w-20`} /></label>
+                <label className={labelCls}>Note<input name="note" maxLength={200} placeholder="optional" className={`${inputCls} w-44`} /></label>
+              </SettingsForm>
+            </Section>
+
+            <Section id="capital-h" title="Capital & loans" note="Money put into VXP: partners' capital, and loans with what is still owed. Interest is simple and yearly, on the full amount from the day it came in. Record repayments as the total repaid so far.">
+              {s.capital.length === 0 ? <p className="text-ink-3">No entries yet.</p> : (
+                <div className="overflow-x-auto rounded-xl bg-raised">
+                  <table className="w-full min-w-[900px] text-left text-sm tabular-nums">
+                    <thead>
+                      <tr className="border-b border-line">
+                        {['Who', 'Kind', 'Amount', 'Received', 'Interest', 'Due', 'Repaid so far (₹)', ''].map((h, i) => <th key={i} scope="col" className={`${th} ${i === 2 ? 'text-right' : ''}`}>{h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {s.capital.map((c) => (
+                        <tr key={c.id} className="border-b border-line align-top last:border-0">
+                          <th scope="row" className="px-4 py-3 font-semibold text-ink">{c.name}{c.note ? <span className="block max-w-[40ch] text-xs font-normal text-ink-3">{c.note}</span> : null}</th>
+                          <td className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? 'Loan' : 'Partner capital'}</td>
+                          <td className="px-4 py-3 text-right text-ink">{rs(c.amountPaise)}</td>
+                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(c.receivedOn)}</td>
+                          <td className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? `${+((c.interestRate ?? 0) * 100).toFixed(2)}% a year` : '—'}</td>
+                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{c.dueOn ? day(c.dueOn) : '—'}</td>
+                          <td className="px-4 py-3">
+                            <SettingsForm action={saveRepaid} submit="Save" tone="quiet" className="flex flex-wrap items-center gap-2">
+                              <input type="hidden" name="id" value={c.id} />
+                              <input name="repaid" required inputMode="decimal" aria-label={`Total repaid to ${c.name}`} defaultValue={rupees(c.repaidPaise)} className={`${inputCls} w-32 py-1.5`} />
+                            </SettingsForm>
+                          </td>
+                          <td className="px-4 py-3">
+                            <details>
+                              <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
+                              <SettingsForm action={deleteCapital} submit="Delete for good" tone="danger" className="mt-2">
+                                <input type="hidden" name="id" value={c.id} />
+                              </SettingsForm>
+                            </details>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <h3 className="mt-8 text-base font-semibold text-ink">Add a loan or partner capital</h3>
+              <SettingsForm action={addCapital} submit="Add" className="mt-3 flex flex-wrap items-end gap-3">
+                <label className={labelCls}>Kind
+                  <select name="kind" defaultValue="loan" className={inputCls}>
+                    <option value="loan">Loan</option>
+                    <option value="partner">Partner capital</option>
+                  </select>
+                </label>
+                <label className={labelCls}>Who<input name="name" required maxLength={80} placeholder="Lender or partner" className={`${inputCls} w-48`} /></label>
+                <label className={labelCls}>Amount (₹)<input name="amount" required inputMode="decimal" placeholder="100000" className={`${inputCls} w-36`} /></label>
+                <label className={labelCls}>Received<input name="received" type="date" required defaultValue={today} max={today} className={inputCls} /></label>
+                <label className={labelCls}>Interest (% a year, loans)<input name="rate" inputMode="decimal" placeholder="0" className={`${inputCls} w-24`} /></label>
+                <label className={labelCls}>Due (loans, optional)<input name="due" type="date" className={inputCls} /></label>
                 <label className={labelCls}>Note<input name="note" maxLength={200} placeholder="optional" className={`${inputCls} w-48`} /></label>
               </SettingsForm>
             </Section>
