@@ -8,6 +8,7 @@ import type { Chrome, Data } from './data'
 import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
+import { monthlyRunRate, type FixedCost } from './pnl'
 import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
@@ -104,7 +105,7 @@ export function mapCampaign(r: CampaignRow, products: Product[]): Campaign {
   return { id: r.campaign_id, storeId: sid(r.store_id), sku: p?.sku ?? null, name: r.name }
 }
 
-export function mapRecentOrder(r: OrderRow, products: Product[]): RecentOrder {
+export function mapRecentOrder(r: OrderRow, products: Pick<Product, 'storeId' | 'sku' | 'name'>[]): RecentOrder {
   const p = products.find((x) => x.storeId === r.store_id && x.sku === r.primary_sku)
   return {
     id: `${r.store_id}:${r.order_name}`, storeId: sid(r.store_id), placedAt: new Date(r.placed_at).toISOString(),
@@ -164,7 +165,8 @@ export const metaStoresAmong = (storeIds: string[]): string[] => metaStoreIds().
 
 /** How far back the day-level reads go: 30D + its comparison, and this month + last month, with room. */
 const HISTORY_DAYS = 70
-const RECENT_LIMIT = 20
+/** Newest orders read for the order list and the map. */
+const RECENT_LIMIT = 60
 
 /**
  * Cash from the vFulfill ledger (cc_vf_wallet), COD due (cc_cod_due), the latest hand-entered bank balance and
@@ -238,6 +240,23 @@ async function readSync(sb: Client, storeIds: string[], metaStoreIds: string[], 
   return mapSync(runs, storeIds, now, metaStoreIds)
 }
 
+/** The newest orders only, for the live map: two small reads, no history. */
+export async function loadRecentOrders(): Promise<RecentOrder[]> {
+  const sb = await getClient()
+  const { data, error } = await sb.from('cc_orders').select('store_id, order_name, placed_at, payment, total_paise, primary_sku, city')
+    .is('cancelled_at', null).eq('is_test', false).order('placed_at', { ascending: false }).limit(RECENT_LIMIT)
+  if (error) throw new Error(error.message)
+  const rows = (data ?? []) as OrderRow[]
+  const skus = [...new Set(rows.map((r) => r.primary_sku))]
+  const names = skus.length === 0 ? [] : await sb.from('cc_products').select('store_id, sku, name').in('sku', skus)
+    .then(({ data: p, error: e }) => {
+      if (e) throw new Error(e.message)
+      return (p ?? []) as { store_id: string; sku: string; name: string }[]
+    })
+  const products = names.map((p) => ({ storeId: sid(p.store_id), sku: p.sku, name: p.name }))
+  return rows.map((r) => mapRecentOrder(r, products))
+}
+
 export async function loadChrome(): Promise<Chrome> {
   const sb = await getClient()
   const now = new Date()
@@ -256,7 +275,7 @@ export async function loadData(): Promise<Data> {
   const dayCols = `${orderCols}, orders_missing_cogs`
   const campCols = 'store_id, campaign_id, sku, spend, impressions, clicks, meta_purchases, attributed_orders'
 
-  const [{ stores, metaStoreIds }, productRows, cogsRows, orders, ordersToday, ordersYesterday, campaignRows, campaignDays, campsToday, campsYesterday, resolved, recent] =
+  const [{ stores, metaStoreIds }, productRows, cogsRows, orders, ordersToday, ordersYesterday, campaignRows, campaignDays, campsToday, campsYesterday, resolved, recent, fixedRows] =
     await Promise.all([
       readStores(sb),
       selectAll<ProductRow>(() => sb.from('cc_products').select('store_id, sku, name, price_paise, packed_weight_grams, handle, stage, live_since').order('store_id').order('sku')),
@@ -269,16 +288,22 @@ export async function loadData(): Promise<Data> {
       selectAll<CampaignHourRow>(() => sb.from('cc_campaign_hour_rows').select(`hour, ${campCols}`).eq('date', today).order('hour').order('store_id').order('campaign_id').order('sku')),
       selectAll<CampaignHourRow>(() => sb.from('cc_campaign_hour_rows').select(`hour, ${campCols}`).eq('date', yesterday).order('hour').order('store_id').order('campaign_id').order('sku')),
       selectAll<ResolvedRow>(() => sb.from('cc_resolved_days').select('closed_on, store_id, sku, payment, delivered, rto').order('closed_on').order('store_id').order('sku').order('payment')),
-      // The 20 newest real orders: one small read, not paged.
+      // The newest real orders: one small read, not paged.
       sb.from('cc_orders').select('store_id, order_name, placed_at, payment, total_paise, primary_sku, city')
         .is('cancelled_at', null).eq('is_test', false).order('placed_at', { ascending: false }).limit(RECENT_LIMIT)
         .then(({ data, error }): OrderRow[] => {
           if (error) throw new Error(error.message)
           return (data ?? []) as OrderRow[]
         }),
+      selectAll<{ store_id: string | null; name: string; amount_paise: Num; frequency: FixedCost['frequency']; start_date: string; end_date: string | null; gst_inclusive: boolean }>(
+        () => sb.from('cc_fixed_costs').select('store_id, name, amount_paise, frequency, start_date, end_date, gst_inclusive').order('id'),
+      ),
     ])
 
   const cogs = currentCogs(cogsRows, today)
+  const runRatePaise = monthlyRunRate(fixedRows.map((r) => ({
+    storeId: r.store_id, name: r.name, amountPaise: n(r.amount_paise), frequency: r.frequency, startDate: r.start_date, endDate: r.end_date, gstInclusive: r.gst_inclusive,
+  })), today)
   const products = productRows.map((r) => mapProduct(r, cogs))
   return {
     now, today, nowHour, nowMinute, source: 'supabase',
@@ -294,6 +319,7 @@ export async function loadData(): Promise<Data> {
     resolved: resolved.map(mapResolvedDay),
     recentOrders: recent.map((r) => mapRecentOrder(r, products)),
     cash: await readCash(sb, now), gst: null, fixedCostsMonthly: null,
+    fixedCostsRunRate: runRatePaise === null ? null : runRatePaise / 100,
     sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now),
   }
 }

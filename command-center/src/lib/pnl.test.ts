@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addMonths, computePnl, fixedInMonth, gatewayRate, orderCogs, type FixedCost, type PnlOrder, type PnlTxn } from './pnl'
+import { addMonths, computePnl, fixedInMonth, gatewayRate, monthlyRunRate, orderCogs, type FixedCost, type PnlOrder, type PnlTxn } from './pnl'
 
 const stores = [
   { id: 'oorvia', gatewayPct: 0.02, ownerShare: 0.5 },
@@ -292,5 +292,22 @@ describe('computePnl: spend, fixed costs, totals', () => {
     expect(r.months.map((m) => m.month)).toEqual(['2026-04', '2026-05', '2026-06'])
     expect(r.warnings.join()).toMatch(/unknown store "avesto"/)
     expect(addMonths('2026-12', 1)).toBe('2027-01')
+  })
+})
+
+describe('monthlyRunRate (VXP breakeven)', () => {
+  const fc = (o: Partial<FixedCost>): FixedCost => ({ storeId: null, name: 'x', amountPaise: 100_000, frequency: 'monthly', startDate: '2026-01-05', endDate: null, gstInclusive: false, ...o })
+  const today = '2026-11-21'
+
+  it('is null when nothing is on record, 0 when nothing runs today', () => {
+    expect(monthlyRunRate([], today)).toBeNull()
+    expect(monthlyRunRate([fc({ endDate: '2026-10-31' })], today)).toBe(0)
+  })
+
+  it('sums monthly costs running today, every store and shared, ex-GST; one-time costs are not a run rate', () => {
+    expect(monthlyRunRate([
+      fc({}), fc({ storeId: 'kaiven', amountPaise: 118_000, gstInclusive: true }),
+      fc({ frequency: 'one-time', startDate: '2026-11-02' }), fc({ startDate: '2026-12-01' }), fc({ endDate: today }),
+    ], today)).toBeCloseTo(100_000 + 100_000 + 100_000, 6)
   })
 })

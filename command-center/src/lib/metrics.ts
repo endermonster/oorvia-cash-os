@@ -113,9 +113,28 @@ export type StoreStats = Totals & {
   prev: Totals & { roas: number | null; cpm: number | null; contribution: number }
 }
 
+/**
+ * VXP's breakeven ROAS for a period (decided 2026-11-21): each store's product breakeven weighted by its revenue, plus
+ * VXP's fixed costs. Σ revenue ÷ (Σ profit before ads at each store's breakeven economics − fixed costs). Infinity when
+ * the stores' profit before ads cannot cover the fixed costs at any ROAS.
+ */
+export type VxpBreakeven = Pick<Breakeven, 'breakevenRoas' | 'breakevenCpa' | 'targetRoas'> & {
+  /** Fixed costs falling in the period: the monthly run rate per day, today only as far as it has run. */
+  fixedCosts: number
+  /** False when no fixed cost is on record: the breakeven then covers ads only. */
+  fixedOnRecord: boolean
+  /** Stores with revenue in the period but no product cost: left out of the weighting. */
+  leftOut: string[]
+}
+
 export type Portfolio = {
   stores: StoreStats[]
-  total: Totals & { contribution: number; prevContribution: number; prevRevenue: number; prevSpend: number; roas: number | null }
+  total: Totals & {
+    contribution: number; prevContribution: number; prevRevenue: number; prevSpend: number; roas: number | null
+    /** Null when no costed store has revenue in the period. */
+    breakeven: VxpBreakeven | null
+    zone: RoasZone | null
+  }
 }
 
 export type SeriesPoint = {
@@ -404,6 +423,8 @@ export function createMetrics(d: Data) {
   function portfolio(p: Period, storeIds: StoreId[] = d.stores.map((s) => s.id)): Portfolio {
     const stores = storeIds.map((id) => storeStats(id, p)).sort((a, b) => b.contribution - a.contribution)
     const total = stores.reduce((t, s) => add(t, s), zero())
+    const roas = ratio(total.revenue, total.spend)
+    const breakeven = vxpBreakeven(stores, p)
     return {
       stores,
       total: {
@@ -412,8 +433,33 @@ export function createMetrics(d: Data) {
         prevContribution: stores.reduce((s, x) => s + x.prev.contribution, 0),
         prevRevenue: stores.reduce((s, x) => s + x.prev.revenue, 0),
         prevSpend: stores.reduce((s, x) => s + x.prev.spend, 0),
-        roas: ratio(total.revenue, total.spend),
+        roas, breakeven,
+        // A store with sales but no cost is in the blended ROAS but not the breakeven: no zone rather than a false one.
+        zone: roas === null || breakeven === null || breakeven.leftOut.length > 0 ? null : roasZone(roas, breakeven),
       },
+    }
+  }
+
+  /** Fixed costs falling in the period: the monthly run rate per day, today counted only as far as it has run. */
+  function fixedCostsIn(p: Period): number {
+    if (!d.fixedCostsRunRate) return 0
+    let days = 0
+    for (let day = p.from; day <= p.to; day = addDays(day, 1)) days += day === TODAY ? (d.nowHour + d.nowMinute / 60) / 24 : 1
+    return ((d.fixedCostsRunRate * 12) / 365) * days
+  }
+
+  function vxpBreakeven(stores: StoreStats[], p: Period): VxpBreakeven | null {
+    const costed = stores.filter((s) => s.economics !== null && s.revenue > 0)
+    const revenue = costed.reduce((t, s) => t + s.revenue, 0)
+    if (revenue === 0) return null
+    // A store's revenue ÷ its breakeven ROAS, written via its CPA so a store losing money before ads subtracts instead of counting 0.
+    const beforeAds = costed.reduce((t, s) => t + (s.revenue / s.economics!.avgPricePaid) * s.economics!.breakevenCpa, 0)
+    const fixedCosts = fixedCostsIn(p)
+    const { breakevenRoas, breakevenCpa, targetRoas } = fromCpa(revenue, beforeAds - fixedCosts)
+    return {
+      breakevenRoas, breakevenCpa, targetRoas, fixedCosts,
+      fixedOnRecord: d.fixedCostsRunRate !== null,
+      leftOut: stores.filter((s) => s.economics === null && s.revenue > 0).map((s) => s.store.name),
     }
   }
 
@@ -475,6 +521,19 @@ export function createMetrics(d: Data) {
         })
       }
       const s = storeStats(id, p)
+      // The call chip follows the product breakeven, so it can say Hold in a week that lost money: this keeps the loss
+      // from reading as "nothing needs you". One bad line per store: the 3-day rule above already names it.
+      if (s.contribution < 0 && !out.some((c) => c.id === `${id}-below`)) {
+        out.push({
+          id: `${id}-loss`, tone: 'bad', storeId: id,
+          title: `${store.name} is losing money`,
+          detail: [
+            `Profit (est.) −${inr(-s.contribution)} ${p.id === 'today' ? 'today' : `over ${p.short}`}`,
+            s.roas !== null && eco && breaksEven(eco) ? `ROAS ${fmtX(s.roas)} vs ${fmtX(eco.breakevenRoas)} breakeven` : null,
+            s.spend > 0 ? `${inr(s.spend)} spent` : null,
+          ].filter(Boolean).join(' · '),
+        })
+      }
       if (s.zone === 'profit' && s.orders >= 10) {
         out.push({
           id: `${id}-target`, tone: 'good', storeId: id,
@@ -565,11 +624,19 @@ export function createMetrics(d: Data) {
     return d.recentOrders.filter((o) => storeIds.includes(o.storeId)).slice(0, limit)
   }
 
+  /** Shipments vFulfill closed in the period (by close date), whatever day they were ordered. Counts only, no money. */
+  function resolvedCounts(storeIds: StoreId[], p: Period) {
+    const rows = d.resolved.filter((r) => storeIds.includes(r.storeId) && r.closedOn >= p.from && r.closedOn <= p.to)
+    const delivered = rows.reduce((s, r) => s + r.delivered, 0)
+    const rto = rows.reduce((s, r) => s + r.rto, 0)
+    return { delivered, rto, rate: delivered + rto > 0 ? delivered / (delivered + rto) : null }
+  }
+
   const minutesAgo = (iso: string) => Math.max(0, Math.round((d.now.getTime() - Date.parse(iso)) / 60000))
 
   return {
     resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
-    series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, minutesAgo, relevantProducts,
+    series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, resolvedCounts, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
     /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */
     metaNotConnected: (id: StoreId) => d.sync.metaNotConnected.includes(id),

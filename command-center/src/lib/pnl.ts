@@ -178,6 +178,17 @@ export function fixedInMonth(fc: FixedCost, month: string, asOf?: string): numbe
   return amount
 }
 
+/**
+ * VXP's recurring fixed costs per month, ex-GST, every store and shared: the monthly costs running on `today`.
+ * One-time costs are left out: a run rate, for breakeven, not a bill. Null when no fixed cost is on record at all.
+ */
+export function monthlyRunRate(fcs: FixedCost[], today: string): number | null {
+  if (fcs.length === 0) return null
+  return fcs
+    .filter((fc) => fc.frequency === 'monthly' && fc.startDate <= today && (fc.endDate === null || fc.endDate >= today))
+    .reduce((s, fc) => s + (fc.gstInclusive ? fc.amountPaise / (1 + GST) : fc.amountPaise), 0)
+}
+
 type Acc = Omit<PnlLine, 'netProfit' | 'ownerShare'>
 const emptyAcc = (): Acc => ({
   orders: { delivered: 0, rto: 0, open: 0, cancelled: 0 },

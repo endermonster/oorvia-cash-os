@@ -35,6 +35,8 @@ export type Data = {
   cash: CashPosition | null
   gst: GstPosition | null
   fixedCostsMonthly: number | null
+  /** ₹ per month, ex-GST: recurring fixed costs running today, every store and shared (pnl.monthlyRunRate). Drives VXP's breakeven only. Null when none are on record. */
+  fixedCostsRunRate: number | null
   sync: SyncStatus
 }
 

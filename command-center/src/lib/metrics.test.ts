@@ -423,3 +423,60 @@ describe('breakeven names and borrowed rates', () => {
     expect(orphaned.borrowedRates(['kaiven'], week).map((x) => x.id)).toEqual(['kaiven'])
   })
 })
+
+describe('VXP breakeven (decided 2026-11-21: store breakevens weighted by revenue, plus fixed costs)', () => {
+  const week = resolvePeriod('7d')
+  const noFixed = createMetrics({ ...MOCK, fixedCostsRunRate: null })
+
+  it('is Σ revenue ÷ (Σ profit before ads at each store’s breakeven − fixed costs)', () => {
+    const pf = m.portfolio(week)
+    const costed = pf.stores.filter((s) => s.economics && s.revenue > 0)
+    const revenue = costed.reduce((t, s) => t + s.revenue, 0)
+    const pool = costed.reduce((t, s) => t + (s.revenue / s.economics!.avgPricePaid) * s.economics!.breakevenCpa, 0)
+    const b = pf.total.breakeven!
+    expect(b.fixedCosts).toBeGreaterThan(0)
+    expect(b.breakevenRoas).toBeCloseTo(revenue / (pool - b.fixedCosts), 6)
+  })
+
+  it('without fixed costs, one store’s VXP breakeven is that store’s breakeven', () => {
+    const one = noFixed.portfolio(week, ['kaiven'])
+    expect(one.total.breakeven!.fixedOnRecord).toBe(false)
+    expect(one.total.breakeven!.breakevenRoas).toBeCloseTo(one.stores[0].economics!.breakevenRoas, 6)
+  })
+
+  it('fixed costs raise it, and prorate by the days in the period', () => {
+    const b = m.portfolio(week).total.breakeven!
+    expect(b.breakevenRoas).toBeGreaterThan(noFixed.portfolio(week).total.breakeven!.breakevenRoas)
+    const month = m.portfolio(resolvePeriod('30d')).total.breakeven!
+    // 30 days vs 7, both ending today part-way through: the ratio sits just above 30/7.
+    expect(month.fixedCosts / b.fixedCosts).toBeGreaterThan(30 / 7)
+    expect(month.fixedCosts / b.fixedCosts).toBeLessThan(30 / 6)
+  })
+
+  it('no ROAS breaks even when fixed costs swallow the profit before ads', () => {
+    const huge = createMetrics({ ...MOCK, fixedCostsRunRate: 100_000_000 })
+    expect(huge.portfolio(week).total.breakeven!.breakevenRoas).toBe(Infinity)
+    expect(huge.portfolio(week).total.zone).toBe('below')
+  })
+})
+
+describe('a store losing money always reaches Needs your call', () => {
+  const week = resolvePeriod('7d')
+
+  it('every losing store has a below-breakeven or a loss line', () => {
+    const ids = m.calls(week).map((c) => c.id)
+    for (const s of m.portfolio(week).stores.filter((x) => x.contribution < 0)) {
+      expect(ids.some((id) => id === `${s.store.id}-below` || id === `${s.store.id}-loss`)).toBe(true)
+    }
+  })
+
+  it('names the loss when the 3-day rule does not fire', () => {
+    // Move Selnova's spend from two days ago to today: same week, but the 3-day rule needs spend on all three days.
+    const gap = createMetrics({ ...MOCK, campaignDays: CAMPAIGN_DAYS.map((r) => (r.storeId === 'selnova' && r.date === addDays(TODAY, -2) ? { ...r, date: TODAY } : r)) })
+    expect(gap.storeStats('selnova', week).contribution).toBeLessThan(0)
+    const call = gap.calls(week).find((c) => c.id === 'selnova-loss')!
+    expect(call.tone).toBe('bad')
+    expect(call.detail).toMatch(/^Profit \(est\.\) −₹[\d,]+ over 7D/)
+    expect(gap.calls(week).some((c) => c.id === 'selnova-below')).toBe(false)
+  })
+})

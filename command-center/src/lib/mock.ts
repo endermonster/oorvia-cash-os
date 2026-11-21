@@ -339,5 +339,5 @@ export const MOCK: Data = {
   campaigns: CAMPAIGNS, campaignDays: CAMPAIGN_DAYS,
   campaignHours: CAMPAIGN_HOURS, campaignHoursYesterday: CAMPAIGN_HOURS_YESTERDAY,
   resolved: RESOLVED, recentOrders: RECENT_ORDERS,
-  cash: CASH, gst: GST, fixedCostsMonthly: FIXED_COSTS_MONTHLY, sync: SYNC,
+  cash: CASH, gst: GST, fixedCostsMonthly: FIXED_COSTS_MONTHLY, fixedCostsRunRate: FIXED_COSTS_MONTHLY, sync: SYNC,
 }

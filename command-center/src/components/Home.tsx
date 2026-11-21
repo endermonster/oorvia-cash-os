@@ -1,76 +1,297 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { AlertTriangle, ChevronRight, CircleCheck, FileText, PieChart, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
-import { fmtX, inr, MIN_SAMPLE, pct, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
+import { fmtX, inr, MIN_SAMPLE, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { StoreId } from '@/lib/types'
-import { Calls } from './Calls'
-import { PaceChart } from './PaceChart'
-import { Headline, Signed, StoreDot } from './bits'
+import { Delta, Signed, StoreDot } from './bits'
+import { LiveMap } from './LiveMap'
+import { RevenueChart } from './RevenueChart'
 
-export function HomeView({ view, period, m }: { view: ViewState; period: Period; m: Metrics }) {
+export function HomeView({ view, period, m, now, mock }: { view: ViewState; period: Period; m: Metrics; now: Date; mock: boolean }) {
   const pf = m.portfolio(period)
   const ids = m.stores.map((s) => s.id)
-  const pts = m.series(ids, period)
+  const resolved = m.resolvedCounts(ids, period)
+  const borrowed = m.borrowedRates(undefined, period).map((s) => s.name)
+  const missing = missingCosts(pf.stores)
+  const orders = m.recentOrders(ids, 60)
+  const series = m.series(ids, period)
+  const end = series.at(-1)
+
+  return (
+    <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+      {/* The verdict leads; the numbers behind it sit to its right. */}
+      <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="min-w-0 lg:self-center">
+          <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(pf.stores, m.metaNotConnected)}</h1>
+          {missing && <p className="mt-1 max-w-[75ch] text-[0.8125rem] text-warn">{missing}</p>}
+        </div>
+        <div className="border-line lg:border-l lg:pl-8">
+          <p className="label">Projected profit · {period.short} · All stores</p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className={`text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(pf.total.contribution)}`}>{pf.total.contribution > 0 ? '+' : ''}<Signed value={pf.total.contribution} /></p>
+            {pf.total.prevContribution > 0
+              ? <Delta now={pf.total.contribution} prev={pf.total.prevContribution} suffix={`vs ${period.prevLabel}`} />
+              : <span className="text-sm text-ink-3">vs {inr(pf.total.prevContribution)} {period.prevLabel}</span>}
+          </div>
+          {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
+          {borrowed.length > 0 && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {borrowed.join(', ')} on VXP delivery rates until {MIN_SAMPLE} resolve</p>}
+        </div>
+        <div className="border-line lg:border-l lg:pl-8">
+          <p className="label">Resolved · {period.short} · vFulfill</p>
+          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className="text-[2.6rem] font-extrabold leading-none tracking-[-0.035em]">{resolved.delivered}<span className="ml-2 text-xl font-semibold tracking-normal text-ink-2">delivered</span></p>
+            <span className="text-sm text-ink-2">{resolved.rto} RTO{resolved.rate !== null && <> · {pct(resolved.rate)} delivered</>}</span>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <Stores stores={pf.stores} total={pf.total} view={view} period={period} notConnected={m.metaNotConnected} />
+          <Calls calls={m.calls(period)} view={view} />
+          <section aria-labelledby="pace-h" className="glass flex flex-col px-5 pb-3 pt-4 lg:flex-1">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+              <h2 id="pace-h" className="text-lg font-bold">Cumulative revenue vs spend <span className="block text-sm font-medium text-ink-3 sm:ml-2 sm:inline">{period.short} · Shopify + Meta</span></h2>
+              <p className="flex items-center gap-5 text-sm text-ink-2">
+                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-revenue" /><span>Revenue<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-revenue sm:hidden"> {inr(end.cumRevenue)}</span>}</span></span>
+                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-spend" /><span>Spend<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-spend sm:hidden"> {inr(end.cumSpend)}</span>}</span></span>
+              </p>
+            </div>
+            <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+              <RevenueChart points={series} unit={period.id === 'today' ? 'hour' : 'day'} />
+            </div>
+          </section>
+        </div>
+
+        <section aria-labelledby="map-h" className="glass flex min-w-0 flex-col p-2">
+          <div className="flex items-center justify-between gap-4 px-3 pt-2">
+            <h2 id="map-h" className="text-lg font-bold">Orders across India</h2>
+            <p className="flex items-center gap-4 text-sm text-ink-2">
+              <span className="flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full bg-prepaid" />Prepaid</span>
+              <span className="flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full bg-cod" />COD</span>
+            </p>
+          </div>
+          <div className="mt-3 flex min-h-0 flex-1 flex-col">
+            <LiveMap initial={orders} stores={m.stores.map((s) => ({ id: s.id, name: s.name }))} serverNow={now.toISOString()} mock={mock} view={view} />
+          </div>
+        </section>
+      </div>
+
+      <BottomLine m={m} view={view} period={period} />
+    </main>
+  )
+}
+
+/** Gain green, loss red, zero plain: ₹0 is not a gain. */
+const tone = (n: number) => (n > 0 ? 'text-good' : n < 0 ? 'text-bad' : 'text-ink-2')
+
+/** Cells share one first baseline, so a row's primary figures sit on one line and sub-lines hang below. */
+const ROW = 'grid grid-cols-2 gap-x-4 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 gap-y-3 @min-[50rem]:content-center @min-[50rem]:items-baseline @min-[50rem]:gap-y-0 @min-[50rem]:grid-cols-[minmax(6.75rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.75rem,0.9fr)_minmax(9.5rem,1.9fr)_minmax(6.75rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] @min-[60rem]:grid-cols-[minmax(7.5rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.5rem,0.9fr)_minmax(10.5rem,1.9fr)_minmax(5rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"rev_profit"] @min-[50rem]:[grid-template-areas:"name_spend_orders_roas_rev_profit_call"]'
+
+function Stores({ stores, total, view, period, notConnected }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; period: Period; notConnected: (id: StoreId) => boolean }) {
+  const head = 'label whitespace-nowrap leading-tight'
+  const src = (s: string) => <span className="block text-[0.6875rem] font-normal normal-case tracking-normal text-ink-3">{period.short} · {s}</span>
+  return (
+    <section aria-labelledby="stores-h" className="glass rise p-2 [--delay:80ms]">
+      <h2 id="stores-h" className="sr-only">Stores</h2>
+      <div role="table" aria-label="Stores" className="@container">
+        <div role="row" className={`${ROW} hidden px-3 pb-2 pt-2 @min-[50rem]:grid`}>
+          <span role="columnheader" className={`${head} [grid-area:name]`}>Store</span>
+          <span role="columnheader" className={`${head} [grid-area:spend]`}>Spend{src('Meta')}</span>
+          <span role="columnheader" className={`${head} [grid-area:orders]`}>Orders{src('Shopify')}</span>
+          <span role="columnheader" className={`${head} [grid-area:roas]`}>ROAS vs breakeven{src('Meta')}</span>
+          <span role="columnheader" className={`${head} [grid-area:rev]`}>Booked revenue{src('Shopify')}</span>
+          <span role="columnheader" className={`${head} [grid-area:profit]`}>Profit (est.){src('Estimate')}</span>
+          <span role="columnheader" className={`${head} [grid-area:call] text-center`}>Call</span>
+        </div>
+        <div className="space-y-1.5">
+          {stores.map((s) => (
+            <div role="row" key={s.store.id} className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
+              <span role="cell" className="[grid-area:name]">
+                <Link href={href('/', { ...view, store: s.store.id })} className="flex items-center gap-2.5 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] hover:underline">
+                  <StoreDot id={s.store.id} size={9} />{s.store.name}
+                </Link>
+              </span>
+              <Cell area="spend" label="Spend" value={inr(s.spend)} />
+              <Cell area="orders" label="Orders" value={String(s.orders)} sub={s.orders ? `${pct(s.codOrders / s.orders)} COD` : undefined} />
+              <span role="cell" className="[grid-area:roas]"><RoasBar s={s} off={notConnected(s.store.id)} /></span>
+              <Cell area="rev" label="Booked revenue" value={inr(s.revenue)} />
+              <span role="cell" className="[grid-area:profit]">
+                <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
+                <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></span>
+                {s.contribution < 0 && <span className="text-xs text-bad">loss this period</span>}
+              </span>
+              <span role="cell" className="flex justify-end [grid-area:call] @min-[50rem]:justify-center"><CallChip s={s} off={notConnected(s.store.id)} /></span>
+            </div>
+          ))}
+          <div role="row" className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
+            <span role="cell" className="text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] [grid-area:name]">VXP <span className="text-lg font-medium text-ink-2">(total)</span></span>
+            <Cell area="spend" label="Spend" value={inr(total.spend)} />
+            <Cell area="orders" label="Orders" value={String(total.orders)} />
+            <span role="cell" className="[grid-area:roas]"><VxpRoas total={total} /></span>
+            <Cell area="rev" label="Booked revenue" value={inr(total.revenue)} />
+            <span role="cell" className="[grid-area:profit]">
+              <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
+              <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(total.contribution)}`}>{total.contribution > 0 ? '+' : ''}<Signed value={total.contribution} /></span>
+            </span>
+            <span role="cell" aria-hidden className="[grid-area:call]" />
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function Cell({ area, label, value, sub }: { area: string; label: string; value: string; sub?: string }) {
+  return (
+    <span role="cell" className="min-w-0" style={{ gridArea: area }}>
+      <span className="text-xs text-ink-3 @min-[50rem]:hidden">{label} </span>
+      <span className="block text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight">{value}</span>
+      {sub && <span className="text-xs text-ink-2">{sub}</span>}
+    </span>
+  )
+}
+
+function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
+  if (s.roas === null) return <span className="text-lg text-ink-2">{off ? 'Meta not connected' : 'No ads'}</span>
+  if (s.economics === null) {
+    return <div><p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-revenue">{fmtX(s.roas)}</p><p className="text-xs text-warn">Breakeven needs a product cost</p></div>
+  }
+  if (!breaksEven(s.economics)) {
+    return <div><p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-bad">{fmtX(s.roas)}</p><p className="text-xs text-bad">{noBreakevenText(s.economics)}</p></div>
+  }
+  return <Bar roas={s.roas} be={s.economics.breakevenRoas} target={s.economics.targetRoas} zone={s.zone} />
+}
+
+/** VXP's blended ROAS against its own breakeven: the stores' breakevens weighted by revenue, plus fixed costs. */
+function VxpRoas({ total }: { total: Portfolio['total'] }) {
+  if (total.roas === null) return <span className="text-ink-3">No ads</span>
+  const blended = <span className="text-sm font-medium text-ink-3"> blended</span>
+  const b = total.breakeven
+  if (b === null) return <p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-revenue">{fmtX(total.roas)}{blended}</p>
+  if (!breaksEven(b)) {
+    return (
+      <div>
+        <p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-bad">{fmtX(total.roas)}{blended}</p>
+        <p className="text-xs text-bad">{b.fixedCosts > 0 ? `Profit before ads can’t cover ${inr(b.fixedCosts)} fixed costs` : 'No ROAS breaks even'}</p>
+      </div>
+    )
+  }
+  const note = [b.fixedOnRecord ? `Incl. ${inr(b.fixedCosts)} fixed costs` : 'No fixed costs on record', b.leftOut.length ? `Incomplete: ${b.leftOut.join(', ')} has no cost` : null]
+  return <Bar roas={total.roas} be={b.breakevenRoas} target={b.targetRoas} zone={total.zone} after={blended} note={note.filter(Boolean).join(' · ')} />
+}
+
+function Bar({ roas, be, target, zone, after, note }: { roas: number; be: number; target: number; zone: StoreStats['zone']; after?: React.ReactNode; note?: string }) {
+  const max = Math.max(target * 1.12, roas * 1.05)
+  const at = (v: number) => `${(v / max) * 100}%`
+  const fill = zone === null ? 'bg-ink-3' : zone === 'below' ? 'bg-bad' : zone === 'profit' ? 'bg-good' : 'bg-revenue'
+  const word = zone === null ? 'Breakeven incomplete' : zone === 'below' ? 'Below breakeven' : zone === 'covering' ? 'Covering costs' : 'Above target'
+  return (
+    <div title={`${word}: breakeven ${fmtX(be)}, target ${fmtX(target)}${note ? `. ${note}` : ''}`}>
+      <p className={`text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight ${zone === null ? 'text-ink-2' : zone === 'below' ? 'text-bad' : 'text-revenue'}`}>{fmtX(roas)}{after}<span className="sr-only"> {word}</span></p>
+      <div className="relative mt-1.5 h-2 rounded-full bg-[rgb(150_180_225/0.16)]">
+        <div className={`absolute inset-y-0 left-0 rounded-full ${fill}`} style={{ width: at(roas) }} />
+        {/* Dark edge keeps a tick visible when the fill of the same colour runs past it. */}
+        <span aria-hidden className="absolute -top-1 h-4 w-0.5 rounded bg-bad shadow-[0_0_0_1px_rgb(6_10_19/0.85)]" style={{ left: at(be) }} />
+        <span aria-hidden className="absolute -top-1 h-4 w-0.5 rounded bg-good shadow-[0_0_0_1px_rgb(6_10_19/0.85)]" style={{ left: at(target) }} />
+      </div>
+      {/* A key, not labels on the ticks: the two ticks sit ~60px apart, too close for two centred labels to fit. */}
+      <div className="mt-1.5 flex items-center justify-between gap-3 whitespace-nowrap text-[0.6875rem] leading-none">
+        <span className="flex items-center gap-1.5 text-ink-2"><span aria-hidden className="h-2.5 w-0.5 rounded bg-bad" />BE {fmtX(be)}</span>
+        <span className="flex items-center gap-1.5 text-ink-2"><span aria-hidden className="h-2.5 w-0.5 rounded bg-good" />Target {fmtX(target)}</span>
+      </div>
+      {note && <p className="mt-1 truncate text-[0.6875rem] leading-tight text-ink-3">{note}</p>}
+    </div>
+  )
+}
+
+/** One word per store, from where its ROAS sits against breakeven and target. */
+function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
+  const [word, cls] =
+    s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-2 ring-line-strong']
+    : s.economics === null ? ['Add cost', 'text-warn ring-warn/40 bg-warn/10']
+    : !breaksEven(s.economics) || s.zone === 'below' ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
+    : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
+    : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
+  return <span className={`inline-block min-w-[5.25rem] whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${cls}`}>{word}</span>
+}
+
+const TONE = {
+  bad: { Icon: TrendingDown, cls: 'text-bad', word: 'Problem' },
+  warn: { Icon: AlertTriangle, cls: 'text-warn', word: 'Warning' },
+  good: { Icon: TrendingUp, cls: 'text-good', word: 'Good' },
+} as const
+
+function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
+  return (
+    <section aria-labelledby="calls-h" className="glass rise p-2 [--delay:140ms]">
+      <h2 id="calls-h" className="px-3 pt-2 text-lg font-bold">Needs your call</h2>
+      {calls.length === 0 ? (
+        <p className="mt-3 flex items-center gap-3 px-3 pb-2 text-ink-2"><CircleCheck className="size-5 text-good" aria-hidden />Nothing needs you today.</p>
+      ) : (
+        <ul className="mt-3 space-y-1.5">
+          {calls.map((c) => {
+            const { Icon, cls, word } = TONE[c.tone]
+            const body = (
+              <>
+                <Icon className={`size-[1.15rem] shrink-0 ${cls}`} aria-hidden /><span className="sr-only">{word}: </span>
+                <span className="min-w-0 flex-1 md:truncate"><span className="font-semibold">{c.title}</span><span className="text-ink-2"> — {c.detail}</span></span>
+                {c.storeId && <ChevronRight className="size-4 shrink-0 text-ink-3" aria-hidden />}
+              </>
+            )
+            return (
+              <li key={c.id}>
+                {c.storeId
+                  ? <Link href={href('/', { ...view, store: c.storeId })} className="glass-row flex items-center gap-3 px-3 py-2.5">{body}</Link>
+                  : <div className="glass-row flex items-center gap-3 px-3 py-2.5">{body}</div>}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: Period }) {
   const c = m.cash()
   const g = m.gst()
   const share = m.ownerShare()
-  const borrowed = m.borrowedRates(undefined, period).map((s) => s.name)
-  const missing = missingCosts(pf.stores)
-
+  const month = (iso: string) => new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })
+  const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  const meta = (a: string, b: string) => <span className="hidden text-xs leading-snug text-ink-3 xl:block">{a}<br />{b}</span>
+  const item = 'flex min-w-0 items-center gap-3.5 px-3 py-3'
   return (
-    <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
-      <div className="grid gap-x-12 gap-y-10 pt-10 lg:grid-cols-12">
-        <section className="lg:col-span-7" aria-label="Revenue and ad spend">
-          <Headline
-            short={period.short} scope="all stores" prevLabel={period.prevLabel}
-            revenue={pf.total.revenue} prevRevenue={pf.total.prevRevenue} spend={pf.total.spend} prevSpend={pf.total.prevSpend}
-          />
-          <p className="mt-8 text-ink-2">
-            {pf.total.orders} orders · {pf.total.roas !== null ? `${fmtX(pf.total.roas)} blended ROAS` : 'no ads'} · profit (est.) <Signed value={pf.total.contribution} className="font-semibold text-ink" />
-          </p>
-          {missing && <p className="mt-2 max-w-[70ch] text-sm text-warn">{missing}</p>}
-          <p className="mt-2 max-w-[70ch] text-sm text-ink-3">
-            {verdict(pf.stores, m.metaNotConnected)} Profit uses each product’s own delivery rate, COD and prepaid separately
-            {borrowed.length > 0 && <>; {borrowed.join(' and ')} {borrowed.length === 1 ? 'uses' : 'use'} VXP rates until {MIN_SAMPLE} orders resolve</>}.
-          </p>
-        </section>
-
-        <div className="lg:col-span-5">
-          <Calls calls={m.calls(period)} />
-        </div>
+    <section aria-label="Cash, GST and your share" className="glass grid gap-x-2 gap-y-1 p-2 md:grid-cols-3 md:divide-x md:divide-line">
+      <Link href={href('/money', view)} className={`${item} rounded-xl hover:bg-white/[0.04]`}>
+        <Wallet className="size-6 shrink-0 text-ink-2" aria-hidden />
+        <span className="min-w-0 flex-1">
+          {c ? <>
+            <span className="block text-lg"><span className="font-semibold">Cash</span> <span className="font-bold">{inr(c.total)}</span></span>
+            <span className="block text-sm text-ink-2">{c.bank && c.coversDays !== null ? `covers ${Math.floor(c.coversDays)} days of spend` : c.missing.length ? `without ${c.missing.join(' and ')}` : 'cash on hand'}</span>
+          </> : <span className="text-ink-3">Cash connects in a later stage</span>}
+        </span>
+        {meta(`Period: ${period.short}`, 'Source: cash ledger')}
+      </Link>
+      <div className={item}>
+        <FileText className="size-6 shrink-0 text-ink-2" aria-hidden />
+        <span className="min-w-0 flex-1">
+          {g ? <>
+            <span className="block text-lg"><span className="font-semibold">GST {month(g.month)}</span> <span className="font-bold">{inr(g.owed)}</span></span>
+            <span className="block text-sm text-ink-2">due {day(g.dueDate)}</span>
+          </> : <span className="text-ink-3">GST connects in a later stage</span>}
+        </span>
+        {g && meta(`Period: ${month(g.month)}`, 'Source: GST ledger')}
       </div>
-
-      <div className="mt-14 grid gap-x-12 gap-y-10 border-t border-line pt-10 lg:grid-cols-12">
-        <div className="min-w-0 lg:col-span-8">
-          <PaceChart points={pts} title={`Pace · ${period.range}`} prevLabel={period.prevLabel} unit={period.id === 'today' ? 'hour' : 'day'} />
-        </div>
-        <div className="lg:col-span-4">
-          <LiveOrders view={view} m={m} />
-        </div>
+      <div className={item}>
+        <PieChart className="size-6 shrink-0 text-ink-2" aria-hidden />
+        <span className="min-w-0 flex-1 text-lg">
+          {share ? <><span className="font-semibold">Your share (50%) this month</span> <span className={`font-bold ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <span className="text-base text-ink-3">Your share connects in a later stage</span>}
+        </span>
+        {share && meta('Period: this month', 'Source: profit model')}
       </div>
-
-      <Scoreboard stores={pf.stores} total={pf.total} view={view} notConnected={m.metaNotConnected} />
-
-      <p className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line pt-6 text-sm text-ink-2">
-        {/* Each part shows as soon as its source is wired; the rest are named as still to come. */}
-        {[
-          c && (
-            <span key="cash">
-              Cash <span className="font-semibold text-ink">{inr(c.total)}</span>
-              {c.missing.length > 0 && <span className="text-ink-3"> without {c.missing.join(' and ')}</span>}
-              {c.bank && c.coversDays !== null && <> · covers {Math.floor(c.coversDays)} days of spend</>}
-            </span>
-          ),
-          g && <span key="gst">GST {new Date(`${g.month}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })} <span className="font-semibold text-ink">{inr(g.owed)}</span> due {new Date(`${g.dueDate}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</span>,
-          share && <span key="share">Your share (50%) this month <Signed value={share.share} className="font-semibold text-ink" /></span>,
-          (!c || !g || !share) && <span key="later" className="text-ink-3">{laterParts(!c, !g, !share)} connect in a later stage</span>,
-        ].filter(Boolean).flatMap((part, i) => (i === 0 ? [part] : [<span key={`sep${i}`} aria-hidden className="text-ink-3">·</span>, part]))}
-        <Link href={href('/money', view)} className="ml-auto inline-flex items-center gap-1 font-semibold text-ink hover:underline">
-          Money <ArrowRight className="size-4" aria-hidden />
-        </Link>
-      </p>
-    </main>
+    </section>
   )
 }
 
@@ -106,142 +327,4 @@ export function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boo
   if (losing.length === 0) return `${list(paying)} ${paying.length === 1 ? 'is' : 'are'} paying for ${paying.length === 1 ? 'itself' : 'themselves'}.`
   if (paying.length === 0) return `${list(losing)} ${losing.length === 1 ? 'isn’t' : 'aren’t'} covering ad spend yet.`
   return `${list(paying)} ${paying.length === 1 ? 'is' : 'are'} paying for ${paying.length === 1 ? 'itself' : 'themselves'}. ${list(losing)} ${losing.length === 1 ? 'isn’t' : 'aren’t'}, yet.`
-}
-
-function LiveOrders({ view, m }: { view: ViewState; m: Metrics }) {
-  const orders = m.recentOrders(m.stores.map((s) => s.id), 5)
-  return (
-    <section aria-labelledby="orders-h">
-      <div className="flex items-baseline justify-between">
-        <h2 id="orders-h" className="text-base font-semibold text-ink">Latest orders</h2>
-        <Link href={href('/orders', view)} className="inline-flex items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">
-          All orders <ArrowRight className="size-4" aria-hidden />
-        </Link>
-      </div>
-      {orders.length === 0 ? (
-        <p className="mt-4 text-ink-3">No orders yet today.</p>
-      ) : (
-        <ul className="mt-3 divide-y divide-line">
-          {orders.map((o) => (
-            <li key={o.id} className="grid grid-cols-[1fr_auto] items-center gap-x-4 py-3">
-              <div className="min-w-0">
-                <p className="flex items-center gap-2 font-semibold text-ink"><StoreDot id={o.storeId} />{m.storeById(o.storeId).name}<span className="truncate font-normal text-ink-3">· {o.city}</span></p>
-                <p className="mt-0.5 truncate text-sm text-ink-2">{o.product}</p>
-              </div>
-              <div className="text-right">
-                <p className="font-semibold text-ink">{inr(o.value)}</p>
-                <p className="mt-0.5 text-sm">
-                  <span className={o.payment === 'cod' ? 'text-cod' : o.payment === 'prepaid' ? 'text-prepaid' : 'text-ink-3'}>{o.payment === 'cod' ? 'COD' : o.payment === 'prepaid' ? 'Prepaid' : 'Payment unknown'}</span>
-                  <span className="text-ink-3"> · {ago(m.minutesAgo(o.placedAt))}</span>
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-const ago = (m: number) => (m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ago`)
-
-function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
-  if (s.roas === null) return <span className="text-sm text-ink-3">{off ? 'Meta not connected' : 'No ads'}</span>
-  if (s.economics === null) {
-    return (
-      <div className="min-w-48">
-        <p className="text-sm"><span className="font-semibold text-ink">{fmtX(s.roas)}</span></p>
-        <p className="mt-1.5 text-xs text-warn">Breakeven needs a product cost</p>
-      </div>
-    )
-  }
-  if (!breaksEven(s.economics)) {
-    return (
-      <div className="min-w-48">
-        <p className="text-sm"><span className="font-semibold text-ink">{fmtX(s.roas)}</span><span className="text-ink-3"> · Below breakeven</span></p>
-        <p className="mt-1.5 text-xs text-bad">{noBreakevenText(s.economics)}</p>
-      </div>
-    )
-  }
-  const { breakevenRoas: be, targetRoas: target } = s.economics
-  const max = Math.max(target * 1.15, s.roas * 1.05)
-  const at = (v: number) => `${(v / max) * 100}%`
-  const tone = s.zone === 'below' ? 'bg-bad' : s.zone === 'covering' ? 'bg-warn' : 'bg-good'
-  const word = s.zone === 'below' ? 'Below breakeven' : s.zone === 'covering' ? 'Covering costs' : 'Above target'
-  return (
-    <div className="min-w-48">
-      <p className="text-sm">
-        <span className="font-semibold text-ink">{fmtX(s.roas)}</span>
-        <span className="text-ink-3"> · {word}</span>
-      </p>
-      <div className="relative mt-2 h-1.5 rounded-full bg-line-strong" title={`Breakeven ${fmtX(be)} · target ${fmtX(target)}`}>
-        <div className={`absolute inset-y-0 left-0 rounded-full ${tone}`} style={{ width: at(s.roas) }} />
-        <span className="absolute -top-1 h-3.5 w-0.5 rounded bg-ink-2" style={{ left: at(be) }} aria-hidden />
-        <span className="absolute -top-1 h-3.5 w-0.5 rounded bg-ink" style={{ left: at(target) }} aria-hidden />
-      </div>
-      <p className="mt-1.5 text-xs text-ink-3">breakeven {fmtX(be)} · target {fmtX(target)}</p>
-    </div>
-  )
-}
-
-function Scoreboard({ stores, total, view, notConnected }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; notConnected: (id: StoreId) => boolean }) {
-  const th = 'pb-3 text-left font-semibold label'
-  return (
-    <section aria-labelledby="score-h" className="mt-14 border-t border-line pt-10">
-      <h2 id="score-h" className="text-base font-semibold text-ink">Stores</h2>
-      <ul className="mt-4 divide-y divide-line border-y border-line md:hidden">
-        {stores.map((s) => (
-          <li key={s.store.id} className="py-4">
-            <Link href={href('/', { ...view, store: s.store.id })} className="flex items-center justify-between gap-4">
-              <span className="flex items-center gap-3 font-semibold text-ink"><StoreDot id={s.store.id} size={10} />{s.store.name}</span>
-              <span className="font-semibold text-ink"><Signed value={s.contribution} /> <span className="text-xs font-normal text-ink-3">profit est.</span></span>
-            </Link>
-            <p className="mt-1 text-sm text-ink-2">{inr(s.spend)} spend · {s.orders} orders · {inr(s.revenue)} booked</p>
-            <div className="mt-3"><RoasBar s={s} off={notConnected(s.store.id)} /></div>
-          </li>
-        ))}
-        <li className="flex items-center justify-between py-4 font-extrabold text-ink">
-          <span>VXP total</span><Signed value={total.contribution} />
-        </li>
-      </ul>
-      <div className="mt-4 hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[760px] border-collapse">
-          <thead>
-            <tr className="border-b border-line">
-              <th className={th}>Store</th>
-              <th className={`${th} text-right`}>Spend</th>
-              <th className={`${th} text-right`}>Orders</th>
-              <th className={`${th} pl-10`}>ROAS</th>
-              <th className={`${th} text-right`}>Booked revenue</th>
-              <th className={`${th} text-right`}>Profit (est.)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {stores.map((s) => (
-              <tr key={s.store.id} className="group border-b border-line">
-                <td className="py-4">
-                  <Link href={href('/', { ...view, store: s.store.id })} className="flex items-center gap-3 font-semibold text-ink group-hover:underline">
-                    <StoreDot id={s.store.id} size={10} />{s.store.name}
-                  </Link>
-                </td>
-                <td className="py-4 text-right text-ink">{inr(s.spend)}</td>
-                <td className="py-4 text-right text-ink">{s.orders}<span className="block text-xs text-ink-3">{s.orders ? `${pct(s.codOrders / s.orders)} COD` : '—'}</span></td>
-                <td className="py-4 pl-10"><RoasBar s={s} off={notConnected(s.store.id)} /></td>
-                <td className="py-4 text-right text-ink">{inr(s.revenue)}</td>
-                <td className="py-4 text-right font-semibold text-ink"><Signed value={s.contribution} /></td>
-              </tr>
-            ))}
-            <tr>
-              <td className="pt-4 font-extrabold text-ink">VXP total</td>
-              <td className="pt-4 text-right font-extrabold text-ink">{inr(total.spend)}</td>
-              <td className="pt-4 text-right font-extrabold text-ink">{total.orders}</td>
-              <td className="pt-4 pl-10 text-sm text-ink-3">{total.roas !== null ? `${fmtX(total.roas)} blended` : '—'}</td>
-              <td className="pt-4 text-right font-extrabold text-ink">{inr(total.revenue)}</td>
-              <td className="pt-4 text-right font-extrabold text-ink"><Signed value={total.contribution} /></td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  )
 }

@@ -36,7 +36,7 @@ export function SyncButton() {
         type="button"
         onClick={run}
         disabled={busy}
-        className="rounded-md border border-line px-2 py-1 text-xs font-medium text-ink-2 transition-colors hover:text-ink disabled:cursor-wait disabled:opacity-60"
+        className="glass-pill px-3 py-[3px] font-medium text-ink-2 transition-colors hover:text-ink disabled:cursor-wait disabled:opacity-60"
       >
         {busy ? 'Syncing…' : 'Sync now'}
       </button>

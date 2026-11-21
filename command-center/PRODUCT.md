@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Delegated (2026-11-18): Next.js App Router + TypeScript + Tailwind CSS 4, deployed on Vercel. It matches Cash OS and the user's other apps, so the Supabase backend plugs in later without a port. The first build is front end only, with mock data.
+Delegated (2026-11-18): Next.js App Router + TypeScript + Tailwind CSS 4, deployed on Vercel, Supabase backend (live since 2026-11-19). `DATA_SOURCE=supabase` reads real data; anything else serves the in-memory mock behind the same data contract.
 
 ## Users
 
@@ -44,7 +44,9 @@ Breakeven ROAS is computed per store from real costs, never typed in.
 - Laptop first: the main session is on a laptop. The phone must still work for quick checks of the top numbers and the order stream.
 - Checked several times a day during ad-testing periods, mostly for Meta, then Shopify.
 - vFulfill data arrives by CSV import, not live; staleness must be visible.
-- Separate from the user's personal finance app ("Money"), and must never be visually confused with it. Only one number flows across: Vedaant's 50% profit share.
+- Separate from the user's personal finance app ("Money"), and must never be visually confused with it. Only one number flows across: Vedaant's 50% profit share. Command Center's own "Money" tab keeps that name (confirmed 2026-11-20); the separation rule covers visual identity, not tab names.
+- Replaces Cash OS (the parent Oorvia-only app in this repo, confirmed 2026-11-20). Cash OS is legacy and gets retired once Command Center covers Oorvia; new product work goes here, not there.
+- Data arrival: Shopify live by HMAC-verified webhook plus a 60-day backfill; Meta once a day by Vercel Cron (00:30 UTC) plus a "Sync now" button; vFulfill shipments and transaction ledger by CSV import scripts; Oorvia history before the API window by Shopify CSV import; bank balance typed in by hand.
 
 ## Capabilities and Constraints
 
@@ -53,19 +55,23 @@ Breakeven ROAS is computed per store from real costs, never typed in.
 - Gain/loss and over/under carry a sign, label or icon, never colour alone.
 - A number whose inputs are stale or assumed says so (e.g. "assumed from Oorvia" for a new store's delivery rate).
 - Kaiven and Selnova have days of history; Oorvia has data from March 2026 onward.
-- First build uses mock data shaped like the real data; every mocked number is tagged with its future source.
+- Single user behind a Supabase Auth login gate: a session counts only if its email is on the allowlist. No figures render, mock or real, without one.
+- Payment type can be `unknown` for history Shopify cannot settle: counted as an order, left out of COD share and delivery rates, never guessed.
+- Not connected yet: gateway settlements (Razorpay, PayU, Cashfree). The cash total leaves out unconnected parts and names them; no cash-low alert until a bank balance exists.
+- Mock mode stays available; while it drives the screen, every mocked number is tagged with its source and the top bar shows "Mock data".
 
 ## Brand Commitments
 
 - Store names: Oorvia, Kaiven, Selnova. Business name: VXP Ventures (internal only; not shown on storefronts, but fine in this private tool).
-- Visual direction set by the user: its own identity, built on a reference screenshot (dark dashboard with neon-gradient hero numbers, ROAS gauge with breakeven marker, COD/prepaid order dot grid, sentence-style insight cards, cumulative revenue-vs-spend chart, live order stream). Shares no design tokens with "Money".
+- Visual direction: the user gave full creative control over the front end on 2026-11-20; the old UI and DESIGN.md were a quick preview, not a commitment. Binding, set by the user the same day: dark colours and Apple-style Liquid Glass material. Must share no design tokens with "Money" and cannot be mistaken for it. The earlier reference screenshot (ROAS gauge with breakeven marker, COD/prepaid order grid, sentence-style insights, cumulative revenue-vs-spend chart, live order stream) is a list of useful ideas, not a required look.
 
 ## Evidence on Hand
 
 - Real Oorvia monthly P&L, March–August 2026: `../phase0/pnl-2026-*.json` (e.g. April: 108 orders placed, ₹1,75,491 order value; August: ₹1,76,070 net revenue, ₹61,776 ad spend).
 - Reference screenshot from the user (single-store dashboard, 18–19 Oct).
 - Plan and metric list: `../PLAN-vxp-command-center.md`.
-- No real Kaiven or Selnova numbers yet; mock them plausibly and label them mock.
+- Live Supabase data: Meta campaign spend for the four allowlisted ad accounts (Kaiven, Oorvia-1, Oorvia-2, Selnova1) backfilled 2026-01-01 to 2026-11-19; Shopify orders and products for all three stores; Oorvia vFulfill shipments and ledger (wallet matches vFulfill to the paisa).
+- Kaiven and Selnova still have only days of history; new-store delivery rates are assumed from Oorvia and must say so.
 
 ## Product Principles
 

@@ -24,7 +24,7 @@ async function Dashboard({ searchParams }: { searchParams: PageProps<'/'>['searc
     <>
       <TopBar tab="home" view={view} d={d} />
       {view.store === 'all'
-        ? <HomeView view={view} period={period} m={m} />
+        ? <HomeView view={view} period={period} m={m} now={d.now} mock={d.source === 'mock'} />
         : <StoreView id={view.store} view={view} period={period} m={m} orders={d.orders} />}
     </>
   )
