@@ -7,6 +7,16 @@ type Cash = NonNullable<ReturnType<Metrics['cash']>>
 const rupees = (n: number) => `${n < 0 ? '−' : ''}₹${Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
 
+/** Says it is an estimate, how it is made, and where the money sits, by gateway. */
+function settlementNote(s: NonNullable<Cash['settlements']>): string {
+  const orders = s.reduce((n, x) => n + x.orders, 0)
+  if (orders === 0) return 'Estimate: every prepaid order should have settled by now (T+2 working days)'
+  const byGateway = new Map<string, number>()
+  for (const x of s) byGateway.set(x.gateway, (byGateway.get(x.gateway) ?? 0) + x.amount)
+  const parts = [...byGateway].map(([g, a]) => `${g} ${inr(a)}`).join(' · ')
+  return `Estimate: ${orders} prepaid ${orders === 1 ? 'order' : 'orders'} from Shopify not settled yet (T+2 working days), after gateway fee + GST. ${parts}`
+}
+
 /**
  * Money's cash card: the total, how many days of ad spend it covers, and each part with where it comes from.
  * A part not connected yet says so instead of counting as ₹0.
@@ -38,8 +48,8 @@ export function CashCard({ c }: { c: Cash | null }) {
     },
     {
       label: 'Gateway settlements',
-      value: c.settlements ? inr(c.settlementsTotal) : <span className="text-ink-3">Not connected</span>,
-      note: c.settlements ? 'Captured, not yet settled' : 'Razorpay, PayU and Cashfree connect in a later stage',
+      value: c.settlements ? inr(c.settlementsTotal) : <span className="text-ink-3">Not read</span>,
+      note: c.settlements ? settlementNote(c.settlements) : 'Estimated from Shopify prepaid orders',
     },
   ]
   return (

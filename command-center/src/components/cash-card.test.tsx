@@ -13,7 +13,7 @@ describe('CashCard', () => {
     expect(html).toContain('₹1,90,545.17')
     expect(html).toContain('Without bank and gateway settlements.')
     expect(html).toContain('Not entered')
-    expect(html).toContain('Not connected')
+    expect(html).toContain('Not read')
     expect(html).toContain('Every delivered COD order is remitted')
     expect(html).toContain('19 Nov 2026')
     expect(html).not.toContain('Covers')
@@ -25,6 +25,23 @@ describe('CashCard', () => {
     expect(html).toContain('Without gateway settlements.')
     expect(html).toMatch(/Covers \d+ days of ad spend/)
     expect(html).toContain('2 delivered COD orders not remitted yet')
+  })
+
+  it('gateway settlements are labelled an estimate, with the total per gateway', () => {
+    const settlements = [
+      { gateway: 'PayU', storeId: 'kaiven' as const, amount: 1463.62, orders: 1 },
+      { gateway: 'Razorpay', storeId: 'kaiven' as const, amount: 1000, orders: 1 },
+      { gateway: 'Razorpay', storeId: 'selnova' as const, amount: 500, orders: 2 },
+    ]
+    const html = renderToStaticMarkup(<CashCard c={createMetrics({ ...MOCK, cash: { ...live, settlements } }).cash()} />)
+    expect(html).toContain('Estimate: 4 prepaid orders from Shopify not settled yet')
+    expect(html).toContain('Razorpay ₹1,500')
+    expect(html).toContain('Without bank.')
+  })
+
+  it('nothing pending: ₹0, and says why', () => {
+    const html = renderToStaticMarkup(<CashCard c={createMetrics({ ...MOCK, cash: { ...live, settlements: [] } }).cash()} />)
+    expect(html).toContain('every prepaid order should have settled by now')
   })
 
   it('no source at all', () => {

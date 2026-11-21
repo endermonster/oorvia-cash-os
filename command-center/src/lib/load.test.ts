@@ -244,6 +244,19 @@ describe('mapCash', () => {
     })
   })
 
+  it('settlement estimates: paise to rupees, store id checked; none read stays null', () => {
+    expect(mapCash(wallet, [], null, now, [{ gateway: 'PayU', storeId: 'kaiven', paise: 146_362, orders: 1 }])!.settlements)
+      .toEqual([{ gateway: 'PayU', storeId: 'kaiven', amount: 1463.62, orders: 1 }])
+    expect(mapCash(wallet, [], null, now, [])!.settlements).toEqual([])
+    expect(mapCash(wallet, [], null, now)!.settlements).toBeNull()
+  })
+
+  it('settlements alone are enough to show cash; an empty estimate alone is not', () => {
+    const est = [{ gateway: 'Cashfree', storeId: 'oorvia', paise: 232_823, orders: 1 }]
+    expect(mapCash(null, [], null, now, est)).toMatchObject({ settlements: [{ amount: 2328.23 }], bank: null, vfulfillWallet: 0 })
+    expect(mapCash(null, [], null, now, [])).toBeNull()
+  })
+
   it('no bank entered yet: bank is null, never 0', () => {
     expect(mapCash(wallet, [], null, now)!.bank).toBeNull()
   })

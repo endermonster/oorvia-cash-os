@@ -120,8 +120,11 @@ export type CashPosition = {
   asOf: string
   /** Typed in by hand (scripts/bank-balance.ts); null until first entered. */
   bank: { amount: number; enteredAt: string } | null
-  /** Razorpay / PayU / Cashfree APIs; null until they are connected. */
-  settlements: { gateway: string; storeId: StoreId; amount: number }[] | null
+  /**
+   * Gateway money captured, not yet settled, net of fee + GST: an **estimate** from Shopify prepaid orders and T+2
+   * (src/lib/settlements.ts), no gateway API. Null when not read; an empty list when nothing is pending.
+   */
+  settlements: { gateway: string; storeId: StoreId; amount: number; orders: number }[] | null
   /** vFulfill transactions import: credits − debits. */
   vfulfillWallet: number
   /** Date of the newest vFulfill transaction (YYYY-MM-DD); null if none imported. */

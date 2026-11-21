@@ -8,6 +8,7 @@ import type { Chrome, Data } from './data'
 import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
+import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
@@ -166,16 +167,18 @@ const HISTORY_DAYS = 70
 const RECENT_LIMIT = 20
 
 /**
- * Cash from the vFulfill ledger (cc_vf_wallet), COD due (cc_cod_due) and the latest hand-entered bank balance.
- * Gateway settlements are not connected yet (null). Null when no source has any data at all.
+ * Cash from the vFulfill ledger (cc_vf_wallet), COD due (cc_cod_due), the latest hand-entered bank balance and
+ * gateway settlements estimated from Shopify (./settlements; null when not read). Null when no source has any data.
  */
-export function mapCash(wallet: WalletRow | null, codDue: CodDueRow[], bank: BankRow | null, now: Date): CashPosition | null {
+export function mapCash(
+  wallet: WalletRow | null, codDue: CodDueRow[], bank: BankRow | null, now: Date, settlements: SettlementEstimate[] | null = null,
+): CashPosition | null {
   const hasWallet = wallet !== null && n(wallet.transactions) > 0
-  if (!hasWallet && !bank) return null
+  if (!hasWallet && !bank && !settlements?.length) return null
   return {
     asOf: now.toISOString(),
     bank: bank ? { amount: n(bank.amount_paise) / 100, enteredAt: bank.entered_on } : null,
-    settlements: null,
+    settlements: settlements?.map((s) => ({ gateway: s.gateway, storeId: sid(s.storeId), amount: s.paise / 100, orders: s.orders })) ?? null,
     // The view sums exact amounts; round once, to the paisa, as vFulfill shows it.
     vfulfillWallet: hasWallet ? Math.round(n(wallet!.balance) * 100) / 100 : 0,
     vfulfillAsOf: hasWallet ? wallet!.last_txn_date : null,
@@ -190,12 +193,23 @@ async function readCash(sb: Client, now: Date): Promise<CashPosition | null> {
     if (error) throw new Error(error.message)
     return data ?? []
   }
-  const [wallet, codDue, bank] = await Promise.all([
+  const today = istNow(now).today
+  const [wallet, codDue, bank, prepaid, stores] = await Promise.all([
     one<WalletRow>(sb.from('cc_vf_wallet').select('balance, last_txn_date, transactions')),
     one<CodDueRow>(sb.from('cc_cod_due').select('store_id, orders, paise')),
     one<BankRow>(sb.from('cc_bank_balances').select('amount_paise, entered_on').order('entered_on', { ascending: false }).order('created_at', { ascending: false }).limit(1)),
+    selectAll<{ store_id: string; placed_at: string; gateways: string[] | null; total_paise: Num }>(
+      () => sb.from('cc_orders').select('store_id, placed_at, gateways, total_paise').eq('payment', 'prepaid').eq('is_test', false).is('cancelled_at', null)
+        .gte('placed_at', `${addDays(today, -LOOKBACK_DAYS)}T00:00:00+05:30`).order('store_id').order('order_name'),
+    ),
+    one<{ id: string; gateway_pct: Num }>(sb.from('cc_stores').select('id, gateway_pct')),
   ])
-  return mapCash(wallet[0] ?? null, codDue, bank[0] ?? null, now)
+  const settlements = estimateSettlements(
+    prepaid.map((o) => ({ storeId: o.store_id, placedAt: o.placed_at, gateways: o.gateways ?? [], totalPaise: n(o.total_paise) })),
+    stores.map((s) => ({ id: s.id, gatewayPct: n(s.gateway_pct) })),
+    today,
+  )
+  return mapCash(wallet[0] ?? null, codDue, bank[0] ?? null, now, settlements)
 }
 
 type Client = Awaited<ReturnType<typeof getClient>>
