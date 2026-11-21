@@ -1,6 +1,39 @@
-# Handoff: carrying the Home look to Ads, Orders, Money (written 2026-11-21)
+# Handoff: carrying the Home look to Ads, Orders, Money (written 2026-11-21, updated 2026-11-22)
 
 For the next design agent. Read this before touching any tab other than Home.
+
+## Start here: the backend is done (2026-11-22)
+
+Phase 7 (porting old Cash OS) is finished on the backend: Ads (7b), Orders (7a), Settings (7c-1), GST and
+capital & loans (7c-2), Forecast (7d). Every number on every tab is real now, so the wait in §0 is over. Still ask
+Vedaant which tab to start with (§3 suggests an order) and confirm nothing changed since this note.
+
+**Design work waiting, most useful first:**
+
+1. **Gear icon for `/settings` in the top bar.** Full request in `REDESIGN-REVIEW-FINDINGS.md` ("Request: a gear
+   icon"). `TopBar` needs a way to render with no tab selected (store and period switches mean nothing on Settings).
+   Once it's in, remove the "Settings: bank, vFulfill, costs, GST, loans" link beside the Money heading.
+2. **Ads tab** in the Home look (`src/app/ads/page.tsx`, `AdsParts.tsx`). Reuse `Bar` from `Home.tsx` for ROAS
+   against breakeven and target.
+3. **Orders tab** (`src/app/orders/page.tsx`, `OrdersParts.tsx`).
+4. **Money tab**: the most changed. Five panels now, all flat `bg-raised` cards:
+   - `CashCard.tsx`: cash on hand, per store or All VXP.
+   - `CapitalCard` (`MoneyParts.tsx`): loans owed with days overdue, partner capital. VXP-wide.
+   - `GstCard` (`MoneyParts.tsx`): one GSTIN, VXP-wide. A hero cash figure, then one block per unfiled month plus
+     the month in progress (output tax, input credit, credit ledger, RCM), with GSTR-1 / 3B due dates that turn
+     amber at 3 days and red when late.
+   - `PnlTable.tsx`: monthly P&L, per store or All VXP.
+   - `ForecastCard` (`MoneyParts.tsx`): running total from Day 1 (opens at Oorvia's pre-GST −₹1,40,108), average
+     finished month, profit needed a month (6/12/24), month table. **Wants a chart**: the old Cash OS Forecast page
+     had a cumulative line with a zero line, red below and green above, and a dashed projection to break-even
+     (`oorvia-cash-os/app/(dashboard)/forecast/page.js`, `CumulativeChart`). Data is in `Forecast.rows`
+     (`month`, `net`, `cumulative`, `partial`), `opening`, `breakEven`. No projection line while the average loses
+     money (decided 2026-11-22).
+5. **Store view** (`StoreView.tsx`), to match Home.
+6. **Settings** (`src/app/settings/page.tsx`): long forms and tables (bank, vFulfill upload, products, fixed costs,
+   GST, capital & loans). Lowest priority; it works as is.
+
+Open redesign findings 1–8 are in `REDESIGN-REVIEW-FINDINGS.md` (Vedaant chose to skip #8).
 
 ## 0. Don't start until the backend for that tab is done
 
@@ -28,7 +61,7 @@ you design a tab:
   `node "C:/Users/Vedaant Priya/.claude/plugins/cache/openai-codex/codex/1.0.6/scripts/codex-companion.mjs" review --scope working-tree ""`
   from `oorvia-cash-os/`. When it returns, show the output verbatim, then a plain-language breakdown table
   (meaning, new or known, impact, fix and time) and a recommendation.
-- **Commits:** only when he asks. "Commit" means commit and push. Branch `v2`. The whole redesign is still uncommitted.
+- **Commits:** only when he asks. "Commit" means commit and push. Branch `v2`. The Home redesign is committed (`bd8c310`).
 
 ## 2. The look you're carrying over
 
@@ -78,7 +111,8 @@ All four still use the old look: flat `bg-raised` cards and plain `h2` headings.
 |---|---|---|---|
 | Ads | `src/app/ads/page.tsx`, `src/components/AdsParts.tsx` | Stats row, per-store ads table, sortable campaigns table, daily table, month navigation | Real data only (mock shows a placeholder) |
 | Orders | `src/app/orders/page.tsx`, `src/components/OrdersParts.tsx` | Stats row, filterable orders table, delivery-rates table, vFulfill import age | Real data only |
-| Money | `src/app/money/page.tsx`, `CashCard.tsx`, `PnlTable.tsx` | Cash card, a "Coming next" list, monthly P&L table | Real data only. Likely to change most once the backend finishes |
+| Money | `src/app/money/page.tsx`, `CashCard.tsx`, `MoneyParts.tsx`, `PnlTable.tsx` | Cash, Capital & loans, GST, monthly P&L, Forecast | Real data only. Backend finished 2026-11-22 (see "Start here") |
+| Settings | `src/app/settings/page.tsx`, `SettingsForm.tsx` | Forms and tables for everything typed in by hand | Not a tab; reached from Money until the gear exists |
 | Store view | `src/components/StoreView.tsx` (Home with `?store=`) | ROAS semicircle gauge, campaigns, per-store detail | Not redesigned either; it should match Home |
 
 Suggested order once the backend is ready: **Ads → Orders → Money → Store view**. Ads is where Vedaant makes spend
@@ -96,13 +130,16 @@ decisions. Confirm the order with him first.
   for overlap and overflow checks). Scratchpads can be wiped, so rebuild them if they're gone: CDP over Node's
   built-in WebSocket. That Chrome window is visible and Vedaant may be using it, so open your own tab
   (`PUT /json/new`) and close it when done. Never drive his tab.
-- **Checks:** `npx tsc --noEmit && npx eslint src && npx vitest run` (482 tests pass as of this handoff).
+- **Checks:** `npx tsc --noEmit && npx eslint src && npx vitest run` (about 515 tests pass as of 2026-11-22). Run them
+  from `cd "/c/Users/..."` (capital C): from a lowercase `c:` path Vitest loads twice and every suite fails with
+  "reading 'config'".
 
 ## 5. Open items that aren't yours
 
-- vFulfill is now a quarterly fee. Until the backend models it, the VXP breakeven on Home leaves it out (backend note
-  in `HANDOFF-redesign.md`).
-- The VXP fixed-cost run rate only counts `monthly` rows (`pnl.monthlyRunRate`).
+- ~~vFulfill quarterly fee left out of the VXP breakeven~~ Done 2026-11-22: fixed costs have a `quarterly` frequency,
+  the subscription is one (₹42,372.89 ex-GST from 27 Oct), and `monthlyRunRate` counts a third of it a month.
+- The vFulfill shipments export last imported was empty, so delivered/RTO and GST output tax lag until Vedaant imports
+  a real one. Data, not design.
 
 ## 6. Decisions already made (don't reopen them)
 

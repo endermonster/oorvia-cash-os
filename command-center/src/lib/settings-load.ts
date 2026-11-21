@@ -12,7 +12,7 @@ export type SettingsProduct = {
   costs: { cogsPaise: number; effectiveFrom: string }[]
 }
 export type SettingsFixedCost = {
-  id: number; storeId: string | null; name: string; amountPaise: number; frequency: 'monthly' | 'one-time'
+  id: number; storeId: string | null; name: string; amountPaise: number; frequency: 'monthly' | 'quarterly' | 'one-time'
   startDate: string; endDate: string | null; gstInclusive: boolean; rcm: boolean; note: string | null
 }
 export type SettingsRun = { source: string; finishedAt: string; ok: boolean }
@@ -25,7 +25,7 @@ export async function loadSettings() {
       () => sb.from('cc_products').select('store_id, sku, name, price_paise, stage').order('store_id').order('sku')),
     selectAll<{ store_id: string; sku: string; cogs_paise: Num; effective_from: string }>(
       () => sb.from('cc_cogs_history').select('store_id, sku, cogs_paise, effective_from').order('store_id').order('sku').order('effective_from')),
-    selectAll<{ id: Num; store_id: string | null; name: string; amount_paise: Num; frequency: 'monthly' | 'one-time'; start_date: string; end_date: string | null; gst_inclusive: boolean; rcm: boolean; note: string | null }>(
+    selectAll<{ id: Num; store_id: string | null; name: string; amount_paise: Num; frequency: 'monthly' | 'quarterly' | 'one-time'; start_date: string; end_date: string | null; gst_inclusive: boolean; rcm: boolean; note: string | null }>(
       () => sb.from('cc_fixed_costs').select('id, store_id, name, amount_paise, frequency, start_date, end_date, gst_inclusive, rcm, note').order('start_date', { ascending: false }).order('id')),
     sb.from('cc_bank_balances').select('amount_paise, entered_on, note').order('entered_on', { ascending: false }).order('created_at', { ascending: false }).limit(5)
       .then(({ data, error }) => {

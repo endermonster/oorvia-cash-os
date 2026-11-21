@@ -12,7 +12,8 @@
  * New here:
  * - Costs that belong to no one store (vFulfill storage, subscription, inward fees; fixed costs with no store) sit in
  *   the VXP total only, never split across stores (decided 2026-11-20).
- * - A vFulfill Subscription Charge pays for a quarter: it is spread over the 3 months starting with its own.
+ * - vFulfill's quarterly Subscription Charge is a quarterly fixed cost, booked whole in the months it bills (decided
+ *   2026-11-22); its wallet debit is left out of the vFulfill fees so it isn't counted twice.
  * - Lost Claims credits reduce vFulfill fees.
  */
 
@@ -59,7 +60,7 @@ export type FixedCost = {
   storeId: string | null
   name: string
   amountPaise: number
-  frequency: 'monthly' | 'one-time'
+  frequency: 'monthly' | 'quarterly' | 'one-time'
   startDate: string
   /** Inclusive; null runs on. */
   endDate: string | null
@@ -101,11 +102,15 @@ export type PnlResult = {
 const SHARED_VF_HEADS = new Set(['Storage Charges', 'Inward Fees', 'Wallet Recharge Service Fee', 'Subscription Charge'])
 /** Money moving, not a cost: top-ups, withdrawals, stock bought (that reaches the P&L as COGS), COD cash coming in. */
 const NOT_A_COST = new Set(['Add Funds - Wire', 'Add Funds - Razorpay', 'Withdraw Funds', 'Client Sourcing Request', 'COD Remittance'])
-const SUBSCRIPTION = 'Subscription Charge'
-const SUBSCRIPTION_MONTHS = 3
+/** Modelled as a quarterly fixed cost (cc_fixed_costs): the ledger debit stays in the wallet, out of the P&L. */
+const AS_FIXED_COST = new Set(['Subscription Charge'])
 
 export const monthOf = (date: string) => date.slice(0, 7)
 const daysIn = (month: string) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate()
+/** Whole months from `from` to `to` (YYYY-MM); negative when `to` is earlier. */
+export const monthsBetween = (from: string, to: string) =>
+  (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7))
+
 export function addMonths(month: string, n: number): string {
   const d = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + n, 1))
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
@@ -166,11 +171,13 @@ export const billingDate = (month: string, day: number) => `${month}-${String(Ma
 
 /**
  * What a fixed cost charges in one calendar month, ex-GST, booked whole on its billing date (decided 2026-11-20):
- * a monthly cost bills on its start date's day of the month, each month from `startDate` to `endDate`; a one-time
- * cost on its start date. Nothing is charged after `asOf` (today), so a month in progress shows only bills already due.
+ * a monthly cost bills on its start date's day of the month, each month from `startDate` to `endDate`; a quarterly
+ * one the same, every third month from its start month; a one-time cost on its start date. Nothing is charged after
+ * `asOf` (today), so a month in progress shows only bills already due.
  */
 export function fixedInMonth(fc: FixedCost, month: string, asOf?: string): number {
   const amount = fc.gstInclusive ? fc.amountPaise / (1 + GST) : fc.amountPaise
+  if (fc.frequency === 'quarterly' && monthsBetween(monthOf(fc.startDate), month) % 3 !== 0) return 0
   const on = fc.frequency === 'one-time' ? fc.startDate : billingDate(month, Number(fc.startDate.slice(8, 10)))
   if (monthOf(on) !== month || on < fc.startDate) return 0
   if (fc.endDate && on > fc.endDate) return 0
@@ -179,14 +186,15 @@ export function fixedInMonth(fc: FixedCost, month: string, asOf?: string): numbe
 }
 
 /**
- * VXP's recurring fixed costs per month, ex-GST, every store and shared: the monthly costs running on `today`.
- * One-time costs are left out: a run rate, for breakeven, not a bill. Null when no fixed cost is on record at all.
+ * VXP's recurring fixed costs per month, ex-GST, every store and shared: the monthly costs running on `today`, and a
+ * third of each quarterly one. One-time costs are left out: a run rate, for breakeven, not a bill. Null when no fixed
+ * cost is on record at all.
  */
 export function monthlyRunRate(fcs: FixedCost[], today: string): number | null {
   if (fcs.length === 0) return null
   return fcs
-    .filter((fc) => fc.frequency === 'monthly' && fc.startDate <= today && (fc.endDate === null || fc.endDate >= today))
-    .reduce((s, fc) => s + (fc.gstInclusive ? fc.amountPaise / (1 + GST) : fc.amountPaise), 0)
+    .filter((fc) => fc.frequency !== 'one-time' && fc.startDate <= today && (fc.endDate === null || fc.endDate >= today))
+    .reduce((s, fc) => s + (fc.gstInclusive ? fc.amountPaise / (1 + GST) : fc.amountPaise) / (fc.frequency === 'quarterly' ? 3 : 1), 0)
 }
 
 type Acc = Omit<PnlLine, 'netProfit' | 'ownerShare'>
@@ -302,7 +310,7 @@ export function computePnl(input: {
   const unknownHeads = new Map<string, number>()
   let unmatched = 0
   for (const t of txns) {
-    if (NOT_A_COST.has(t.head)) continue
+    if (NOT_A_COST.has(t.head) || AS_FIXED_COST.has(t.head)) continue
     const sign = t.nature === 'debit' ? 1 : t.head === 'Lost Claims' ? -1 : 0
     if (sign === 0) continue // a credit that is not a refund of a cost
     const paise = sign * exGst(t)
@@ -319,17 +327,12 @@ export function computePnl(input: {
       continue
     }
     if (!SHARED_VF_HEADS.has(t.head)) unknownHeads.set(t.head, (unknownHeads.get(t.head) ?? 0) + 1)
-    // Shared: the VXP total only. A subscription is spread over the quarter it pays for: a third on the charge date
-    // and on that day of each of the next two months (27 Oct → 27 Nov, 27 Dec), none counted before it falls due.
-    const spread = t.head === SUBSCRIPTION ? SUBSCRIPTION_MONTHS : 1
-    for (let i = 0; i < spread; i++) {
-      const m = addMonths(monthOf(t.txnDate), i)
-      if (!inRange(m)) continue
-      if (asOf && billingDate(m, Number(t.txnDate.slice(8, 10))) > asOf) continue
-      let rec = sharedVf.get(m)
-      if (!rec) { rec = {}; sharedVf.set(m, rec) }
-      addVf(rec, t.head, paise / spread)
-    }
+    // Shared: the VXP total only, in the month charged.
+    const m = monthOf(t.txnDate)
+    if (!inRange(m)) continue
+    let rec = sharedVf.get(m)
+    if (!rec) { rec = {}; sharedVf.set(m, rec) }
+    addVf(rec, t.head, paise)
   }
   if (unmatched > 0) warnings.push(`${unmatched} vFulfill charge${unmatched === 1 ? '' : 's'} for orders not in Shopify data, booked in the month charged`)
   for (const [head, n] of unknownHeads) warnings.push(`vFulfill head "${head}" (${n}×) is new: counted as a shared cost until it is classified`)

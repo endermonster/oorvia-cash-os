@@ -87,14 +87,14 @@ export async function addFixedCost(_: ActionState, f: FormData): Promise<ActionS
     (v) => `${v.name}: ${rs(v.amount_paise)} ${v.frequency === 'monthly' ? 'a month' : 'once'} from ${v.start_date} saved.`)
 }
 
-/** Stops a monthly cost after a date (its last billing day). History before it stays. */
+/** Stops a monthly or quarterly cost after a date (its last billing day). History before it stays. */
 export async function endFixedCost(_: ActionState, f: FormData): Promise<ActionState> {
   if (!(await allowedUser())) return UNAUTHORIZED
   const parsed = parseEnd(f)
   if (parsed.ok) {
     const { data } = await supabase().from('cc_fixed_costs').select('start_date, frequency').eq('id', parsed.value.id).maybeSingle()
     if (!data) return { ok: false, message: 'That cost no longer exists. Reload the page.' }
-    if (data.frequency !== 'monthly') return { ok: false, message: 'Only a monthly cost has an end date.' }
+    if (data.frequency === 'one-time') return { ok: false, message: 'A one-time cost has no end date.' }
     if (parsed.value.end_date < data.start_date) return { ok: false, message: `End date is before the start date (${data.start_date}).` }
   }
   return write('end date', parsed,

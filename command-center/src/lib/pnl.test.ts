@@ -170,12 +170,15 @@ describe('computePnl: vFulfill ledger', () => {
     expect(may.vxp.netProfit).toBe(-700)
   })
 
-  it('spreads a subscription over the quarter starting with its month', () => {
+  it('leaves the subscription debit out: it is a quarterly fixed cost, billed whole every third month', () => {
+    const sub: FixedCost = { storeId: null, name: 'vFulfill subscription', amountPaise: 4_237_289, frequency: 'quarterly', startDate: '2026-10-27', endDate: null, gstInclusive: false }
     const r = computePnl({
-      stores, orders: [], spend: [], fixed: [], fromMonth: '2026-10', toMonth: '2027-01',
-      txns: [txn({ storeId: null, orderName: null, head: 'Subscription Charge', txnDate: '2026-10-27', taxablePaise: 5_000_000 })],
+      stores, orders: [], spend: [], fixed: [sub], fromMonth: '2026-10', toMonth: '2027-02',
+      txns: [txn({ storeId: null, orderName: null, head: 'Subscription Charge', txnDate: '2026-10-27', taxablePaise: 4_237_289 })],
     })
-    expect(r.months.map((m) => m.vxp.vfFees)).toEqual([1_666_667, 1_666_667, 1_666_667, 0])
+    expect(r.months.map((m) => m.vxp.vfFees)).toEqual([0, 0, 0, 0, 0])
+    expect(r.months.map((m) => m.vxp.fixedCosts)).toEqual([4_237_289, 0, 0, 4_237_289, 0])
+    expect(r.warnings.join()).not.toMatch(/Subscription/)
   })
 
   it('a charge for an order not in Shopify data counts in the month charged, with a warning', () => {
@@ -263,11 +266,12 @@ describe('computePnl: spend, fixed costs, totals', () => {
     expect(r.months[0].stores.oorvia.fixedCosts).toBe(199_400)
   })
 
-  it('each subscription third lands on its monthly date, and not before', () => {
-    const sub = txn({ storeId: null, orderName: null, head: 'Subscription Charge', txnDate: '2026-10-27', taxablePaise: 3_000_000 })
-    const run3 = (asOf: string) => computePnl({ stores, orders: [], spend: [], fixed: [], txns: [sub], fromMonth: '2026-10', toMonth: '2026-12', asOf })
-    expect(run3('2026-11-20').months.map((m) => m.vxp.vfFees)).toEqual([1_000_000, 0, 0])
-    expect(run3('2026-11-27').months.map((m) => m.vxp.vfFees)).toEqual([1_000_000, 1_000_000, 0])
+  it('a quarterly cost bills every third month on its day, not before it falls due, and runs at a third a month', () => {
+    const fc: FixedCost = { storeId: null, name: 'vFulfill subscription', amountPaise: 3_000_000, frequency: 'quarterly', startDate: '2026-10-27', endDate: '2027-04-26', gstInclusive: false }
+    expect(['2026-09', '2026-10', '2026-11', '2026-12', '2027-01', '2027-04', '2027-07'].map((m) => fixedInMonth(fc, m))).toEqual([0, 3_000_000, 0, 0, 3_000_000, 0, 0])
+    expect(fixedInMonth(fc, '2027-01', '2027-01-26')).toBe(0)
+    expect(monthlyRunRate([fc, { ...fc, frequency: 'monthly', amountPaise: 100 }], '2026-11-22')).toBe(1_000_100)
+    expect(monthlyRunRate([fc], '2027-05-01')).toBe(0) // ended
   })
 
   it('net profit adds up from the rounded lines, and the owner share is half', () => {

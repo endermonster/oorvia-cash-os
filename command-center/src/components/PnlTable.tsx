@@ -81,7 +81,7 @@ export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResu
       {!store && months.some((m) => Object.keys(m.shared.vfByHead).length + Object.keys(m.shared.fixed).length > 0) ? (
         <p className="mt-3 text-xs text-ink-3">
           Shared costs this month: {breakdown({ ...months[0].shared.vfByHead, ...months[0].shared.fixed }).replaceAll('\n', ' · ') || 'none'}. The quarterly
-          vFulfill subscription is spread over its 3 months.
+          vFulfill subscription counts in full in the month it bills, nothing in the two between.
         </p>
       ) : null}
       {pnl.warnings.length > 0 ? (

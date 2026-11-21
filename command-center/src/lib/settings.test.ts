@@ -61,6 +61,11 @@ describe('parseFixedCost', () => {
     expect(parseFixedCost(form({ ...base, amount: '0' }), STORES).ok).toBe(false)
     expect(parseFixedCost(form({ ...base, end: '2027-03-06' }), STORES)).toEqual({ ok: false, error: 'End date is before the start date' })
   })
+  it('a quarterly cost keeps its end date', () => {
+    const r = parseFixedCost(form({ ...base, frequency: 'quarterly', end: '2027-12-06' }), STORES)
+    expect(r.ok && [r.value.frequency, r.value.end_date]).toEqual(['quarterly', '2027-12-06'])
+    expect(parseFixedCost(form({ ...base, frequency: 'yearly' }), STORES).ok).toBe(false)
+  })
   it('flags a foreign bill as RCM, never with GST inside it', () => {
     const r = parseFixedCost(form({ ...base, store: '', rcm: 'on' }), STORES)
     expect(r.ok && r.value.rcm).toBe(true)

@@ -68,7 +68,7 @@ export function parseStage(f: { get(k: string): Field }, products: { storeId: st
 }
 
 export type FixedCostInput = {
-  store_id: string | null; name: string; amount_paise: number; frequency: 'monthly' | 'one-time'
+  store_id: string | null; name: string; amount_paise: number; frequency: 'monthly' | 'quarterly' | 'one-time'
   start_date: string; end_date: string | null; gst_inclusive: boolean
   /** Billed from abroad (Shopify, Claude, ChatGPT): 18% RCM on it, paid in cash. */
   rcm: boolean; note: string | null
@@ -81,7 +81,7 @@ export function parseFixedCost(f: { get(k: string): Field }, storeIds: string[])
   const amount = rupeesToPaise(f.get('amount'))
   if (amount === null || amount === 0) return fail('Amount must be rupees above zero')
   const frequency = text(f.get('frequency'))
-  if (frequency !== 'monthly' && frequency !== 'one-time') return fail('Pick monthly or one-time')
+  if (frequency !== 'monthly' && frequency !== 'quarterly' && frequency !== 'one-time') return fail('Pick monthly, quarterly or one-time')
   const start = isoDate(f.get('start'))
   if (!start) return fail('Start date must be a real date')
   const endRaw = text(f.get('end'))
@@ -100,7 +100,7 @@ export function parseFixedCost(f: { get(k: string): Field }, storeIds: string[])
   }
 }
 
-/** Ending a monthly cost: the last day it still bills. */
+/** Ending a monthly or quarterly cost: the last day it still bills. */
 export function parseEnd(f: { get(k: string): Field }): Parsed<{ id: number; end_date: string }> {
   const id = Number(text(f.get('id')))
   if (!Number.isSafeInteger(id) || id <= 0) return fail('Unknown cost')

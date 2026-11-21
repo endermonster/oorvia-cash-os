@@ -108,7 +108,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <div className="space-y-4">{s.products.map((p) => <ProductCard key={`${p.storeId}:${p.sku}`} p={p} today={today} storeName={storeName} />)}</div>
             </Section>
 
-            <Section id="fixed-h" title="Fixed costs" note="Monthly costs bill on their start date's day each month until the end date; one-time costs land on their date. A store's costs count in that store's P&L; shared ones (no store) in All VXP only. End a cost that stopped; delete only one entered by mistake.">
+            <Section id="fixed-h" title="Fixed costs" note="Monthly costs bill on their start date's day each month until the end date, quarterly ones every third month from their start; one-time costs land on their date. A store's costs count in that store's P&L; shared ones (no store) in All VXP only. End a cost that stopped; delete only one entered by mistake.">
               {s.fixedCosts.length === 0 ? <p className="text-ink-3">No fixed costs yet.</p> : (
                 <div className="overflow-x-auto rounded-xl bg-raised">
                   <table className="w-full min-w-[980px] text-left text-sm tabular-nums">
@@ -125,12 +125,12 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                             <th scope="row" className="px-4 py-3 font-semibold text-ink">{f.name}{f.note ? <span className="block text-xs font-normal text-ink-3">{f.note}</span> : null}</th>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
                             <td className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
-                            <td className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : 'One-time'}</td>
+                            <td className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : f.frequency === 'quarterly' ? 'Every 3 months' : 'One-time'}</td>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
                             <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap items-start gap-3">
-                                {f.frequency === 'monthly' ? (
+                                {f.frequency !== 'one-time' ? (
                                   <SettingsForm action={endFixedCost} submit={f.endDate ? 'Change end' : 'End'} tone="quiet" className="flex flex-wrap items-center gap-2">
                                     <input type="hidden" name="id" value={f.id} />
                                     <input name="end" type="date" required aria-label={`Last billing day of ${f.name}`} defaultValue={f.endDate ?? today} min={f.startDate} className={`${inputCls} py-1.5`} />
@@ -166,11 +166,12 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                 <label className={labelCls}>Billing
                   <select name="frequency" defaultValue="monthly" className={inputCls}>
                     <option value="monthly">Monthly</option>
+                    <option value="quarterly">Every 3 months</option>
                     <option value="one-time">One-time</option>
                   </select>
                 </label>
                 <label className={labelCls}>From<input name="start" type="date" required defaultValue={today} className={inputCls} /></label>
-                <label className={labelCls}>Until (monthly, optional)<input name="end" type="date" className={inputCls} /></label>
+                <label className={labelCls}>Until (optional)<input name="end" type="date" className={inputCls} /></label>
                 <label className={labelCls}>Note<input name="note" maxLength={200} placeholder="optional" className={`${inputCls} w-48`} /></label>
               </SettingsForm>
             </Section>
