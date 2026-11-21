@@ -79,7 +79,7 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
     {
       label: 'Bank',
       value: c.bank ? inr(c.bank.amount) : <span className="text-ink-3">Not entered</span>,
-      note: c.bank ? `Entered ${day(c.bank.enteredAt)}` : 'Run scripts/bank-balance.ts --amount <rupees>',
+      note: c.bank ? `Entered ${day(c.bank.enteredAt)}` : 'Not entered yet: add it on Settings (link above)',
     },
     {
       label: 'vFulfill wallet',

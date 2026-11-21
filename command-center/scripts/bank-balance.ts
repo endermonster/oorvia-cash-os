@@ -1,4 +1,4 @@
-// Records the bank balance by hand (until the Money tab gets a form, after the login gate).
+// Records the bank balance by hand. The same entry can be made on /settings.
 // Run: NODE_OPTIONS=--conditions=react-server npx tsx --env-file=.env.local scripts/bank-balance.ts \
 //        [--amount <rupees>] [--date YYYY-MM-DD] [--note <text>]
 // With no --amount, prints the latest entry and changes nothing. --date defaults to today (IST).

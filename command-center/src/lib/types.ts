@@ -118,7 +118,7 @@ export type RecentOrder = {
 
 export type CashPosition = {
   asOf: string
-  /** Typed in by hand (scripts/bank-balance.ts); null until first entered. */
+  /** Typed in by hand on /settings (or scripts/bank-balance.ts); null until first entered. */
   bank: { amount: number; enteredAt: string } | null
   /**
    * Gateway money captured, not yet settled, net of fee + GST: an **estimate** from Shopify prepaid orders and T+2

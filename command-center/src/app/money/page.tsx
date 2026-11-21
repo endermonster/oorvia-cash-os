@@ -1,3 +1,5 @@
+import { Settings } from 'lucide-react'
+import Link from 'next/link'
 import { Suspense } from 'react'
 import { CashCard } from '@/components/CashCard'
 import { PnlTable } from '@/components/PnlTable'
@@ -45,7 +47,11 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
     <>
       <TopBar tab="money" view={view} d={d} />
       <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
-        <h1 className="text-3xl font-extrabold tracking-tight text-ink">Money</h1>
+        <div className="flex flex-wrap items-baseline justify-between gap-4">
+          <h1 className="text-3xl font-extrabold tracking-tight text-ink">Money</h1>
+          {/* Until the top bar has its gear icon. */}
+          <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink"><Settings className="size-4" aria-hidden />Settings: bank, vFulfill, costs</Link>
+        </div>
         <div className="mt-8 grid gap-10 lg:grid-cols-12">
           <div className="lg:col-span-6"><CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} /></div>
           <div className="lg:col-span-6">
