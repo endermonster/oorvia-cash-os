@@ -63,7 +63,7 @@ export function AdsVerdict({ t, be, single, rows, range, period, scope, months, 
       <div className="min-w-0 lg:self-center">
         <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(rows, t.spendPaise, range, allDisconnected, notConnected.length > 0)}</h1>
         <p className={`mt-1 ${note}`}>Campaign ROAS counts tracked orders only ({t.trackedOrders} of {t.orders}).</p>
-        {notConnected.length > 0 && <p className="mt-1 flex items-start gap-2 text-sm text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />Meta not connected yet: {notConnected.join(', ')}.</p>}
+        {notConnected.length > 0 && <p className="mt-1 flex items-start gap-2 text-sm text-warn"><span className="flex h-lh shrink-0 items-center"><AlertTriangle className="size-4" aria-hidden /></span>Meta not connected yet: {notConnected.join(', ')}.</p>}
       </div>
       <div className={heroCell}>
         <p className="label">Spend · {period} · Meta</p>
@@ -111,12 +111,12 @@ export function AdsStatsRow({ t, be, single, period }: { t: Totals; be: Breakeve
   )
 }
 
-const row = 'grid-cols-2 gap-x-4 gap-y-3 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 @min-[50rem]:content-center @min-[50rem]:items-baseline @min-[50rem]:gap-y-0'
-const storeGrid = `${row} @min-[50rem]:grid-cols-[minmax(6.75rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.75rem,0.9fr)_minmax(9.5rem,1.9fr)_minmax(6.75rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] @min-[60rem]:grid-cols-[minmax(7.5rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.5rem,0.9fr)_minmax(10.5rem,1.9fr)_minmax(5rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"rev_cpa"] @min-[50rem]:[grid-template-areas:"name_spend_orders_roas_rev_cpa_call"]`
-const campaignGrid = `${row} @min-[50rem]:grid-cols-[minmax(12rem,2.4fr)_minmax(5.5rem,1fr)_minmax(3.5rem,0.6fr)_minmax(6rem,1fr)_minmax(11rem,2fr)_5.75rem] @min-[72rem]:grid-cols-[minmax(14rem,2.4fr)_minmax(5.5rem,1fr)_minmax(3.5rem,0.6fr)_minmax(6rem,1fr)_minmax(11rem,2fr)_4.5rem_5rem_4.5rem_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"cpa_cpa"_"meta_meta"] @min-[50rem]:[grid-template-areas:"name_spend_orders_cpa_roas_call"] @min-[72rem]:[grid-template-areas:"name_spend_orders_cpa_roas_purch_cpm_ctr_call"]`
+const row = 'gap-x-4 gap-y-3 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 @min-[50rem]:content-center @min-[50rem]:items-baseline @min-[50rem]:gap-y-0'
+const storeGrid = `${row} grid-cols-2 @min-[50rem]:grid-cols-[minmax(6.75rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.75rem,0.9fr)_minmax(9.5rem,1.9fr)_minmax(6.75rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] @min-[60rem]:grid-cols-[minmax(7.5rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.5rem,0.9fr)_minmax(10.5rem,1.9fr)_minmax(5rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"rev_cpa"] @min-[50rem]:[grid-template-areas:"name_spend_orders_roas_rev_cpa_call"]`
+const campaignGrid = `${row} grid-cols-[minmax(0,1fr)_minmax(0,1fr)_5.25rem] @min-[50rem]:grid-cols-[minmax(12rem,2.4fr)_minmax(5.5rem,1fr)_minmax(6rem,0.6fr)_minmax(6rem,1fr)_minmax(11rem,2fr)_5.75rem] @min-[72rem]:grid-cols-[minmax(14rem,2.4fr)_minmax(5.5rem,1fr)_minmax(6rem,0.6fr)_minmax(6rem,1fr)_minmax(11rem,2fr)_4.5rem_5rem_4.5rem_5.75rem] [grid-template-areas:"name_name_call"_"roas_roas_roas"_"spend_orders_orders"_"cpa_cpa_cpa"_"meta_meta_meta"] @min-[50rem]:[grid-template-areas:"name_spend_orders_cpa_roas_call"] @min-[72rem]:[grid-template-areas:"name_spend_orders_cpa_roas_purch_cpm_ctr_call"]`
 const headRow = 'hidden px-3 pb-2 pt-2 @min-[50rem]:grid'
 const glassRow = 'glass-row grid px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2'
-const callCell = 'flex justify-end [grid-area:call] @min-[50rem]:justify-center'
+const callCell = 'flex justify-end self-start [grid-area:call] @min-[50rem]:self-auto @min-[50rem]:justify-center'
 
 function Head({ area, label, detail, sort, className = '' }: {
   area: string; label: string; detail?: string; sort?: 'ascending' | 'descending'; className?: string
@@ -133,11 +133,11 @@ function MobileLabel({ children }: { children: string }) {
   return <span className={`${note} @min-[50rem]:hidden`}>{children} </span>
 }
 
-function Cell({ area, label, value, detail }: { area: string; label: string; value: string; detail?: string }) {
+function Cell({ area, label, value, detail, money = false }: { area: string; label: string; value: string; detail?: string; money?: boolean }) {
   return (
-    <div role="cell" className="min-w-0" style={{ gridArea: area }}>
+    <div role="cell" className={`min-w-0${money ? ' text-right tabular-nums' : ''}`} style={{ gridArea: area }}>
       <MobileLabel>{label}</MobileLabel>
-      <p className={figure}>{value}</p>
+      <p className={`${figure}${money ? ' whitespace-nowrap' : ''}`}>{value}</p>
       {detail && <p className={note}>{detail}</p>}
     </div>
   )
@@ -160,7 +160,7 @@ function CallChip({ roas, be, zone, unmatched = false, noSpend = 'No spend' }: {
     : be === null ? ['Add cost', warning]
     : !breaksEven(be) ? calls.below
     : calls[zone ?? 'covering']
-  return <span className={`inline-block min-w-[5.25rem] whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${cls}`}>{word}</span>
+  return <span className={`inline-flex h-8 w-[5.25rem] items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold ring-1 ${cls}`}>{word}</span>
 }
 
 export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; storeName: (id: string) => string; period: string }) {
@@ -170,11 +170,11 @@ export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; s
       <div role="table" aria-labelledby="ads-stores" className="@container">
         <div role="row" className={`${storeGrid} ${headRow}`}>
           <Head area="name" label="Store" />
-          <Head area="spend" label="Spend" detail={`${period} · Meta`} />
+          <Head area="spend" label="Spend" detail={`${period} · Meta`} className="text-right" />
           <Head area="orders" label="Orders" detail={`${period} · Shopify`} />
           <Head area="roas" label="ROAS vs breakeven" detail={`${period} · Meta + Shopify`} />
-          <Head area="rev" label="Revenue" detail={`${period} · Shopify`} />
-          <Head area="cpa" label="CPA" detail={`${period} · All orders`} />
+          <Head area="rev" label="Revenue" detail={`${period} · Shopify`} className="text-right" />
+          <Head area="cpa" label="CPA" detail={`${period} · All orders`} className="text-right" />
           <Head area="call" label="Call" className="text-center" />
         </div>
         <div role="rowgroup" className="space-y-1.5">
@@ -182,8 +182,8 @@ export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; s
             const idle = s.spendPaise === 0 && s.orders === 0
             return (
               <div role="row" key={s.storeId} className={`${glassRow} ${storeGrid}${idle ? ' text-ink-3' : ''}`}>
-                <div role="rowheader" className="flex items-center gap-2.5 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] [grid-area:name]"><StoreDot id={s.storeId} size={9} />{storeName(s.storeId)}</div>
-                <Cell area="spend" label="Spend" value={rs(s.spendPaise)} />
+                <div role="rowheader" className="flex items-center gap-2 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] [grid-area:name]"><StoreDot id={s.storeId} />{storeName(s.storeId)}</div>
+                <Cell money area="spend" label="Spend" value={rs(s.spendPaise)} />
                 <Cell area="orders" label="Orders" value={String(s.orders)} detail={s.orders === 0 ? undefined : `${pct(s.trackedOrders / s.orders)} tracked`} />
                 <div role="cell" className="[grid-area:roas]">
                   <MobileLabel>ROAS vs breakeven</MobileLabel>
@@ -191,8 +191,8 @@ export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; s
                   {!idle && s.roas === null && s.be && breaksEven(s.be) &&
                     <p className={note}>BE {fmtX(s.be.breakevenRoas)} · Target {fmtX(s.be.targetRoas)}</p>}
                 </div>
-                <Cell area="rev" label="Revenue" value={rs(s.revenuePaise)} />
-                <Cell area="cpa" label="CPA" value={s.cpa === null ? '—' : inr(s.cpa)} />
+                <Cell money area="rev" label="Revenue" value={rs(s.revenuePaise)} />
+                <Cell money area="cpa" label="CPA" value={s.cpa === null ? '—' : inr(s.cpa)} />
                 <div role="cell" className={callCell}><CallChip roas={s.roas} be={s.be} zone={s.zone} noSpend="No ads" /></div>
               </div>
             )
@@ -221,12 +221,12 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
         <div role="table" aria-labelledby="ads-campaigns" className="@container mt-3">
           <div role="row" className={`${campaignGrid} ${headRow}`}>
             <Head area="name" label="Campaign" />
-            <Head area="spend" label="Spend" detail={`${period} · Meta`} sort={direction('spend')} />
+            <Head area="spend" label="Spend" detail={`${period} · Meta`} className="text-right" sort={direction('spend')} />
             <Head area="orders" label="Orders" detail="Tracked · Shopify" sort={direction('orders')} />
-            <Head area="cpa" label="CPA" detail="Tracked" sort={direction('cpa')} />
+            <Head area="cpa" label="CPA" detail="Tracked" className="text-right" sort={direction('cpa')} />
             <Head area="roas" label="ROAS vs breakeven" detail={`${period} · Tracked`} sort={direction('roas')} />
             <Head area="purch" label="Purch." detail={`${period} · Meta`} className="hidden @min-[72rem]:block" />
-            <Head area="cpm" label="CPM" detail={`${period} · Meta`} className="hidden @min-[72rem]:block" />
+            <Head area="cpm" label="CPM" detail={`${period} · Meta`} className="hidden text-right @min-[72rem]:block" />
             <Head area="ctr" label="CTR" detail={`${period} · Meta`} className="hidden @min-[72rem]:block" />
             <Head area="call" label="Call" className="text-center" />
           </div>
@@ -239,7 +239,7 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
                 {showStore ? `${storeName(c.storeId)} · ` : ''}
                 {c.sku ?? <span className="text-warn">URL matches no product</span>}
                 {c.status ? ` · ${c.status.toLowerCase()}` : ''}
-                {c.url && <> · <a href={c.url} target="_blank" rel="noreferrer" className="inline-flex items-center text-ink-2 hover:text-ink">Ads Manager<ArrowUpRight className="size-3" aria-hidden /></a></>}
+                {c.url && <> · <a href={c.url} target="_blank" rel="noreferrer" className="inline-flex min-h-9 items-center gap-1 text-ink-2 hover:text-ink sm:min-h-0">Ads Manager<ArrowUpRight className="size-3.5 shrink-0" aria-hidden /></a></>}
               </>
               const secondary = `${purchases} Meta purch. · CPM ${cpm} · CTR ${ctr}`
               const breakevenCpa = c.be && breaksEven(c.be) ? inr(c.be.breakevenCpa) : null
@@ -247,19 +247,19 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
                 <div role="row" key={c.id} className={`${glassRow} ${campaignGrid}`}>
                   <div role="rowheader" className="min-w-0 [grid-area:name]">
                     <div className="flex items-start gap-2 font-semibold leading-tight @min-[50rem]:text-[1.35rem]">
-                      <span className="mt-1.5 shrink-0"><StoreDot id={c.storeId} /></span>
-                      <span className="line-clamp-2 [overflow-wrap:anywhere]" title={c.name}>{c.name}</span>
+                      <span className="flex h-lh shrink-0 items-center"><StoreDot id={c.storeId} /></span>
+                      <span className="[overflow-wrap:anywhere] @min-[50rem]:line-clamp-2" title={c.name}>{c.name}</span>
                     </div>
                     <p className={`hidden [overflow-wrap:anywhere] @min-[50rem]:block ${note}`}>{metadata}</p>
                     <p className={`hidden @min-[50rem]:block @min-[72rem]:hidden ${note}`}>{secondary}</p>
                   </div>
-                  <Cell area="spend" label="Spend" value={rs(c.spendPaise)} />
+                  <Cell money area="spend" label="Spend" value={rs(c.spendPaise)} />
                   <Cell area="orders" label="Orders" value={String(c.orders)} />
-                  <div role="cell" className="grid grid-cols-2 items-end gap-x-4 [grid-area:cpa] @min-[50rem]:block">
+                  <div role="cell" className="grid grid-cols-2 items-end gap-x-4 text-right tabular-nums [grid-area:cpa] @min-[50rem]:block">
                     <div>
                       <MobileLabel>CPA</MobileLabel>
                       {/* The unit breakeven assumes one unit per order, so CPA takes its tone from the ROAS verdict. */}
-                      <p className={`${figure} ${c.zone === 'below' ? ZONE.below.tone : ''}`}>{c.cpa === null ? '—' : inr(c.cpa)}</p>
+                      <p className={`${figure} whitespace-nowrap ${c.zone === 'below' ? ZONE.below.tone : ''}`}>{c.cpa === null ? '—' : inr(c.cpa)}</p>
                     </div>
                     {breakevenCpa && <p className={note} title="Breakeven cost per order for a one-unit order">BE {breakevenCpa} / unit</p>}
                   </div>
@@ -274,7 +274,7 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
                     <p>{secondary}</p>
                   </div>
                   <div role="cell" className="hidden text-ink-2 [grid-area:purch] @min-[72rem]:block">{purchases}</div>
-                  <div role="cell" className="hidden text-ink-2 [grid-area:cpm] @min-[72rem]:block">{cpm}</div>
+                  <div role="cell" className="hidden whitespace-nowrap text-right text-ink-2 tabular-nums [grid-area:cpm] @min-[72rem]:block">{cpm}</div>
                   <div role="cell" className="hidden text-ink-2 [grid-area:ctr] @min-[72rem]:block">{ctr}</div>
                   <div role="cell" className={callCell}><CallChip roas={c.roas} be={c.be} zone={c.zone} unmatched={c.sku === null} /></div>
                 </div>
@@ -287,13 +287,14 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
   )
 }
 
-const dailyGrid = 'grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 items-baseline @min-[60rem]:grid-cols-[minmax(7rem,1fr)_minmax(11rem,1.6fr)_repeat(6,minmax(4.5rem,1fr))]'
+const dailyGrid = 'grid-cols-[minmax(0,1fr)_minmax(9rem,40%)] gap-x-4 gap-y-1 items-baseline @min-[60rem]:grid-cols-[minmax(7rem,1fr)_minmax(11rem,1.6fr)_repeat(6,minmax(4.5rem,1fr))]'
 
 export function DailyTable({ rows, range, period }: { rows: AdsDay[]; range: string; period: string }) {
   const max = Math.max(1, ...rows.map((r) => r.spendPaise))
   return (
     <section aria-labelledby="ads-daily" className="glass p-2">
-      <h2 id="ads-daily" className="px-3 pt-2 text-lg font-bold">Daily spend <span className="text-sm font-medium text-ink-3">{range} · Meta + Shopify</span></h2>
+      <h2 id="ads-daily" className="px-3 pt-2 text-lg font-bold">Daily spend</h2>
+      <p className="mt-3 px-3 text-sm text-ink-3">{range} · <span className="whitespace-nowrap">Meta + Shopify</span></p>
       <div role="table" aria-labelledby="ads-daily" className="@container mt-3">
         <div role="row" className={`hidden px-3 pb-2 @min-[60rem]:grid ${dailyGrid}`}>
           {[
@@ -305,7 +306,7 @@ export function DailyTable({ rows, range, period }: { rows: AdsDay[]; range: str
             ['Impressions', 'Meta'],
             ['Link clicks', 'Meta'],
             ['Meta purch.', 'Meta'],
-          ].map(([label, from]) => <div role="columnheader" key={label} className="label leading-tight">{label}{from && <span className={source}>{period} · {from}</span>}</div>)}
+          ].map(([label, from]) => <div role="columnheader" key={label} className={`label leading-tight${label === 'Spend' || label === 'Revenue' ? ' text-right' : ''}`}>{label}{from && <span className={source}>{period} · {from}</span>}</div>)}
         </div>
         <div role="rowgroup" className="divide-y divide-line">
           {rows.map((r) => {
@@ -313,17 +314,17 @@ export function DailyTable({ rows, range, period }: { rows: AdsDay[]; range: str
             return (
               <div role="row" key={r.date} className={`grid px-3 py-2.5 text-sm font-semibold ${dailyGrid} ${r.spendPaise === 0 ? 'text-ink-3' : 'text-ink-2'}`}>
                 <div role="rowheader">{dayLabel(r.date)}</div>
-                <div role="cell" className="inline-flex items-center gap-2">
+                <div role="cell" className="grid grid-cols-[3rem_minmax(0,1fr)] items-baseline gap-2 @min-[60rem]:grid-cols-[5rem_minmax(0,1fr)]">
                   <span className="sr-only @min-[60rem]:hidden">Spend </span>
-                  <span aria-hidden className="h-1.5 w-12 overflow-hidden rounded-full bg-line @min-[60rem]:w-20">
+                  <span aria-hidden className="h-1.5 self-center overflow-hidden rounded-full bg-line">
                     <span className="block h-full rounded-full bg-spend" style={{ width: `${(r.spendPaise / max) * 100}%` }} />
                   </span>
-                  {rs(r.spendPaise)}
+                  <span className="whitespace-nowrap text-right tabular-nums">{rs(r.spendPaise)}</span>
                 </div>
                 <div role="cell" className={`col-span-2 font-normal @min-[60rem]:hidden ${note}`}>{r.orders} orders · {r.trackedOrders} tracked · {rs(r.revenuePaise)} revenue · {roas} ROAS</div>
                 <div role="cell" className="col-span-2 text-xs font-normal text-ink-2 @min-[60rem]:hidden">{n(r.impressions)} impressions · {n(r.clicks)} link clicks · {n(r.metaPurchases)} Meta {r.metaPurchases === 1 ? 'purchase' : 'purchases'}</div>
                 <div role="cell" className="hidden @min-[60rem]:block">{r.orders}<p className={note}>{r.trackedOrders} tracked</p></div>
-                <div role="cell" className="hidden @min-[60rem]:block">{rs(r.revenuePaise)}</div>
+                <div role="cell" className="hidden whitespace-nowrap text-right tabular-nums @min-[60rem]:block">{rs(r.revenuePaise)}</div>
                 <div role="cell" className="hidden @min-[60rem]:block">{roas}</div>
                 <div role="cell" className="hidden @min-[60rem]:block">{n(r.impressions)}</div>
                 <div role="cell" className="hidden @min-[60rem]:block">{n(r.clicks)}</div>

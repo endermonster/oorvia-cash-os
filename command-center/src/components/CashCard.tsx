@@ -34,19 +34,20 @@ const settlementRow = (s: Cash['settlements'], total: number): Row => ({
 
 function Rows({ rows }: { rows: Row[] }) {
   return (
-    <dl className="mt-5 space-y-1.5">
+    <dl className="mt-3 space-y-1.5">
       {rows.map((r) => (
-        <div key={r.label} className="glass-row flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-3 py-3">
-          <dt className="min-w-0 flex-1 basis-56 font-semibold text-ink">{r.label}<span className="mt-0.5 block text-xs font-normal text-ink-3">{r.note}</span></dt>
-          <dd className="text-[1.3rem] font-bold tabular-nums text-ink">{r.value}</dd>
+        <div key={r.label} className="glass-row grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-4 px-3 py-3">
+          <dt className="font-semibold text-ink">{r.label}</dt>
+          <dd className="text-right text-[1.3rem] font-bold tabular-nums whitespace-nowrap text-ink">{r.value}</dd>
+          <dd className="col-span-2 mt-0.5 text-xs text-ink-3">{r.note}</dd>
         </div>
       ))}
     </dl>
   )
 }
 
-const PANEL = 'glass rise p-5'
-const HERO = 'mt-3 text-[2.1rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-ink'
+const PANEL = 'glass rise p-2'
+const HERO = 'mt-3 px-3 text-[2.1rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-ink'
 
 /**
  * Money's cash card: the total, how many days of ad spend it covers, and each part with where it comes from.
@@ -57,8 +58,8 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
   if (!c) {
     return (
       <section aria-labelledby="cash-h" className={PANEL}>
-        <h2 id="cash-h" className="text-lg font-bold">Cash</h2>
-        <p className="mt-3 text-ink-2">No cash source yet: import vFulfill transactions or enter a bank balance.</p>
+        <h2 id="cash-h" className="px-3 pt-2 text-lg font-bold">Cash</h2>
+        <p className="mt-3 px-3 pb-2 text-ink-2">No cash source yet: import vFulfill transactions or enter a bank balance.</p>
       </section>
     )
   }
@@ -66,15 +67,16 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
     const s = storeCash(c, store.id)
     return (
       <section aria-labelledby="cash-h" className={PANEL}>
-        <h2 id="cash-h" className="text-lg font-bold">Cash · {store.name}</h2>
+        <h2 id="cash-h" className="px-3 pt-2 text-lg font-bold">Cash · {store.name}</h2>
         <p className={HERO}>{inr(s.total)}</p>
-        <p className="mt-2 max-w-[75ch] text-sm text-ink-2">
+        <p className="mt-2 max-w-[75ch] px-3 text-sm text-ink-2">
           {store.name}&apos;s money on its way in: COD vFulfill owes and gateway settlements.
           {s.settlements ? null : <> Without gateway settlements.</>}{' '}
           Bank{s.shared.bank ? ` (${inr(s.shared.bank.amount)})` : ''} and the vFulfill wallet ({rupees(s.shared.vfulfillWallet)}) serve all
           stores, so they count in All VXP only.
         </p>
         <Rows rows={[codRow(s.codDue, s.codDueOrders), settlementRow(s.settlements, s.settlementsTotal)]} />
+        <div className="pb-2" />
       </section>
     )
   }
@@ -94,15 +96,16 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
   ]
   return (
     <section aria-labelledby="cash-h" className={PANEL}>
-      <h2 id="cash-h" className="text-lg font-bold">Cash</h2>
+      <h2 id="cash-h" className="px-3 pt-2 text-lg font-bold">Cash</h2>
       <p className={HERO}>{inr(c.total)}</p>
-      <p className="mt-2 max-w-[75ch] text-sm text-ink-2">
+      <p className="mt-2 max-w-[75ch] px-3 text-sm text-ink-2">
         {c.missing.length > 0 ? <>Without {c.missing.join(' and ')}. </> : null}
         {c.bank && c.coversDays !== null
           ? <>Covers {Math.floor(c.coversDays)} days of ad spend at {inr(c.dailySpend)} a day (last 7 days).</>
           : c.bank ? <>No ad spend in the last 7 days.</> : <>Days of spend it covers shows once a bank balance is entered.</>}
       </p>
       <Rows rows={rows} />
+      <div className="pb-2" />
     </section>
   )
 }

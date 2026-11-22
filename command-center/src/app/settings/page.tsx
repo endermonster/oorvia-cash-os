@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { Suspense } from 'react'
 import { SettingsForm } from '@/components/SettingsForm'
 import { Skeleton } from '@/components/Skeleton'
@@ -34,7 +35,7 @@ const when = (iso: string) => new Date(iso).toLocaleString('en-IN', { day: 'nume
 /** To the paisa, for tax figures. */
 const exact = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
-const th = 'label px-4 py-3 font-normal whitespace-nowrap'
+const th = 'label px-3 py-3 font-normal whitespace-nowrap'
 // Here, not in SettingsForm: a value exported from a 'use client' file reaches a server component as a client reference, not a string.
 const inputCls = 'glass-pill h-10 max-w-full border border-line-strong px-3 text-sm text-ink focus:outline-2 focus:outline-sodium'
 const labelCls = 'flex flex-col gap-1 text-sm text-ink-2'
@@ -43,9 +44,21 @@ function Section({ id, title, note, children }: { id: string; title: string; not
   return (
     <section aria-labelledby={id} className="glass @container scroll-mt-4 px-5 py-5">
       <h2 id={id} className="text-lg font-bold tracking-tight text-ink">{title}</h2>
-      {note ? <p className="mt-1 max-w-[80ch] text-sm text-ink-3">{note}</p> : null}
+      {note ? <p className="mt-3 max-w-[80ch] text-sm text-ink-3">{note}</p> : null}
       <div className="mt-3">{children}</div>
     </section>
+  )
+}
+
+/** One disclosure for every Delete / History: same 36 px control, same chevron as Orders. */
+function Disclosure({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <details className={`group ${className}`}>
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-sm text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
+        <span aria-hidden className="flex size-4 shrink-0 items-center justify-center"><ChevronRight className="size-4 transition-transform group-open:[transform:rotate(90deg)]" /></span>{label}
+      </summary>
+      {children}
+    </details>
   )
 }
 
@@ -97,19 +110,19 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
             <Section id="vf-h" title="vFulfill exports" note={<>Shipments (Orders → Shipments) decide delivered and RTO; transactions (Wallet → Transaction Report) carry fees, COD remittances and the wallet. Re-importing rows already stored is safe. Leave <em>Check only</em> on to see the report before anything is written.</>}>
               <p className="text-sm text-ink-2">Last shipments import: <RunText r={s.vfRuns.shipments} /> · Last transactions import: <RunText r={s.vfRuns.transactions} /></p>
               <SettingsForm action={importVf} submit="Run" pendingText="Reading… (up to a minute)" limitUpload className="mt-4 flex flex-wrap items-end gap-4">
-                <label className={labelCls}>Shipments export<input name="shipments" type="file" accept=".csv,text/csv" className="text-sm text-ink-2" /></label>
-                <label className={labelCls}>Transactions export<input name="transactions" type="file" accept=".csv,text/csv" className="text-sm text-ink-2" /></label>
-                <label className="flex items-center gap-2 self-center text-sm text-ink"><input name="check" type="checkbox" defaultChecked className="size-4" />Check only</label>
+                <label className={labelCls}>Shipments export<input name="shipments" type="file" accept=".csv,text/csv" className="h-10 text-sm text-ink-2 file:mr-3 file:h-10 file:cursor-pointer file:rounded-xl file:border file:border-line-strong file:bg-raised file:px-4 file:text-sm file:font-semibold file:text-ink hover:file:bg-ground" /></label>
+                <label className={labelCls}>Transactions export<input name="transactions" type="file" accept=".csv,text/csv" className="h-10 text-sm text-ink-2 file:mr-3 file:h-10 file:cursor-pointer file:rounded-xl file:border file:border-line-strong file:bg-raised file:px-4 file:text-sm file:font-semibold file:text-ink hover:file:bg-ground" /></label>
+                <label className="flex h-10 items-center gap-2 text-sm text-ink"><input name="check" type="checkbox" defaultChecked className="size-4" />Check only</label>
               </SettingsForm>
             </Section>
 
             <Section id="prod-h" title="Products" note={<>Cost is ex-GST, per unit, from the date given; breakeven uses today&apos;s, past orders the one in force on their date. Shopify&apos;s “cost per item” also writes here when the product sync runs and it differs, so change it in Shopify too. Stage is a label only: no figure reads it.</>}>
-              <div className="space-y-4">{s.products.map((p) => <ProductCard key={`${p.storeId}:${p.sku}`} p={p} today={today} storeName={storeName} />)}</div>
+              <div className="-mx-3 space-y-4">{s.products.map((p) => <ProductCard key={`${p.storeId}:${p.sku}`} p={p} today={today} storeName={storeName} />)}</div>
             </Section>
 
             <Section id="fixed-h" title="Fixed costs" note="Monthly costs bill on their start date's day each month until the end date, quarterly ones every third month from their start; one-time costs land on their date. A store's costs count in that store's P&L; shared ones (no store) in All VXP only. End a cost that stopped; delete only one entered by mistake.">
               {s.fixedCosts.length === 0 ? <p className="text-ink-3">No fixed costs yet.</p> : (
-                <div className="@container min-w-0">
+                <div className="@container -mx-3 min-w-0">
                   <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
@@ -120,27 +133,26 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                       {s.fixedCosts.map((f) => {
                         const ended = f.endDate !== null && f.endDate < today
                         return (
-                          <tr key={f.id} className={`glass-row align-top ${ended ? 'text-ink-3' : ''}`}>
-                            <th scope="row" className="px-4 py-3 font-semibold text-ink">{f.name}{f.note ? <span className="block text-xs font-normal text-ink-3">{f.note}</span> : null}</th>
-                            <td data-label="Store" className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
-                            <td data-label="Amount" className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
-                            <td data-label="Billing" className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : f.frequency === 'quarterly' ? 'Every 3 months' : 'One-time'}</td>
-                            <td data-label="From" className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
-                            <td data-label="Until" className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
-                            <td className="px-4 py-3">
-                              <div className="flex flex-wrap items-start gap-3">
+                          <tr key={f.id} className={`glass-row align-top @max-4xl:grid! @max-4xl:grid-cols-2 @max-4xl:gap-x-3 ${ended ? 'text-ink-3' : ''}`}>
+                            <th scope="row" className="px-3 py-3 font-semibold text-ink @max-4xl:col-span-2">{f.name}{f.note ? <span className="block text-xs font-normal text-ink-3">{f.note}</span> : null}</th>
+                            <td data-label="Store" className="px-3 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
+                            <td data-label="Amount" className="px-3 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
+                            <td data-label="Billing" className="px-3 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : f.frequency === 'quarterly' ? 'Every 3 months' : 'One-time'}</td>
+                            <td data-label="From" className="px-3 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
+                            <td data-label="Until" className="px-3 py-3 text-ink-2 whitespace-nowrap @max-4xl:col-span-2">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
+                            <td className="px-3 py-3 @max-4xl:col-span-2 @4xl:min-w-[22rem]">
+                              <div className="flex flex-wrap items-center gap-x-3">
                                 {f.frequency !== 'one-time' ? (
-                                  <SettingsForm action={endFixedCost} submit={f.endDate ? 'Change end' : 'End'} tone="quiet" className="flex flex-wrap items-center gap-2">
+                                  <SettingsForm action={endFixedCost} submit={f.endDate ? 'Change end' : 'End'} tone="quiet" className="flex items-center gap-2">
                                     <input type="hidden" name="id" value={f.id} />
-                                    <input name="end" type="date" required aria-label={`Last billing day of ${f.name}`} defaultValue={f.endDate ?? today} min={f.startDate} className={`${inputCls} py-1.5`} />
+                                    <input name="end" type="date" required aria-label={`Last billing day of ${f.name}`} defaultValue={f.endDate ?? today} min={f.startDate} className={`${inputCls} w-40 shrink-0 py-1.5`} />
                                   </SettingsForm>
                                 ) : null}
-                                <details>
-                                  <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
+                                <Disclosure label="Delete…">
                                   <SettingsForm action={deleteFixedCost} submit="Delete for good" tone="danger" className="mt-2">
                                     <input type="hidden" name="id" value={f.id} />
                                   </SettingsForm>
-                                </details>
+                                </Disclosure>
                               </div>
                             </td>
                           </tr>
@@ -184,12 +196,11 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                     <li key={g.month} className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                       <span className={i === 0 ? 'font-semibold text-ink' : 'text-ink-2'}>After {monthName(g.month)}: {exact(g.balancePaise)}</span>
                       {g.note ? <span className="max-w-[80ch] text-xs text-ink-3">{g.note}</span> : null}
-                      <details>
-                        <summary className="cursor-pointer text-ink-3 hover:text-ink">Delete…</summary>
+                      <Disclosure label="Delete…">
                         <SettingsForm action={deleteGstCredit} submit="Delete for good" tone="danger" className="mt-2">
                           <input type="hidden" name="month" value={g.month} />
                         </SettingsForm>
-                      </details>
+                      </Disclosure>
                     </li>
                   ))}
                 </ul>
@@ -203,7 +214,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <h3 className="mt-10 text-base font-semibold text-ink">Other GST entries</h3>
               <p className="mt-1 max-w-[80ch] text-sm text-ink-3">A purchase with GST that Money doesn&apos;t read (packaging, equipment), a sale outside Shopify, or a one-off foreign charge (RCM, e.g. a Shopify app). Never vFulfill, Meta, fees or a fixed cost flagged RCM: those count already.</p>
               {s.gst.entries.length === 0 ? <p className="mt-3 text-ink-3">No entries yet.</p> : (
-                <div className="mt-3 @container min-w-0">
+                <div className="mt-3 @container -mx-3 min-w-0">
                   <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
@@ -213,18 +224,17 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                     <tbody>
                       {s.gst.entries.map((e) => (
                         <tr key={e.id} className="glass-row align-top">
-                          <td data-label="Month" className="px-4 py-3 text-ink-2 whitespace-nowrap">{monthName(e.month)}</td>
-                          <td data-label="Kind" className="px-4 py-3 text-ink-2">{GST_KIND_LABEL[e.kind]}</td>
-                          <th scope="row" className="px-4 py-3 font-semibold text-ink">{e.source}{e.description || e.note ? <span className="block text-xs font-normal text-ink-3">{[e.description, e.note].filter(Boolean).join(' · ')}</span> : null}</th>
-                          <td data-label="Taxable" className="px-4 py-3 text-right text-ink-2">{exact(e.taxablePaise)}<span className="block text-xs text-ink-3">at {e.rate}%</span></td>
-                          <td data-label="GST" className="px-4 py-3 text-right font-semibold text-ink">{exact(e.gstPaise)}</td>
-                          <td className="px-4 py-3">
-                            <details>
-                              <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
+                          <td data-label="Month" className="px-3 py-3 text-ink-2 whitespace-nowrap">{monthName(e.month)}</td>
+                          <td data-label="Kind" className="px-3 py-3 text-ink-2">{GST_KIND_LABEL[e.kind]}</td>
+                          <th scope="row" className="px-3 py-3 font-semibold text-ink">{e.source}{e.description || e.note ? <span className="block text-xs font-normal text-ink-3">{[e.description, e.note].filter(Boolean).join(' · ')}</span> : null}</th>
+                          <td data-label="Taxable" className="px-3 py-3 text-right text-ink-2">{exact(e.taxablePaise)}<span className="block text-xs text-ink-3">at {e.rate}%</span></td>
+                          <td data-label="GST" className="px-3 py-3 text-right font-semibold text-ink">{exact(e.gstPaise)}</td>
+                          <td className="px-3 py-3 @max-4xl:col-span-2">
+                            <Disclosure label="Delete…">
                               <SettingsForm action={deleteGstEntry} submit="Delete for good" tone="danger" className="mt-2">
                                 <input type="hidden" name="id" value={e.id} />
                               </SettingsForm>
-                            </details>
+                            </Disclosure>
                           </td>
                         </tr>
                       ))}
@@ -249,7 +259,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
 
             <Section id="capital-h" title="Capital & loans" note="Money put into VXP: partners' capital, and loans with what is still owed. Interest is simple and yearly, on the full amount from the day it came in. Record repayments as the total repaid so far.">
               {s.capital.length === 0 ? <p className="text-ink-3">No entries yet.</p> : (
-                <div className="@container min-w-0">
+                <div className="@container -mx-3 min-w-0">
                   <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
@@ -258,26 +268,25 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                     </thead>
                     <tbody>
                       {s.capital.map((c) => (
-                        <tr key={c.id} className="glass-row align-top">
-                          <th scope="row" className="px-4 py-3 font-semibold text-ink">{c.name}{c.note ? <span className="block max-w-[40ch] text-xs font-normal text-ink-3">{c.note}</span> : null}</th>
-                          <td data-label="Kind" className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? 'Loan' : 'Partner capital'}</td>
-                          <td data-label="Amount" className="px-4 py-3 text-right text-ink">{rs(c.amountPaise)}</td>
-                          <td data-label="Received" className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(c.receivedOn)}</td>
-                          <td data-label="Interest" className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? `${+((c.interestRate ?? 0) * 100).toFixed(2)}% a year` : '—'}</td>
-                          <td data-label="Due" className="px-4 py-3 text-ink-2 whitespace-nowrap">{c.dueOn ? day(c.dueOn) : '—'}</td>
-                          <td data-label="Repaid so far (₹)" className="px-4 py-3">
+                        <tr key={c.id} className="glass-row align-top @max-4xl:grid! @max-4xl:grid-cols-2 @max-4xl:gap-x-3">
+                          <th scope="row" className="px-3 py-3 font-semibold text-ink @max-4xl:col-span-2">{c.name}{c.note ? <span className="block max-w-[40ch] text-xs font-normal text-ink-3">{c.note}</span> : null}</th>
+                          <td data-label="Kind" className="px-3 py-3 text-ink-2">{c.kind === 'loan' ? 'Loan' : 'Partner capital'}</td>
+                          <td data-label="Amount" className="px-3 py-3 text-right text-ink">{rs(c.amountPaise)}</td>
+                          <td data-label="Received" className="px-3 py-3 text-ink-2 whitespace-nowrap">{day(c.receivedOn)}</td>
+                          <td data-label="Interest" className="px-3 py-3 text-ink-2">{c.kind === 'loan' ? `${+((c.interestRate ?? 0) * 100).toFixed(2)}% a year` : '—'}</td>
+                          <td data-label="Due" className="px-3 py-3 text-ink-2 whitespace-nowrap">{c.dueOn ? day(c.dueOn) : '—'}</td>
+                          <td data-label="Repaid so far (₹)" className="px-3 py-3">
                             <SettingsForm action={saveRepaid} submit="Save" tone="quiet" className="flex flex-wrap items-center gap-2">
                               <input type="hidden" name="id" value={c.id} />
                               <input name="repaid" required inputMode="decimal" aria-label={`Total repaid to ${c.name}`} defaultValue={rupees(c.repaidPaise)} className={`${inputCls} w-32 py-1.5`} />
                             </SettingsForm>
                           </td>
-                          <td className="px-4 py-3">
-                            <details>
-                              <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
+                          <td className="px-3 py-3">
+                            <Disclosure label="Delete…">
                               <SettingsForm action={deleteCapital} submit="Delete for good" tone="danger" className="mt-2">
                                 <input type="hidden" name="id" value={c.id} />
                               </SettingsForm>
-                            </details>
+                            </Disclosure>
                           </td>
                         </tr>
                       ))}
@@ -319,9 +328,9 @@ function ProductCard({ p, today, storeName }: { p: SettingsProduct; today: strin
   return (
     <div className="glass-row p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <p className="font-semibold text-ink">
-          <span className="inline-flex items-center gap-2"><StoreDot id={p.storeId as StoreId} />{p.name}</span>
-          <span className="ml-2 text-sm font-normal text-ink-3">{p.sku} · {storeName(p.storeId)} · {rs(p.pricePaise)}</span>
+        <p className="flex items-start gap-2 font-semibold text-ink">
+          <span className="flex h-lh items-center"><StoreDot id={p.storeId as StoreId} /></span>
+          <span className="min-w-0">{p.name}<span className="ml-2 text-sm font-normal text-ink-3">{p.sku} · {storeName(p.storeId)} · {rs(p.pricePaise)}</span></span>
         </p>
         <SettingsForm action={saveStage} submit="Set stage" tone="quiet" className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="store" value={p.storeId} />
@@ -343,8 +352,7 @@ function ProductCard({ p, today, storeName }: { p: SettingsProduct; today: strin
           <label className={labelCls}>From<input name="from" type="date" required defaultValue={today} className={inputCls} /></label>
         </SettingsForm>
         {p.costs.length > 0 ? (
-          <details className="text-sm">
-            <summary className="cursor-pointer py-2 text-ink-3 hover:text-ink">History ({p.costs.length})</summary>
+          <Disclosure label={`History (${p.costs.length})`} className="text-sm">
             <ul className="mt-2 space-y-2">
               {[...p.costs].reverse().map((c) => (
                 <li key={c.effectiveFrom} className="flex flex-wrap items-center gap-3">
@@ -358,7 +366,7 @@ function ProductCard({ p, today, storeName }: { p: SettingsProduct; today: strin
                 </li>
               ))}
             </ul>
-          </details>
+          </Disclosure>
         ) : null}
       </div>
     </div>

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, Search } from 'lucide-react'
+import { AlertTriangle, ChevronRight, Search } from 'lucide-react'
 import { inr, pct } from '@/lib/metrics'
 import { rateOf, STATUS_LABEL, type OrderStats, type OrderView, type Outcome, type RateRow } from '@/lib/orders'
 import { gatewayOf } from '@/lib/settlements'
@@ -101,11 +101,11 @@ export function OrderStatsRow({ s }: { s: OrderStats }) {
 type PillItem = { href: string; label: string; on: boolean }
 
 /** One-tap filter links in a pill. Below 30rem it scrolls sideways, with an edge fade. */
-function PillLinks({ label, items }: { label: string; items: PillItem[] }) {
+function PillLinks({ label, items, wrap = false }: { label: string; items: PillItem[]; wrap?: boolean }) {
   return (
     <div className="flex min-w-0 max-w-full items-center gap-2">
       <span className="label">{label}</span>
-      <div role="group" aria-label={label} className="glass-pill flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-[30rem]:pr-6 max-[30rem]:[mask-image:linear-gradient(to_right,black_82%,transparent)]">
+      <div role="group" aria-label={label} className={`glass-pill flex min-w-0 max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar ${wrap ? 'max-[30rem]:flex-wrap max-[30rem]:overflow-visible max-[30rem]:rounded-2xl' : 'max-[30rem]:pr-6 max-[30rem]:[mask-image:linear-gradient(to_right,black_82%,transparent)]'}`}>
         {items.map((i) => (
           <Link key={i.label} href={i.href} aria-current={i.on ? 'true' : undefined}
             className={`${seg} ${i.on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>{i.label}</Link>
@@ -137,16 +137,16 @@ export function OrdersPanel({ rows, total, filters, storeName }: { rows: OrderVi
         <p className="text-sm text-ink-3">{count}</p>
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2 px-3">
-        <PillLinks label="Status" items={filters.status} />
+        <PillLinks label="Status" items={filters.status} wrap />
         <PillLinks label="Pay" items={filters.payment} />
         <form action="/orders" className="flex items-center gap-2">
           {Object.entries(filters.hidden).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}
-          <div className="glass-pill flex h-9 w-44 items-center pr-1">
+          <div className="glass-pill flex h-10 w-44 items-center">
             <input type="search" name="q" defaultValue={filters.q} placeholder="#OV3119…" maxLength={40} aria-label="Order name"
               className="h-full min-w-0 flex-1 bg-transparent pl-3 text-sm text-ink outline-none placeholder:text-ink-3" />
-            <button type="submit" aria-label="Search orders" className="flex size-7 items-center justify-center rounded-lg text-ink-2 hover:text-ink"><Search className="size-4" aria-hidden /></button>
+            <button type="submit" aria-label="Search orders" className="flex size-10 shrink-0 items-center justify-center rounded-lg text-ink-2 hover:text-ink"><Search className="size-4" aria-hidden /></button>
           </div>
-          {filters.clearHref ? <Link href={filters.clearHref} className="flex h-[26px] items-center text-sm text-ink-2 hover:text-ink">Clear</Link> : null}
+          {filters.clearHref ? <Link href={filters.clearHref} className="flex h-10 items-center text-sm text-ink-2 hover:text-ink">Clear</Link> : null}
         </form>
       </div>
       {rows.length === 0 ? (
@@ -198,11 +198,11 @@ function OrderRow({ o, store }: { o: OrderView; store: string }) {
       {/* Phones: one tap opens the fields the table shows as columns. Native details, no JS. */}
       <span role="cell" className="min-w-0 [grid-area:line] @min-[50rem]:hidden">
         <details className="group">
-          <summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-ink-3 [&::-webkit-details-marker]:hidden">
+          <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 text-xs text-ink-3 [&::-webkit-details-marker]:hidden">
             <span className="min-w-0 flex-1 truncate">
               <span className={`font-semibold ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span> · {PAY_WORD[o.payment]} · {day(o.date)}{o.city ? ` · ${o.city}` : ''}
             </span>
-            <span aria-hidden className="shrink-0 transition-transform group-open:rotate-90">›</span>
+            <span aria-hidden className="flex size-4 shrink-0 items-center justify-center"><ChevronRight className="size-4 transition-transform group-open:[transform:rotate(90deg)]" /></span>
           </summary>
           <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
             <Pair k="Store" v={store} />

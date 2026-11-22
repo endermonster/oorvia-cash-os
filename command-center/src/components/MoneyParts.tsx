@@ -10,7 +10,11 @@ const exact = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { m
 const rs = (paise: number) => inr(paise / 100)
 const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
 const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+export const shortMonth = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' })
 const daysFrom = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+
+/** A one-line-tall box that centres an icon on the first line of the text beside it. */
+const ICON = 'flex h-lh shrink-0 items-center'
 
 const HERO = 'text-[2.1rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums'
 
@@ -21,7 +25,7 @@ function Due({ gstr, on, today }: { gstr: '1' | '3B'; on: string; today: string 
   const tone = left < 0 ? 'bg-bad/12 text-bad ring-bad/45' : left <= 3 ? 'bg-warn/10 text-warn ring-warn/40' : 'text-ink-2 ring-line-strong'
   const Icon = left < 0 ? AlertTriangle : left <= 3 ? Clock : null
   return (
-    <span className={`inline-flex h-[26px] items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-xs font-semibold ring-1 ${tone}`}>
+    <span className={`inline-flex h-[26px] items-center gap-1.5 whitespace-nowrap rounded-lg px-2.5 text-xs font-semibold ring-1 ${tone}`}>
       {Icon ? <Icon className="size-3.5 shrink-0" aria-hidden /> : null}
       <span><span className="@max-sm:hidden">GSTR-</span>{gstr} · {day(on)}{state}</span>
     </span>
@@ -105,10 +109,10 @@ export function GstCard({ g, today, vfDaysAgo }: { g: GstResult | null; today: s
             {g.seed ? <>Filed through {monthName(g.seed.month)}, {exact(g.seed.balancePaise)} credit left</> : <>No credit balance entered on Settings: the ledger starts at ₹0.</>}
           </p>
           {unfiled.length > 0 ? (
-            <p className="flex items-start gap-1.5 text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />{unfiled.length} past {unfiled.length === 1 ? 'month' : 'months'} not marked filed</p>
+            <p className="flex items-start gap-2 text-warn"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>{unfiled.length} past {unfiled.length === 1 ? 'month' : 'months'} not marked filed</span></p>
           ) : null}
           {vfDaysAgo === null || vfDaysAgo > 3 ? (
-            <p className="flex items-start gap-1.5 text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />Output tax counts delivered orders from the vFulfill shipments export, last imported {vfDaysAgo === null ? 'never' : `${vfDaysAgo} days ago`}: orders delivered since are missing.</p>
+            <p className="flex items-start gap-2 text-warn"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>Output tax counts delivered orders from the vFulfill shipments export, last imported {vfDaysAgo === null ? 'never' : `${vfDaysAgo} days ago`}: orders delivered since are missing.</span></p>
           ) : null}
         </div>
       </div>
@@ -149,8 +153,8 @@ export function CapitalCard({ c }: { c: Capital | null }) {
                       {rs(l.amountPaise)} on {day(l.receivedOn)}{l.repaidPaise ? `, ${rs(l.repaidPaise)} repaid` : ''}
                       {l.interestRate ? ` · ${+(l.interestRate * 100).toFixed(2)}% a year: ${rs(l.interest)} interest so far` : ' · no interest'}
                     </p>
-                    {l.settled ? <p className="mt-0.5 flex items-center gap-1 text-xs text-good"><CircleCheck className="size-3.5 shrink-0" aria-hidden />Repaid in full</p>
-                      : l.daysOverdue !== null ? <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-bad"><AlertTriangle className="size-3.5 shrink-0" aria-hidden />Was due {day(l.dueOn!)}: {l.daysOverdue} days overdue</p>
+                    {l.settled ? <p className="mt-0.5 flex items-start gap-2 text-xs text-good"><span className={ICON}><CircleCheck className="size-4" aria-hidden /></span>Repaid in full</p>
+                      : l.daysOverdue !== null ? <p className="mt-0.5 flex items-start gap-2 text-xs font-semibold text-bad"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>Was due {day(l.dueOn!)}: <span className="whitespace-nowrap">{l.daysOverdue} days overdue</span></span></p>
                         : l.dueOn ? <p className="mt-0.5 text-xs text-ink-3">Due {day(l.dueOn)}</p> : null}
                   </div>
                   <span className="text-[1.3rem] font-bold tabular-nums text-ink">{rs(l.totalDue)}</span>
@@ -191,9 +195,10 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
   if (!f) return null
   const tone = (p: number) => (p < 0 ? 'text-bad' : p > 0 ? 'text-good' : 'text-ink')
   return (
-    <section aria-labelledby="forecast-h" className="glass rise p-5">
+    <section id="forecast" aria-labelledby="forecast-h" className="glass rise @container scroll-mt-16 p-5">
       <h2 id="forecast-h" className="text-lg font-bold">Forecast · {scope}</h2>
-      <p className={`mt-3 ${HERO} ${tone(f.cumulative)}`}>{signed(f.cumulative)}<span className="ml-2 text-sm font-semibold tracking-normal text-ink-2">running total from Day 1</span></p>
+      <p className={`mt-3 ${HERO} ${tone(f.cumulative)}`}>{signed(f.cumulative)}</p>
+      <p className="mt-1.5 text-sm font-semibold text-ink-2">Running total from <span className="whitespace-nowrap">Day 1</span></p>
       <p className="mt-1 max-w-[80ch] text-sm text-ink-2">
         {f.opening.periodEnd ? <>Opens at {signed(f.opening.netPaise)} up to {day(f.opening.periodEnd)} (old Cash OS, before GST), then </> : <>From </>}
         every month of the P&amp;L above{f.rows.some((r) => r.partial) ? ', this month as it stands so far' : ''}. Net profit, ex-GST.
@@ -204,7 +209,7 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
           {f.average === null ? <p className="mt-1 text-ink-2">No finished month yet.</p> : (
             <p className="mt-1"><span className={`text-xl font-extrabold tracking-tight ${tone(f.average)}`}>{signed(f.average)}</span><span className="ml-2 text-sm text-ink-3">over {f.finishedMonths} {f.finishedMonths === 1 ? 'month' : 'months'}</span></p>
           )}
-          {f.breakEven ? <p className="mt-2 text-sm text-good">At that pace the loss is cleared by {monthName(f.breakEven)}.</p>
+          {f.breakEven ? <p className="mt-2 text-sm text-good">At that pace the loss is cleared by <span className="whitespace-nowrap">{monthName(f.breakEven)}</span>.</p>
             : f.cumulative >= 0 || f.average === null ? null
               : f.average > 0 ? <p className="mt-2 text-sm text-ink-3">At that pace it takes more than 10 years to clear the loss.</p>
                 : f.average === 0 ? <p className="mt-2 text-sm text-ink-3">At that pace the loss stays where it is: no break-even date until the average turns positive.</p>
@@ -225,11 +230,13 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
         ) : <p className="text-good">The running total is not negative: nothing left to win back.</p>}
       </div>
       <ForecastChart forecast={f} />
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[420px] text-left text-sm tabular-nums">
+      <div className="mt-4">
+        <table className="w-full text-left text-sm tabular-nums">
           <thead>
             <tr className="border-b border-line">
-              {['Month', 'Net profit', 'Running total'].map((h, i) => <th key={h} scope="col" className={`label py-2 font-normal ${i ? 'text-right' : ''}`}>{h}</th>)}
+              <th scope="col" className="label py-2 font-normal">Month</th>
+              <th scope="col" className="label py-2 text-right font-normal">Net profit</th>
+              <th scope="col" className="label py-2 text-right font-normal"><span className="hidden @md:inline">Running total</span><span className="@md:hidden">Total</span></th>
             </tr>
           </thead>
           <tbody>
@@ -242,7 +249,7 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
             ) : null}
             {f.rows.map((r) => (
               <tr key={r.month} className="border-b border-line last:border-0">
-                <th scope="row" className="py-2 font-normal text-ink-2">{monthName(r.month)}{r.partial ? ' (so far)' : ''}</th>
+                <th scope="row" className="py-2 font-normal text-ink-2"><span className="hidden @md:inline">{monthName(r.month)}{r.partial ? ' (so far)' : ''}</span><span className="@md:hidden">{shortMonth(r.month)}{r.partial ? ' · so far' : ''}</span></th>
                 <td className={`py-2 text-right ${tone(r.net)}`}>{signed(r.net)}</td>
                 <td className={`py-2 text-right font-semibold ${tone(r.cumulative)}`}>{signed(r.cumulative)}</td>
               </tr>

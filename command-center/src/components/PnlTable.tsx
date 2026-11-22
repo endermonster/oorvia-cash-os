@@ -20,6 +20,9 @@ const ROWS: Row[] = [
   { label: 'Net profit', value: (l) => l.netProfit, strong: true, signed: true },
 ]
 
+/** Phones show the newest months; older ones sit behind a disclosure. */
+const RECENT = 3
+
 const tone = (v: number, signed: boolean) => (signed ? (v < 0 ? 'text-bad' : v > 0 ? 'text-good' : 'text-ink-2') : v === 0 ? 'text-ink-2' : 'text-ink')
 const show = (v: number, signed: boolean) => (v === 0 ? '—' : `${signed && v > 0 ? '+' : ''}${rs(v)}`)
 
@@ -33,15 +36,42 @@ export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResu
   const line = (m: (typeof months)[number]) => (store ? m.stores[store] : m.vxp)
   const shareRow = months.some((m) => line(m).ownerShare !== null)
   const share = (m: (typeof months)[number]) => line(m).ownerShare ?? 0
+  const card = (m: (typeof months)[number]) => {
+    const l = line(m)
+    return (
+      <div key={m.month} className="glass-row px-3 py-3">
+        <p className="flex items-baseline justify-between gap-3">
+          <span className="text-base font-bold">{monthLabel(m.month)}{m.month === currentMonth ? <span className="ml-2 text-xs font-normal text-ink-3">to date</span> : null}</span>
+        </p>
+        <dl className="mt-2 divide-y divide-line tabular-nums">
+          {ROWS.map((r) => {
+            const v = r.value(l)
+            return (
+              <div key={r.label} title={r.title?.(l) || undefined} className="flex items-baseline justify-between gap-4 py-1.5">
+                <dt className={`min-w-0 ${r.strong ? 'font-bold text-ink' : 'text-ink-2'}`}>{r.label}{r.note ? <span className="block text-xs text-ink-3">{r.note}</span> : null}</dt>
+                <dd className={`text-right whitespace-nowrap ${r.strong ? 'text-[1.3rem] font-bold' : ''} ${tone(v, !!r.signed)}`}>{show(v, !!r.signed)}</dd>
+              </div>
+            )
+          })}
+          {shareRow ? (
+            <div className="flex items-baseline justify-between gap-4 py-1.5">
+              <dt className="text-ink-2">Your 50% share</dt>
+              <dd className={`text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</dd>
+            </div>
+          ) : null}
+        </dl>
+      </div>
+    )
+  }
   return (
-    <section aria-labelledby="pnl-h" className="glass rise p-5">
-      <h2 id="pnl-h" className="text-lg font-bold">Monthly P&amp;L · {storeName}</h2>
-      <p className="mt-1 max-w-[75ch] text-sm text-ink-3">
+    <section aria-labelledby="pnl-h" className="glass rise p-2">
+      <h2 id="pnl-h" className="px-3 pt-2 text-lg font-bold">Monthly P&amp;L · {storeName}</h2>
+      <p className="mt-3 max-w-[75ch] px-3 text-sm text-ink-3">
         Actual, ex-GST. A delivered order counts in the month it was delivered (vFulfill); an RTO or cancelled order earns ₹0 in
         the month it was placed but its fees count. {store ? 'Costs shared by all stores are in the All VXP view only.' : 'Includes costs shared by all stores.'}
       </p>
       <div className="@container mt-3">
-        <div className="hidden overflow-x-auto @min-[50rem]:block">
+        <div className="hidden overflow-x-auto px-3 @min-[50rem]:block">
           <table className="w-full text-left tabular-nums">
             <thead>
               <tr className="border-b border-line">
@@ -83,46 +113,30 @@ export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResu
           </table>
         </div>
         <div className="space-y-1.5 @min-[50rem]:hidden">
-          {months.map((m) => {
-            const l = line(m)
-            return (
-              <div key={m.month} className="glass-row px-3 py-3">
-                <p className="flex items-baseline justify-between gap-3">
-                  <span className="text-base font-bold">{monthLabel(m.month)}{m.month === currentMonth ? <span className="ml-2 text-xs font-normal text-ink-3">to date</span> : null}</span>
-                </p>
-                <dl className="mt-2 divide-y divide-line tabular-nums">
-                  {ROWS.map((r) => {
-                    const v = r.value(l)
-                    return (
-                      <div key={r.label} title={r.title?.(l) || undefined} className="flex items-baseline justify-between gap-4 py-1.5">
-                        <dt className={`min-w-0 ${r.strong ? 'font-bold text-ink' : 'text-ink-2'}`}>{r.label}{r.note ? <span className="block text-xs text-ink-3">{r.note}</span> : null}</dt>
-                        <dd className={`text-right whitespace-nowrap ${r.strong ? 'text-[1.3rem] font-bold' : ''} ${tone(v, !!r.signed)}`}>{show(v, !!r.signed)}</dd>
-                      </div>
-                    )
-                  })}
-                  {shareRow ? (
-                    <div className="flex items-baseline justify-between gap-4 py-1.5">
-                      <dt className="text-ink-2">Your 50% share</dt>
-                      <dd className={`text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</dd>
-                    </div>
-                  ) : null}
-                </dl>
-              </div>
-            )
-          })}
+          {months.slice(0, RECENT).map(card)}
+          {months.length > RECENT ? (
+            <details className="group">
+              <summary className="flex min-h-9 cursor-pointer list-none items-center px-3 text-sm font-semibold text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">Show all {months.length} months</span>
+                <span className="hidden group-open:inline">Show latest {RECENT} only</span>
+              </summary>
+              <div className="mt-1.5 space-y-1.5">{months.slice(RECENT).map(card)}</div>
+            </details>
+          ) : null}
         </div>
       </div>
       {!store && months.some((m) => Object.keys(m.shared.vfByHead).length + Object.keys(m.shared.fixed).length > 0) ? (
-        <p className="mt-3 text-xs text-ink-3">
+        <p className="mt-3 px-3 text-xs text-ink-3">
           Shared costs this month: {breakdown({ ...months[0].shared.vfByHead, ...months[0].shared.fixed }).replaceAll('\n', ' · ') || 'none'}. The quarterly
           vFulfill subscription counts in full in the month it bills, nothing in the two between.
         </p>
       ) : null}
       {pnl.warnings.length > 0 ? (
-        <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-warn marker:text-warn">
+        <ul className="mt-4 list-disc space-y-1 pr-3 pl-8 text-sm text-warn marker:text-warn">
           {pnl.warnings.map((w) => <li key={w}>{w}</li>)}
         </ul>
       ) : null}
+      <div className="pb-2" />
     </section>
   )
 }

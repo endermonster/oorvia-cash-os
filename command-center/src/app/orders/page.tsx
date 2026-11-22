@@ -108,7 +108,7 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
             />
             <OrderStatsRow s={orderStats(rows)} />
             <OrdersPanel rows={shown} total={rows.length} filters={filters} storeName={storeName} />
-            <div className="grid items-start gap-3 lg:grid-cols-2">
+            <div className="space-y-3">
               {view.store === 'all' ? (
                 <RatesTable title="Delivery rate by store" by="Store" rows={deliveryRates(rows, (o) => storeName(o.storeId))}
                   note="Delivered ÷ (delivered + RTO) among this month's orders. Unknown payment counts in All only." />

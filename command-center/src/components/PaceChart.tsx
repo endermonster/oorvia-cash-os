@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { SeriesPoint } from '@/lib/metrics'
+import { inr, type SeriesPoint } from '@/lib/metrics'
+import { tone } from './bits'
 
-const inr = (n: number) => `${n < 0 ? '−' : ''}₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.abs(Math.round(n)))}`
+const signedProfit = (n: number) => `${n > 0 ? '+' : ''}${inr(n)}`
 const short = (n: number) => {
   const a = Math.abs(n)
   const s = a >= 1e5 ? `${(a / 1e5).toFixed(a >= 1e6 ? 0 : 1)}L` : a >= 1000 ? `${Math.round(a / 1000)}k` : `${Math.round(a)}`
@@ -21,7 +22,8 @@ function niceMax(v: number) {
 const TOP_H = 230
 const BOT_H = 120
 const GAP = 46
-const PAD = { l: 52, r: 76, t: 10, b: 26 }
+const PAD = { l: 52, r: 84, t: 10, b: 26 }
+const TOOLTIP_WIDTH = 248
 
 export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPoint[]; title: string; prevLabel: string; unit: 'hour' | 'day' }) {
   const wrap = useRef<HTMLDivElement>(null)
@@ -71,8 +73,8 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
   if (!last) {
     return (
       <figure className="m-0">
-        <figcaption><h2 className="text-base font-semibold text-ink">{title}</h2></figcaption>
-        <p className="mt-4 rounded-xl bg-raised p-8 text-ink-2">No orders or ad spend {unit === 'hour' ? 'yet today' : 'in this period'}.</p>
+        <figcaption><h2 className="text-lg font-bold text-ink">{title}</h2></figcaption>
+        <p className="mt-3 rounded-xl bg-raised p-8 text-ink-2">No orders or ad spend {unit === 'hour' ? 'yet today' : 'in this period'}.</p>
       </figure>
     )
   }
@@ -87,7 +89,7 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
   return (
     <figure className="m-0">
       <figcaption className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        <h2 className="text-lg font-bold text-ink">{title}</h2>
         <ul className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-ink-2" aria-label="Legend">
           <li className="flex items-center gap-2"><span className="h-0.5 w-4 rounded bg-revenue" />Booked revenue</li>
           <li className="flex items-center gap-2"><span className="h-0.5 w-4 rounded bg-spend" />Ad spend</li>
@@ -95,8 +97,8 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
         </ul>
       </figcaption>
 
-      <div ref={wrap} className="relative mt-4">
-        <svg width={w} height={H} role="img" aria-label={`${title}: booked revenue ${inr(last.cumRevenue)}, ad spend ${inr(last.cumSpend)}, profit estimate ${inr(last.cumProfit)}`} className="block select-none">
+      <div ref={wrap} className="relative mt-3">
+        <svg width={w} height={H} role="img" aria-label={`${title}: booked revenue ${inr(last.cumRevenue)}, ad spend ${inr(last.cumSpend)}, profit estimate ${signedProfit(last.cumProfit)}`} className="block select-none">
           {/* top panel grid */}
           {g.ticks.map((t) => (
             <g key={t}>
@@ -104,12 +106,12 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
               <text x={PAD.l - 10} y={g.yTop(t)} dy="0.35em" textAnchor="end" className="fill-ink-3 text-[11px]">{short(t)}</text>
             </g>
           ))}
-          <path d={g.prev} fill="none" className="stroke-ink-3" strokeWidth={1.5} strokeDasharray="3 4" />
-          <path d={g.spend} fill="none" className="stroke-spend" strokeWidth={2} strokeLinejoin="round" />
-          <path d={g.rev} fill="none" className="stroke-revenue" strokeWidth={2} strokeLinejoin="round" />
+          <path d={g.prev} style={{ fill: 'none' }} className="stroke-ink-3" strokeWidth={1.5} strokeDasharray="3 4" />
+          <path d={g.spend} style={{ fill: 'none' }} className="stroke-spend" strokeWidth={2} strokeLinejoin="round" />
+          <path d={g.rev} style={{ fill: 'none' }} className="stroke-revenue" strokeWidth={2} strokeLinejoin="round" />
           {/* direct labels at line ends */}
-          <EndLabel x={g.x(g.n - 1)} y={g.yTop(last.cumRevenue)} text={inr(last.cumRevenue)} cls="fill-revenue" />
-          <EndLabel x={g.x(g.n - 1)} y={g.yTop(last.cumSpend)} text={inr(last.cumSpend)} cls="fill-spend" nudge={g.yTop(last.cumSpend) - g.yTop(last.cumRevenue) < 18 ? 14 : 0} />
+          <EndLabel x={g.x(g.n - 1)} y={g.yTop(last.cumRevenue)} text={inr(last.cumRevenue)} cls="text-revenue" />
+          <EndLabel x={g.x(g.n - 1)} y={g.yTop(last.cumSpend)} text={inr(last.cumSpend)} cls={last.cumSpend === 0 ? 'text-ink-2' : 'text-spend'} nudge={g.yTop(last.cumSpend) - g.yTop(last.cumRevenue) < 18 ? 14 : 0} />
 
           {/* bottom panel: profit, its own scale, with a zero line */}
           <text x={PAD.l} y={g.botTop - 10} className="fill-ink-2 text-[12px] font-semibold">Profit, cumulative <tspan className="fill-ink-3 font-normal">(estimate)</tspan></text>
@@ -123,8 +125,8 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
           <text x={PAD.l - 10} y={g.zeroY} dy="0.35em" textAnchor="end" className="fill-ink-3 text-[11px]">₹0</text>
           {g.hi > 0 && <text x={PAD.l - 10} y={g.yBot(g.hi)} dy="0.35em" textAnchor="end" className="fill-ink-3 text-[11px]">{short(g.hi)}</text>}
           {g.lo < 0 && <text x={PAD.l - 10} y={g.yBot(g.lo)} dy="0.35em" textAnchor="end" className="fill-ink-3 text-[11px]">{short(g.lo)}</text>}
-          <path d={g.profitPath} fill="none" className="stroke-ink" strokeWidth={2} strokeLinejoin="round" />
-          <EndLabel x={g.x(g.n - 1)} y={g.yBot(last.cumProfit)} text={inr(last.cumProfit)} cls={last.cumProfit < 0 ? 'fill-bad' : 'fill-ink'} />
+          <path d={g.profitPath} style={{ fill: 'none' }} className="stroke-ink" strokeWidth={2} strokeLinejoin="round" />
+          <EndLabel x={g.x(g.n - 1)} y={g.yBot(last.cumProfit)} text={signedProfit(last.cumProfit)} cls={tone(last.cumProfit)} />
 
           {/* x labels */}
           {points.map((p, i) => (i % g.labelEvery === 0 || i === g.n - 1) && (
@@ -140,20 +142,20 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
               <circle cx={g.x(hover)} cy={g.yBot(hp.cumProfit)} r={4} className="fill-ink stroke-ground" strokeWidth={2} />
             </g>
           )}
-          <rect x={PAD.l} y={0} width={g.plotW} height={H} fill="transparent" onPointerMove={onMove} onPointerLeave={() => setHover(null)} />
+          <rect x={PAD.l} y={0} width={g.plotW} height={H} style={{ fill: 'transparent' }} onPointerMove={onMove} onPointerLeave={() => setHover(null)} />
         </svg>
 
         {hp && hover !== null && (
           <div
-            className="pointer-events-none absolute top-2 z-10 w-56 rounded-lg border border-line-strong bg-raised-2/95 p-3 text-sm shadow-[0_8px_24px_rgb(0_0_0/0.45)]"
-            style={{ left: Math.min(Math.max(g.x(hover) + 14, 0), w - 232) }}
+            className="pointer-events-none absolute top-2 z-10 rounded-lg border border-line-strong bg-raised-2/95 p-3 text-sm"
+            style={{ width: TOOLTIP_WIDTH, left: Math.min(g.x(hover) + 14, w - TOOLTIP_WIDTH - 8) }}
           >
             <p className="font-semibold text-ink">{hp.label}</p>
-            <dl className="mt-2 grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 text-ink-2">
+            <dl className="mt-2 grid grid-cols-[1fr_auto_auto] gap-x-3 gap-y-1 whitespace-nowrap text-ink-2 tabular-nums">
               <dt className="text-ink-3" /> <dd className="text-right text-xs text-ink-3">this {unit}</dd><dd className="text-right text-xs text-ink-3">so far</dd>
               <dt className="flex items-center gap-2"><span className="size-2 rounded-full bg-revenue" />Revenue</dt><dd className="text-right">{inr(hp.revenue)}</dd><dd className="text-right text-ink">{inr(hp.cumRevenue)}</dd>
-              <dt className="flex items-center gap-2"><span className="size-2 rounded-full bg-spend" />Spend</dt><dd className="text-right">{inr(hp.spend)}</dd><dd className="text-right text-ink">{inr(hp.cumSpend)}</dd>
-              <dt className="flex items-center gap-2"><span className="size-2 rounded-full bg-ink" />Profit</dt><dd className={`text-right ${hp.profit < 0 ? 'text-bad' : ''}`}>{inr(hp.profit)}</dd><dd className={`text-right ${hp.cumProfit < 0 ? 'text-bad' : 'text-ink'}`}>{inr(hp.cumProfit)}</dd>
+              <dt className="flex items-center gap-2"><span className="size-2 rounded-full bg-spend" />Spend</dt><dd className="text-right">{inr(hp.spend)}</dd><dd className={`text-right ${hp.cumSpend === 0 ? 'text-ink-2' : 'text-ink'}`}>{inr(hp.cumSpend)}</dd>
+              <dt className="flex items-center gap-2"><span className="size-2 rounded-full bg-ink" />Profit</dt><dd className={`text-right ${tone(hp.profit)}`}>{signedProfit(hp.profit)}</dd><dd className={`text-right ${tone(hp.cumProfit)}`}>{signedProfit(hp.cumProfit)}</dd>
             </dl>
           </div>
         )}
@@ -163,5 +165,5 @@ export function PaceChart({ points, title, prevLabel, unit }: { points: SeriesPo
 }
 
 function EndLabel({ x, y, text, cls, nudge = 0 }: { x: number; y: number; text: string; cls: string; nudge?: number }) {
-  return <text x={x + 10} y={y + nudge} dy="0.35em" className={`${cls} text-[12px] font-semibold`}>{text}</text>
+  return <text x={x + 10} y={y + nudge} dy="0.35em" style={{ fill: 'currentColor' }} className={`${cls} text-[12px] font-semibold tabular-nums`}>{text}</text>
 }

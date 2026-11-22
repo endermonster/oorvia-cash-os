@@ -25,10 +25,16 @@ describe('TopBar', () => {
     const html = renderToStaticMarkup(<TopBar tab="orders" view={view} d={MOCK} />)
     expect(html).toMatch(/<a\b[^>]*aria-current="page"[^>]*href="\/orders\?store=oorvia&amp;period=today&amp;month=2026-11"/)
     expect(html).toContain('href="/orders?period=today&amp;month=2026-11"')
-    expect(html).toContain('href="/orders?store=oorvia&amp;month=2026-11"')
+    expect(html).not.toContain('href="/orders?store=oorvia&amp;month=2026-11"')
     expect(html).toContain('href="/money?store=oorvia&amp;period=today"')
     expect(html).toContain('href="/settings?store=oorvia&amp;period=today"')
     expect(html.match(/aria-current="page"/g)).toHaveLength(1)
+  })
+
+  it.each(['home', 'ads', 'orders', 'money'] as const)('shows the period rail only where it filters %s', (tab) => {
+    const html = renderToStaticMarkup(<TopBar tab={tab} view={view} d={MOCK} />)
+    expect(html).toContain('aria-label="Store"')
+    expect(html.includes('aria-label="Period"')).toBe(tab === 'home' || tab === 'ads')
   })
 })
 
@@ -43,6 +49,14 @@ describe('Home cash details', () => {
     })
     const html = renderToStaticMarkup(<HomeView view={view} period={m.resolvePeriod(view.period)} m={{ ...m, cash }} now={MOCK.now} mock />)
     expect(html).toContain('covers 7 days of spend · without gateway settlements')
+  })
+
+  it('links GST and owner share to Money in the current view when figures are unavailable', () => {
+    const m = createMetrics(MOCK)
+    const view: ViewState = { store: 'all', period: '30d' }
+    const html = renderToStaticMarkup(<HomeView view={view} period={m.resolvePeriod(view.period)} m={{ ...m, gst: () => null, ownerShare: () => null }} now={MOCK.now} mock />)
+    expect(html).toMatch(/aria-label="GST on Money"[^>]*href="\/money\?period=30d"/)
+    expect(html).toMatch(/aria-label="Your share on Money"[^>]*href="\/money\?period=30d"/)
   })
 })
 

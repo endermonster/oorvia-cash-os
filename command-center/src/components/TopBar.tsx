@@ -8,7 +8,10 @@ import { SyncButton } from './SyncButton'
 
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
 const seg = 'rounded-[0.6rem] px-3.5 py-[5px] text-sm font-medium whitespace-nowrap transition-colors'
-const navSeg = `${seg} max-sm:px-2.5`
+const navSeg = `${seg} flex shrink-0 items-center justify-center max-sm:size-10 max-sm:p-0`
+const freshnessChip = 'glass-pill inline-grid grid-cols-[auto_1fr] items-center px-2.5 py-[3px] sm:inline-flex'
+const freshnessAge = 'col-span-2 text-xs sm:text-[0.8125rem]'
+export const pageFrame = 'mx-auto max-w-[1536px] px-3 sm:px-4'
 
 /** vFulfill data older than this is called out, not just dated. */
 const VF_STALE_DAYS = 2
@@ -28,51 +31,51 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
   const vf = vfDays === null ? 'never imported' : vfDays === 0 ? 'today' : `${days(vfDays)} old`
 
   return (
-    <header className="px-3 pt-1.5 sm:px-4">
-      <div className="glass mx-auto max-w-[1536px] px-4 py-2.5 sm:px-5">
+    <header className={`${pageFrame} pt-1.5`}>
+      <div className="glass px-5 py-2.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 sm:gap-x-5">
-          <Link href={href('/', view)} className="flex items-baseline gap-2 pr-2">
+          <Link href={href('/', view)} className="flex items-baseline gap-2 sm:pr-2">
             <span className="text-[1.65rem] font-extrabold leading-none tracking-[-0.03em]">VXP</span>
             {/* Below ~1360 px the subtitle would push the period switch onto a second row. */}
             <span className="hidden text-[0.95rem] font-medium text-ink-2 min-[1360px]:inline">Command Center</span>
           </Link>
 
           {/* Icon-only tabs and Settings fit beside the VXP wordmark at 390 px. */}
-          <nav aria-label="Sections" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar">
+          <nav aria-label="Sections" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:grow max-sm:justify-between max-sm:gap-2">
             {TABS.map((t) => {
               const Icon = ICON[t.id]
               const on = t.id === tab
               return (
                 <Link key={t.id} href={href(t.path, view)} aria-current={on ? 'page' : undefined}
-                  title={t.label} className={`${navSeg} flex items-center gap-2 ${on ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
+                  title={t.label} className={`${navSeg} gap-2 ${on ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
                   <Icon className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">{t.label}</span>
                 </Link>
               )
             })}
             <Link href={href('/settings', view)} aria-label="Settings" aria-current={tab === undefined ? 'page' : undefined}
-              title="Settings" className={`${navSeg} flex items-center self-stretch ${tab === undefined ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
+              title="Settings" className={`${navSeg} self-stretch ${tab === undefined ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
               <Settings className="size-4" aria-hidden />
             </Link>
           </nav>
 
-          {tabPath && <div role="group" aria-label="Store" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-6 max-sm:[mask-image:linear-gradient(to_right,#000_82%,transparent)]">
+          {tabPath && <div role="group" aria-label="Store" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]">
             {stores.map((st) => {
               const on = view.store === st.id
               return (
                 <Link key={st.id} href={href(tabPath, { ...view, store: st.id })} aria-current={on ? 'true' : undefined}
-                  className={`${seg} flex items-center gap-2 ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
+                  className={`${seg} flex items-center gap-2 max-sm:min-h-9 ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
                   {st.id !== 'all' && <StoreDot id={st.id} />}{st.name}
                 </Link>
               )
             })}
           </div>}
 
-          {tabPath && <div role="group" aria-label="Period" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto">
+          {tabPath && (tab === 'home' || tab === 'ads') && <div role="group" aria-label="Period" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto">
             {PERIODS.map((p) => {
               const on = view.period === p.id
               return (
                 <Link key={p.id} href={href(tabPath, { ...view, period: p.id })} aria-current={on ? 'true' : undefined}
-                  className={`${seg} ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
+                  className={`${seg} flex items-center max-sm:min-h-9 ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
                   {p.label}
                 </Link>
               )
@@ -80,19 +83,18 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
           </div>}
         </div>
 
-        {/* One scrolling row on phones instead of two wrapped ones. */}
-        <div className="-mx-1 mt-2 flex items-center gap-2 overflow-x-auto px-1 text-[0.8125rem] no-scrollbar max-sm:pr-6 max-sm:[mask-image:linear-gradient(to_right,#000_82%,transparent)] whitespace-nowrap sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 [&>*]:shrink-0">
-          <span className="glass-pill flex items-center gap-2 px-3 py-[3px]" title="Shopify orders arrive by webhook">
+        <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">
+          <span className={`${freshnessChip} gap-x-2`} title="Shopify orders arrive by webhook">
             <span aria-hidden className={`size-2 rounded-full ${shopify === 'live' ? 'bg-good' : 'bg-ink-3'}`} />
-            <span className="font-medium text-ink">Shopify</span><span className="text-ink-2">{shopify}</span>
+            <span className="font-medium text-ink">Shopify</span><span className={`${freshnessAge} text-ink-2`}>{shopify}</span>
           </span>
-          <span className="glass-pill flex items-center gap-2 px-3 py-[3px]" title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
-            <MetaMark className="size-4 text-revenue" aria-hidden />
-            <span className="font-medium text-ink">Meta</span><span className="text-ink-2">{meta}</span>
+          <span className={`${freshnessChip} gap-x-1.5`} title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
+            <MetaMark className="size-3.5 text-revenue" aria-hidden />
+            <span className="font-medium text-ink">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
           </span>
-          <span className={`glass-pill flex items-center gap-2 px-3 py-[3px] ${vfStale ? 'text-warn max-sm:order-first' : ''}`} title="vFulfill arrives by CSV import">
+          <span className={`${freshnessChip} ${vfStale ? 'gap-x-1.5 text-warn max-sm:order-first' : 'gap-x-2'}`} title="vFulfill arrives by CSV import">
             {vfStale ? <AlertTriangle className="size-3.5" aria-hidden /> : <span aria-hidden className="size-2 rounded-full bg-good" />}
-            <span className={`font-medium ${vfStale ? '' : 'text-ink'}`}>vFulfill</span><span className={vfStale ? '' : 'text-ink-2'}>{vf}</span>
+            <span className={`font-medium ${vfStale ? '' : 'text-ink'}`}>vFulfill</span><span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
             {vfStale && <span className="sr-only">(stale)</span>}
           </span>
 

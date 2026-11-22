@@ -12,6 +12,17 @@ describe('PaceChart', () => {
     expect(html).toContain('No orders or ad spend yet today')
     expect(html).not.toContain('<svg')
   })
+
+  it.each([
+    { profit: 3326, amount: '+₹3,326', color: 'text-good' },
+    { profit: -1035, amount: '−₹1,035', color: 'text-bad' },
+    { profit: 0, amount: '₹0', color: 'text-ink-2' },
+  ])('labels cumulative profit as $amount', ({ profit, amount, color }) => {
+    const point = { key: '1', label: '1 pm', revenue: 1499, spend: 0, profit, cumRevenue: 1499, cumSpend: 0, cumProfit: profit, prevCumRevenue: null }
+    const html = renderToStaticMarkup(<PaceChart points={[point]} title="Pace · Today" prevLabel="yesterday by this hour" unit="hour" />)
+    expect(html).toContain(`class="${color} text-[12px] font-semibold tabular-nums">${amount}</text>`)
+    expect(html).toContain('class="text-ink-2 text-[12px] font-semibold tabular-nums">₹0</text>')
+  })
 })
 
 describe('a product that loses money before ads', () => {

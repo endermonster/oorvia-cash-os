@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Forecast } from '@/lib/forecast'
 import { inr } from '@/lib/metrics'
 import { monthsBetween } from '@/lib/pnl'
@@ -25,8 +25,9 @@ export function forecastTicks(values: number[]): number[] {
   const multiple = [1, 2, 2.5, 5, 10].find((n) => n >= roughStep / magnitude) ?? 10
   const step = magnitude * multiple
   const first = Math.floor(min / step)
-  const last = Math.ceil(max / step)
-  return Array.from({ length: last - first + 1 }, (_, i) => (first + i) * step)
+  // All-loss data: add one step of headroom so the ₹0 line sits inside the plot with room for its label.
+  const last = max <= 0 ? 1 : Math.ceil(max / step)
+  return Array.from({ length: last - first + 1 }, (_, i) => (first + i) * step + 0)
 }
 
 export function formatForecastTick(paise: number): string {
@@ -59,6 +60,8 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
   const wrap = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
   const [active, setActive] = useState<number | null>(null)
+  const tip = useRef<HTMLDivElement>(null)
+  const [tipWidth, setTipWidth] = useState(0)
 
   useEffect(() => {
     const el = wrap.current
@@ -95,15 +98,19 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
     return crossing ? [[from, crossing], [crossing, to]] : [[from, to]]
   })
 
-  // Keep the latest actual label visible. Thin earlier labels by pixel spacing.
+  // The opening and latest labels are always shown; the months between are thinned by pixel spacing.
   const projectionX = breakEven ? width - PAD.right : null
-  const labelled = new Set([points.length - 1])
+  const labelled = new Set([0, points.length - 1])
   let nextLabel = last.x
-  for (let i = points.length - 2; i >= 0; i--) {
-    if (nextLabel - points[i].x < 60) continue
+  for (let i = points.length - 2; i >= 1; i--) {
+    if (nextLabel - points[i].x < 60 || points[i].x - points[0].x < 60) continue
     labelled.add(i)
     nextLabel = points[i].x
   }
+
+  useLayoutEffect(() => {
+    if (tip.current) setTipWidth(tip.current.offsetWidth)
+  }, [active, width])
 
   function inspect(clientX: number, left: number) {
     const position = clientX - left
@@ -190,8 +197,8 @@ export function ForecastChart({ forecast }: { forecast: Forecast }) {
       )}
       <div aria-live="polite">
         {plotWidth > 0 && selected && (
-          <div className="pointer-events-none absolute top-0 max-w-full rounded-full bg-raised px-3 py-2 text-xs text-ink-2 ring-1 ring-line-strong"
-            style={{ [selected.x > width / 2 ? 'right' : 'left']: selected.x > width / 2 ? width - selected.x + 10 : selected.x + 10 }}>
+          <div ref={tip} className="pointer-events-none absolute top-0 w-max max-w-full rounded-xl bg-raised px-3 py-2 text-xs text-ink-2 ring-1 ring-line-strong"
+            style={{ left: Math.max(0, Math.min(width - tipWidth, selected.x + 10 + tipWidth <= width ? selected.x + 10 : selected.x - 10 - tipWidth)) }}>
             <p className="font-semibold text-ink">
               {selected.row ? detailMonth.format(monthDate(selected.row.month)) : 'Day 1 · Opening result'}{selected.row?.partial && ' · so far'}
             </p>

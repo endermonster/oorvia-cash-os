@@ -8,6 +8,7 @@ import { Delta, Signed, StoreDot, tone } from './bits'
 import { LiveMap } from './LiveMap'
 import { RevenueChart } from './RevenueChart'
 import { RoasTrack } from './RoasTrack'
+import { pageFrame } from './TopBar'
 
 export function HomeView({ view, period, m, now, mock }: { view: ViewState; period: Period; m: Metrics; now: Date; mock: boolean }) {
   const pf = m.portfolio(period)
@@ -20,7 +21,7 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   const end = series.at(-1)
 
   return (
-    <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+    <main className={`${pageFrame} space-y-3 pb-6 pt-3`}>
       {/* The verdict leads; the numbers behind it sit to its right. */}
       <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
         <div className="min-w-0 lg:self-center">
@@ -30,7 +31,7 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
         <div className="border-line lg:border-l lg:pl-8">
           <p className="label">Projected profit · {period.short} · All stores</p>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className={`text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(pf.total.contribution)}`}>{pf.total.contribution > 0 ? '+' : ''}<Signed value={pf.total.contribution} /></p>
+            <p className={`whitespace-nowrap text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(pf.total.contribution)}`}>{pf.total.contribution > 0 ? '+' : ''}<Signed value={pf.total.contribution} /></p>
             {pf.total.prevContribution > 0
               ? <Delta now={pf.total.contribution} prev={pf.total.prevContribution} suffix={`vs ${period.prevLabel}`} />
               : <span className="text-sm text-ink-3">vs {inr(pf.total.prevContribution)} {period.prevLabel}</span>}
@@ -56,10 +57,10 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
               <h2 id="pace-h" className="text-lg font-bold">Cumulative revenue vs spend <span className="block text-sm font-medium text-ink-3 sm:ml-2 sm:inline">{period.short} · Shopify + Meta</span></h2>
               <p className="flex items-center gap-5 text-sm text-ink-2">
                 <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-revenue" /><span>Revenue<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-revenue sm:hidden"> {inr(end.cumRevenue)}</span>}</span></span>
-                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-spend" /><span>Spend<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-spend sm:hidden"> {inr(end.cumSpend)}</span>}</span></span>
+                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-spend" /><span>Spend<span className="hidden sm:inline"> (cumulative)</span>{end && <span className={`whitespace-nowrap font-semibold sm:hidden ${end.cumSpend === 0 ? 'text-ink-2' : 'text-spend'}`}> {inr(end.cumSpend)}</span>}</span></span>
               </p>
             </div>
-            <div className="mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className={`mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${end?.cumSpend === 0 ? '[&_.text-spend]:text-ink-2' : ''}`}>
               <RevenueChart points={series} unit={period.id === 'today' ? 'hour' : 'day'} />
             </div>
           </section>
@@ -69,8 +70,8 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
           <div className="flex items-center justify-between gap-4 px-3 pt-2">
             <h2 id="map-h" className="text-lg font-bold">Orders across India</h2>
             <p className="flex items-center gap-4 text-sm text-ink-2">
-              <span className="flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full bg-prepaid" />Prepaid</span>
-              <span className="flex items-center gap-1.5"><span aria-hidden className="size-2.5 rounded-full bg-cod" />COD</span>
+              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-full bg-prepaid" />Prepaid</span>
+              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-full bg-cod" />COD</span>
             </p>
           </div>
           <div className="mt-3 flex min-h-0 flex-1 flex-col">
@@ -94,6 +95,7 @@ const ROW = 'grid grid-cols-2 gap-x-4 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 
 
 function Stores({ stores, total, view, period, notConnected }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; period: Period; notConnected: (id: StoreId) => boolean }) {
   const head = 'label whitespace-nowrap leading-tight'
+  const moneyHead = `${head} text-right`
   const src = (s: string) => <span className="block text-[0.6875rem] font-normal normal-case tracking-normal text-ink-3">{period.short} · {s}</span>
   return (
     <section aria-labelledby="stores-h" className="glass rise p-2 [--delay:80ms]">
@@ -101,31 +103,31 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
       <div role="table" aria-label="Stores" className="@container">
         <div role="row" className={`${ROW} hidden px-3 pb-2 pt-2 @min-[50rem]:grid`}>
           <span role="columnheader" className={`${head} [grid-area:name]`}>Store</span>
-          <span role="columnheader" className={`${head} [grid-area:spend]`}>Spend{src('Meta')}</span>
+          <span role="columnheader" className={`${moneyHead} [grid-area:spend]`}>Spend{src('Meta')}</span>
           <span role="columnheader" className={`${head} [grid-area:orders]`}>Orders{src('Shopify')}</span>
           <span role="columnheader" className={`${head} [grid-area:roas]`}>ROAS vs breakeven{src('Meta')}</span>
-          <span role="columnheader" className={`${head} [grid-area:rev]`}>Booked revenue{src('Shopify')}</span>
-          <span role="columnheader" className={`${head} [grid-area:profit]`}>Profit (est.){src('Estimate')}</span>
+          <span role="columnheader" className={`${moneyHead} [grid-area:rev]`}>Booked revenue{src('Shopify')}</span>
+          <span role="columnheader" className={`${moneyHead} [grid-area:profit]`}>Profit (est.){src('Estimate')}</span>
           <span role="columnheader" className={`${head} [grid-area:call] text-center`}>Call</span>
         </div>
         <div className="space-y-1.5">
           {stores.map((s) => (
             <div role="row" key={s.store.id} className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
               <span role="cell" className="[grid-area:name]">
-                <Link href={href('/', { ...view, store: s.store.id })} className="flex items-center gap-2.5 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] hover:underline">
-                  <StoreDot id={s.store.id} size={9} />{s.store.name}
+                <Link href={href('/', { ...view, store: s.store.id })} className="inline-flex min-h-9 items-center gap-2 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] hover:underline">
+                  <StoreDot id={s.store.id} />{s.store.name}
                 </Link>
               </span>
               <Cell area="spend" label="Spend" value={inr(s.spend)} />
               <Cell area="orders" label="Orders" value={String(s.orders)} sub={codShareLabel(s)} />
               <span role="cell" className="[grid-area:roas]"><RoasBar s={s} off={notConnected(s.store.id)} /></span>
               <Cell area="rev" label="Booked revenue" value={inr(s.revenue)} />
-              <span role="cell" className="[grid-area:profit]">
+              <span role="cell" className="text-right tabular-nums [grid-area:profit]">
                 <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
                 <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></span>
                 {s.contribution < 0 && <span className="text-xs text-bad">loss this period</span>}
               </span>
-              <span role="cell" className="flex justify-end [grid-area:call] @min-[50rem]:justify-center"><CallChip s={s} off={notConnected(s.store.id)} /></span>
+              <span role="cell" className="flex justify-end self-start [grid-area:call] @min-[50rem]:justify-center @min-[50rem]:self-baseline"><CallChip s={s} off={notConnected(s.store.id)} /></span>
             </div>
           ))}
           <div role="row" className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
@@ -134,7 +136,7 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
             <Cell area="orders" label="Orders" value={String(total.orders)} />
             <span role="cell" className="[grid-area:roas]"><VxpRoas total={total} /></span>
             <Cell area="rev" label="Booked revenue" value={inr(total.revenue)} />
-            <span role="cell" className="[grid-area:profit]">
+            <span role="cell" className="text-right tabular-nums [grid-area:profit]">
               <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
               <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(total.contribution)}`}>{total.contribution > 0 ? '+' : ''}<Signed value={total.contribution} /></span>
             </span>
@@ -147,8 +149,9 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
 }
 
 function Cell({ area, label, value, sub }: { area: string; label: string; value: string; sub?: string }) {
+  const money = area === 'spend' || area === 'rev'
   return (
-    <span role="cell" className="min-w-0" style={{ gridArea: area }}>
+    <span role="cell" className={`min-w-0 ${money ? 'whitespace-nowrap text-right tabular-nums' : ''}`} style={{ gridArea: area }}>
       <span className="text-xs text-ink-3 @min-[50rem]:hidden">{label} </span>
       <span className="block text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight">{value}</span>
       {sub && <span className="text-xs text-ink-2">{sub}</span>}
@@ -193,7 +196,7 @@ function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
     : !breaksEven(s.economics) || s.zone === 'below' ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
     : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
     : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
-  return <span className={`inline-block min-w-[5.25rem] whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${cls}`}>{word}</span>
+  return <span className={`inline-flex h-8 min-w-[5.25rem] items-center justify-center whitespace-nowrap rounded-lg px-3 text-sm font-semibold ring-1 ${cls}`}>{word}</span>
 }
 
 const TONE = {
@@ -207,23 +210,29 @@ function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
     <section aria-labelledby="calls-h" className="glass rise p-2 [--delay:140ms]">
       <h2 id="calls-h" className="px-3 pt-2 text-lg font-bold">Needs your call</h2>
       {calls.length === 0 ? (
-        <p className="mt-3 flex items-center gap-3 px-3 pb-2 text-ink-2"><CircleCheck className="size-5 text-good" aria-hidden />Nothing needs you today.</p>
+        <p className="mt-3 flex items-start gap-2 px-3 pb-2 text-ink-2"><span className="flex h-lh shrink-0 items-center"><CircleCheck className="size-4 text-good" aria-hidden /></span>Nothing needs you today.</p>
       ) : (
         <ul className="mt-3 space-y-1.5">
           {calls.map((c) => {
             const { Icon, cls, word } = TONE[c.tone]
             const body = (
               <>
-                <Icon className={`size-[1.15rem] shrink-0 ${cls}`} aria-hidden /><span className="sr-only">{word}: </span>
-                <span className="min-w-0 flex-1 md:truncate"><span className="font-semibold">{c.title}</span><span className="text-ink-2"> — {c.detail}</span></span>
-                {c.storeId && <ChevronRight className="size-4 shrink-0 text-ink-3" aria-hidden />}
+                <span className="flex h-lh shrink-0 items-center"><Icon className={`size-4 ${cls}`} aria-hidden /></span>
+                <span className="sr-only">{word}: </span>
+                <span className="min-w-0 flex-1">
+                  <span className="font-semibold">{c.title}</span>
+                  <span className="text-ink-2"> — {c.detail.split(/([+−-]?₹[\d,]+(?:\.\d+)?)/g).map((part, i) =>
+                    i % 2 ? <span key={i} className="whitespace-nowrap">{part}</span> : part
+                  )}</span>
+                </span>
+                {c.storeId && <span className="-ml-1 flex h-lh shrink-0 items-center"><ChevronRight className="size-3.5 text-ink-3" aria-hidden /></span>}
               </>
             )
             return (
               <li key={c.id}>
                 {c.storeId
-                  ? <Link href={href('/', { ...view, store: c.storeId })} className="glass-row flex items-center gap-3 px-3 py-2.5">{body}</Link>
-                  : <div className="glass-row flex items-center gap-3 px-3 py-2.5">{body}</div>}
+                  ? <Link href={href('/', { ...view, store: c.storeId })} className="glass-row flex items-start gap-2 px-3 py-2.5">{body}</Link>
+                  : <div className="glass-row flex items-start gap-2 px-3 py-2.5">{body}</div>}
               </li>
             )
           })}
@@ -244,33 +253,36 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
   const month = (iso: string) => new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
   const meta = (a: string, b: string) => <span className="hidden text-xs leading-snug text-ink-3 xl:block">{a}<br />{b}</span>
-  const item = 'flex min-w-0 items-center gap-3.5 px-3 py-3'
+  const moneyHref = href('/money', view)
+  const item = 'flex min-w-0 items-start gap-2 px-3 py-3 text-lg'
+  const iconBox = 'flex h-lh shrink-0 items-center text-ink-2'
+  const moneyLink = (label: string) => <Link href={moneyHref} aria-label={`${label} on Money`} className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">On Money <span aria-hidden className="text-sm">→</span></Link>
   return (
     <section aria-label="Cash, GST and your share" className="glass grid gap-x-2 gap-y-1 p-2 md:grid-cols-3 md:divide-x md:divide-line">
-      <Link href={href('/money', view)} className={`${item} rounded-xl hover:bg-white/[0.04]`}>
-        <Wallet className="size-6 shrink-0 text-ink-2" aria-hidden />
+      <Link href={moneyHref} className={`${item} rounded-xl hover:bg-raised/40`}>
+        <span className={iconBox}><Wallet className="size-4" aria-hidden /></span>
         <span className="min-w-0 flex-1">
           {c ? <>
-            <span className="block text-lg"><span className="font-semibold">Cash</span> <span className="font-bold">{inr(c.total)}</span></span>
+            <span className="block"><span className="font-semibold">Cash</span> <span className="whitespace-nowrap font-bold tabular-nums">{inr(c.total)}</span></span>
             <span className="block text-sm text-ink-2">{cashDetails || 'cash on hand'}</span>
           </> : <span className="text-ink-3">Cash connects in a later stage</span>}
         </span>
         {meta(`Period: ${period.short}`, 'Source: cash ledger')}
       </Link>
       <div className={item}>
-        <FileText className="size-6 shrink-0 text-ink-2" aria-hidden />
+        <span className={iconBox}><FileText className="size-4" aria-hidden /></span>
         <span className="min-w-0 flex-1">
           {g ? <>
-            <span className="block text-lg"><span className="font-semibold">GST {month(g.month)}</span> <span className="font-bold">{inr(g.owed)}</span></span>
+            <span className="block"><span className="font-semibold">GST {month(g.month)}</span> <span className="whitespace-nowrap font-bold tabular-nums">{inr(g.owed)}</span></span>
             <span className="block text-sm text-ink-2">due {day(g.dueDate)}</span>
-          </> : <span className="text-ink-3">GST connects in a later stage</span>}
+          </> : <><span className="block font-semibold">GST</span>{moneyLink('GST')}</>}
         </span>
         {g && meta(`Period: ${month(g.month)}`, 'Source: GST ledger')}
       </div>
       <div className={item}>
-        <PieChart className="size-6 shrink-0 text-ink-2" aria-hidden />
-        <span className="min-w-0 flex-1 text-lg">
-          {share ? <><span className="font-semibold">Your share (50%) this month</span> <span className={`font-bold ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <span className="text-base text-ink-3">Your share connects in a later stage</span>}
+        <span className={iconBox}><PieChart className="size-4" aria-hidden /></span>
+        <span className="min-w-0 flex-1">
+          {share ? <><span className="font-semibold">Your share (50%) this month</span> <span className={`whitespace-nowrap font-bold tabular-nums ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <><span className="block font-semibold">Your share</span>{moneyLink('Your share')}</>}
         </span>
         {share && meta('Period: this month', 'Source: profit model')}
       </div>

@@ -19,9 +19,16 @@ describe('splitAtZero', () => {
 describe('forecast y-axis', () => {
   it('uses evenly spaced ticks that cover the data and include zero', () => {
     expect(forecastTicks([-13_010_000, 3_239_000])).toEqual([-15_000_000, -10_000_000, -5_000_000, 0, 5_000_000])
-    expect(forecastTicks([-600])).toEqual([-600, -400, -200, 0])
+    expect(forecastTicks([-600])).toEqual([-600, -400, -200, 0, 200])
     expect(forecastTicks([0, 50])).toEqual([0, 100])
     expect(forecastTicks([0, 0])).toEqual([0])
+  })
+
+  it('keeps a labelled zero line with headroom when every value is a loss', () => {
+    const ticks = forecastTicks([-100_000, -250_000, -300_000])
+    expect(ticks).toContain(0)
+    expect(ticks[ticks.length - 1]).toBeGreaterThan(0)
+    expect(Object.is(ticks.find((t) => t === 0), -0)).toBe(false)
   })
 
   it.each([[0, '₹0'], [-500, '−₹5'], [2_500_000, '₹25k'], [-12_000_000, '−₹1.2L']])(

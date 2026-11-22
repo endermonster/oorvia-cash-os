@@ -124,9 +124,9 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
               <circle cx="7" cy="7" r="1.6" style={{ fill: 'var(--color-map-dots)' }} opacity="0.16" />
             </pattern>
           </defs>
-          <path d={INDIA_PATH} fill="url(#land)" />
-          <path d={INDIA_PATH} fill="url(#land-dots)" />
-          <path d={INDIA_PATH} fill="none" style={{ stroke: 'var(--color-map-edge)' }} strokeOpacity="0.55" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d={INDIA_PATH} style={{ fill: 'url(#land)' }} />
+          <path d={INDIA_PATH} style={{ fill: 'url(#land-dots)' }} />
+          <path d={INDIA_PATH} style={{ fill: 'none', stroke: 'var(--color-map-edge)' }} strokeOpacity="0.55" strokeWidth="2.2" strokeLinejoin="round" />
         </svg>
 
         {/* Dots are HTML so their pop is a compositor animation, never a repaint of the map. */}
@@ -165,7 +165,7 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
       <div className="mt-4 flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between px-3">
           <h3 className="text-lg font-bold">Latest orders</h3>
-          <Link href={href('/orders', view)} className="flex items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">All orders<ChevronRight className="size-4" aria-hidden /></Link>
+          <Link href={href('/orders', view)} className="flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">All orders<ChevronRight className="size-3.5" aria-hidden /></Link>
         </div>
         {orders.length === 0 ? (
           <p className="px-2 pt-3 text-ink-3">No orders yet.</p>
@@ -173,17 +173,17 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
           <ul className="mt-3 space-y-1.5">
             {orders.slice(0, 4).map((o) => (
               <li key={o.id} className={fresh[o.id] ? 'map-row-in' : ''}>
-                <Link href={href('/orders', { ...view, store: o.storeId })} className="glass-row flex items-center gap-3 px-3 py-2.5">
-                  <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${payBg(o.payment)}`} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{name[o.storeId] ?? o.storeId} · {o.city}</span>
-                    <span className="block truncate text-sm text-ink-2">{o.product}</span>
+                <Link href={href('/orders', { ...view, store: o.storeId })} className="glass-row grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-2 px-3 py-2.5">
+                  <span className="flex h-lh items-center"><span aria-hidden className={`size-2 rounded-full ${payBg(o.payment)}`} /></span>
+                  <span className="wrap-anywhere">
+                    <span className="block font-semibold">{name[o.storeId] ?? o.storeId} · {o.city}</span>
+                    <span className="block text-sm text-ink-2">{o.product}</span>
                   </span>
-                  <span className="whitespace-nowrap text-right text-sm">
-                    <span className="block font-semibold sm:inline">{inr(o.value)}</span>
-                    <span className="text-ink-2"><span className="hidden sm:inline"> · </span>{payWord(o.payment)} · {ago(minutes(o.placedAt))}</span>
+                  <span className="whitespace-nowrap text-right tabular-nums">
+                    <span className="block text-sm font-semibold leading-6">{inr(o.value)}</span>
+                    <span className="block text-sm text-ink-2">{payWord(o.payment)} · {ago(minutes(o.placedAt))}</span>
                   </span>
-                  <ChevronRight className="size-4 shrink-0 text-ink-3" aria-hidden />
+                  <span className="-ml-1 flex h-lh items-center"><ChevronRight className="size-3.5 text-ink-3" aria-hidden /></span>
                 </Link>
               </li>
             ))}

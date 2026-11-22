@@ -1,3 +1,4 @@
+import { ArrowDown } from 'lucide-react'
 import { Suspense } from 'react'
 import { CashCard } from '@/components/CashCard'
 import { CapitalCard, ForecastCard, GstCard } from '@/components/MoneyParts'
@@ -65,6 +66,9 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
       <TopBar tab="money" view={view} d={d} />
       <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
         <h1 className="sr-only">Money</h1>
+        {forecast ? (
+          <a href="#forecast" className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink sm:hidden">Forecast <ArrowDown className="size-3.5" aria-hidden /></a>
+        ) : null}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
           <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} />

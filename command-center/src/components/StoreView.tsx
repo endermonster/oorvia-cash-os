@@ -37,7 +37,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
     { k: 'rev', label: src('Revenue', 'Shopify'), value: inr(s.revenue), sub: <Delta now={s.revenue} prev={s.prev.revenue} suffix={`vs ${period.prevLabel}`} /> },
     { k: 'spend', label: src('Spend', 'Meta'), value: inr(s.spend), sub: <Delta now={s.spend} prev={s.prev.spend} neutral suffix={`vs ${period.prevLabel}`} /> },
     { k: 'orders', label: src('Orders', 'Shopify'), value: String(s.orders), sub: codShareLabel(s) ? <span className="text-sm text-ink-2">{codShareLabel(s)}</span> : null },
-    { k: 'cpa', label: src('CPA', 'Meta'), value: s.cpa ? inr(s.cpa) : '—', sub: <span className="text-sm text-ink-3">{e === null ? 'Breakeven needs a product cost' : breaksEven(e) ? `breakeven ${inr(e.breakevenCpa)} per order` : `loses ${inr(-e.breakevenCpa)} per order before ads`}</span> },
+    { k: 'cpa', label: src('CPA', 'Meta'), value: s.cpa ? inr(s.cpa) : '—', sub: <span className="text-sm text-ink-3">{e === null ? 'Breakeven needs a product cost' : breaksEven(e) ? `breakeven ${inr(e.breakevenCpa)} per\u00a0order` : `loses ${inr(-e.breakevenCpa)} per\u00a0order before ads`}</span> },
     { k: 'cpm', label: src('CPM', 'Meta'), value: s.cpm ? inr(s.cpm) : '—', sub: s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null },
     { k: 'ctr', label: src('CTR', 'Meta'), value: s.ctr ? pct(s.ctr, 1) : '—', sub: <span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span> },
   ]
@@ -47,7 +47,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
       <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,auto)_auto]">
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-3">
-            <p className="flex min-w-0 items-center gap-2.5 text-[1.6rem] font-bold tracking-[-0.02em]"><StoreDot id={id} size={11} /><span className="truncate">{store.name}</span></p>
+            <p className="flex min-w-0 items-center gap-2 text-[1.6rem] font-bold tracking-[-0.02em]"><StoreDot id={id} /><span className="truncate">{store.name}</span></p>
             <CallChip s={s} off={off} />
           </div>
           <h1 className="mt-2 text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict([s], m.metaNotConnected)}</h1>
@@ -55,11 +55,11 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
           {warnings.length > 0 && (
             <div className="mt-1 text-sm text-warn">
               <ul className="space-y-0.5">
-                {warnings.slice(0, 3).map((w, i) => <li key={w} className="flex items-start gap-1.5">{i === 0 && <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />}<span className={i === 0 ? '' : 'pl-[1.375rem]'}>{w}</span></li>)}
+                {warnings.slice(0, 3).map((w, i) => <li key={w} className="flex items-start gap-2">{i === 0 && <span className="flex h-lh shrink-0 items-center"><AlertTriangle className="size-4" aria-hidden /></span>}<span className={i === 0 ? '' : 'pl-6'}>{w}</span></li>)}
               </ul>
               {warnings.length > 3 && (
-                <details className="mt-0.5 pl-[1.375rem]">
-                  <summary className="cursor-pointer text-ink-3">+{warnings.length - 3} more</summary>
+                <details className="mt-0.5 pl-6">
+                  <summary className="min-h-9 cursor-pointer py-2 text-ink-3 sm:min-h-0 sm:py-0">+{warnings.length - 3} more</summary>
                   <ul className="mt-0.5 space-y-0.5">{warnings.slice(3).map((w) => <li key={w}>{w}</li>)}</ul>
                 </details>
               )}
@@ -113,10 +113,10 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
 
       {/* Campaigns first in the DOM so phones read them before the chart; desktop puts them on the right. */}
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section aria-labelledby="camp-h" className="glass rise p-2 lg:col-start-2 lg:row-start-1 [--delay:120ms]">
-          <div className="flex items-baseline justify-between gap-3 px-3 pt-2">
+        <section aria-labelledby="camp-h" className="glass rise self-start p-2 lg:col-start-2 lg:row-start-1 [--delay:120ms]">
+          <div className="flex items-center justify-between gap-3 px-3 pt-2">
             <h2 id="camp-h" className="text-lg font-bold">Campaigns</h2>
-            <Link href={href('/ads', view)} className="inline-flex items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">All campaigns <ArrowRight className="size-4" aria-hidden /></Link>
+            <Link href={href('/ads', view)} className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink sm:min-h-0">All campaigns <ArrowRight className="size-3.5 shrink-0" aria-hidden /></Link>
           </div>
           {camps.length === 0 ? (
             <p className="px-3 pb-2 pt-3 text-ink-3">No campaigns spent in this period.</p>
@@ -172,9 +172,9 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="dots-h" className="text-lg font-bold">Orders · {period.short} · {s.orders}</h2>
         <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-2" aria-label="Legend">
-          <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-prepaid" />Prepaid {prepaid}</li>
-          <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-cod" />COD {s.codOrders}</li>
-          {s.unknownPayOrders > 0 && <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-ink-3" />Payment unknown {s.unknownPayOrders}</li>}
+          <li className="flex items-center gap-2"><span aria-hidden className="size-2 shrink-0 rounded-full bg-prepaid" />Prepaid {prepaid}</li>
+          <li className="flex items-center gap-2"><span aria-hidden className="size-2 shrink-0 rounded-full bg-cod" />COD {s.codOrders}</li>
+          {s.unknownPayOrders > 0 && <li className="flex items-center gap-2"><span aria-hidden className="size-2 shrink-0 rounded-full bg-ink-3" />Payment unknown {s.unknownPayOrders}</li>}
         </ul>
       </div>
       {shown.length === 0 ? (
@@ -227,7 +227,7 @@ export function DeliveryTable({ rows }: { rows: DeliveryRow[] }) {
   return (
     <section aria-labelledby="delivery-h" className="glass p-2 @container">
       <h2 id="delivery-h" className="px-3 pt-2 text-lg font-bold">Delivery rate</h2>
-      <p className="px-3 text-sm text-ink-3">Delivered ÷ (delivered + RTO), by the day the shipment closed. From vFulfill; payment type from Shopify.</p>
+      <p className="mt-3 px-3 text-sm text-ink-3">Delivered ÷ (delivered + RTO), by the day the shipment closed. From vFulfill; payment type from Shopify.</p>
       {rows.length === 0 ? (
         <p className="px-3 pb-2 pt-3 text-ink-3">No shipments closed yet.</p>
       ) : (
