@@ -1,4 +1,4 @@
-import { AlertTriangle, CircleCheck, Clock } from 'lucide-react'
+import { AlertTriangle, ChevronRight, CircleCheck, Clock } from 'lucide-react'
 import type { capitalSummary } from '@/lib/capital'
 import type { Forecast } from '@/lib/forecast'
 import type { GstMonth, GstResult } from '@/lib/gst'
@@ -203,7 +203,7 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
         {f.opening.periodEnd ? <>Opens at {signed(f.opening.netPaise)} up to {day(f.opening.periodEnd)} (old Cash OS, before GST), then </> : <>From </>}
         every month of the P&amp;L above{f.rows.some((r) => r.partial) ? ', this month as it stands so far' : ''}. Net profit, ex-GST.
       </p>
-      <div className="mt-4 grid gap-x-10 gap-y-6 sm:grid-cols-2">
+      <div className="mt-4">
         <div>
           <p className="label">Average finished month</p>
           {f.average === null ? <p className="mt-1 text-ink-2">No finished month yet.</p> : (
@@ -215,23 +215,14 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
                 : f.average === 0 ? <p className="mt-2 text-sm text-ink-3">At that pace the loss stays where it is: no break-even date until the average turns positive.</p>
                   : <p className="mt-2 text-sm text-ink-3">At that pace the loss grows: no break-even date until the average turns positive.</p>}
         </div>
-        {f.needed.length > 0 ? (
-          <div>
-            <p className="label">Net profit needed a month, from next month</p>
-            <dl className="mt-1 space-y-1">
-              {f.needed.map((n) => (
-                <div key={n.months} className="flex items-baseline justify-between gap-6">
-                  <dt className="text-ink-2">To clear it in {n.months} months</dt>
-                  <dd className="font-semibold text-ink tabular-nums">{rs(n.perMonth)}</dd>
-                </div>
-              ))}
-            </dl>
-          </div>
-        ) : <p className="text-good">The running total is not negative: nothing left to win back.</p>}
       </div>
       <ForecastChart forecast={f} />
-      <div className="mt-4">
-        <table className="w-full text-left text-sm tabular-nums">
+      <details className="group mt-4">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink-2 hover:text-ink [&::-webkit-details-marker]:hidden">
+          <span aria-hidden className="flex size-4 shrink-0 items-center justify-center"><ChevronRight className="size-4 transition-transform group-open:[transform:rotate(90deg)]" /></span>
+          Monthly breakdown · {f.rows.length + (f.opening.periodEnd ? 1 : 0)} months
+        </summary>
+        <table className="mt-2 w-full text-left text-sm tabular-nums">
           <thead>
             <tr className="border-b border-line">
               <th scope="col" className="label py-2 font-normal">Month</th>
@@ -256,7 +247,7 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
             ))}
           </tbody>
         </table>
-      </div>
+      </details>
     </section>
   )
 }

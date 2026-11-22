@@ -54,7 +54,7 @@ function Section({ id, title, note, children }: { id: string; title: string; not
 function Disclosure({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <details className={`group ${className}`}>
-      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 text-sm text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 text-sm text-ink-3 hover:text-ink [&::-webkit-details-marker]:hidden">
         <span aria-hidden className="flex size-4 shrink-0 items-center justify-center"><ChevronRight className="size-4 transition-transform group-open:[transform:rotate(90deg)]" /></span>{label}
       </summary>
       {children}

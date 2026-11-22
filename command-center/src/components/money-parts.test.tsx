@@ -2,7 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { capitalSummary, type CapitalRow } from '@/lib/capital'
 import type { GstMonth, GstResult } from '@/lib/gst'
-import { CapitalCard, GstCard } from './MoneyParts'
+import type { Forecast } from '@/lib/forecast'
+import { CapitalCard, ForecastCard, GstCard } from './MoneyParts'
 
 const month: GstMonth = {
   month: '2026-10',
@@ -105,5 +106,24 @@ describe('CapitalCard', () => {
     expect(html).toContain('returned')
     expect(html).toContain('Ravi')
     expect(html).toContain('1 entry')
+  })
+})
+
+describe('ForecastCard', () => {
+  const f: Forecast = {
+    opening: { netPaise: -100, periodEnd: '2026-09-30', note: null },
+    rows: [{ month: '2026-10', net: -200, cumulative: -300, partial: false }],
+    cumulative: -300, average: -200, finishedMonths: 1,
+    needed: [{ months: 6, perMonth: 50 }], breakEven: null,
+  }
+
+  it('drops the clearing rows and puts the month table in a closed details', () => {
+    const html = renderToStaticMarkup(<ForecastCard f={f} scope="All VXP" />).replace(/<!-- -->/g, '')
+    expect(html).not.toContain('To clear it in')
+    expect(html).not.toContain('needed a month')
+    const d = html.match(/<details(?![^>]*\sopen)[^>]*>[\s\S]*<\/details>/)?.[0] ?? ''
+    expect(d).toContain('Monthly breakdown · 2 months')
+    expect(d).toContain('<table')
+    expect(html.indexOf('<table')).toBe(html.indexOf('<table', html.indexOf('<details')))
   })
 })
