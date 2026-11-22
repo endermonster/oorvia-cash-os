@@ -36,15 +36,15 @@ const exact = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { m
 const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const th = 'label px-4 py-3 font-normal whitespace-nowrap'
 // Here, not in SettingsForm: a value exported from a 'use client' file reaches a server component as a client reference, not a string.
-const inputCls = 'rounded-md border border-line-strong bg-raised px-3 py-2 text-ink'
+const inputCls = 'glass-pill h-10 max-w-full border border-line-strong px-3 text-sm text-ink focus:outline-2 focus:outline-sodium'
 const labelCls = 'flex flex-col gap-1 text-sm text-ink-2'
 
 function Section({ id, title, note, children }: { id: string; title: string; note?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section aria-labelledby={id} className="mt-12 border-t border-line pt-8">
-      <h2 id={id} className="text-xl font-bold tracking-tight text-ink">{title}</h2>
+    <section aria-labelledby={id} className="glass @container scroll-mt-4 px-5 py-5">
+      <h2 id={id} className="text-lg font-bold tracking-tight text-ink">{title}</h2>
       {note ? <p className="mt-1 max-w-[80ch] text-sm text-ink-3">{note}</p> : null}
-      <div className="mt-5">{children}</div>
+      <div className="mt-3">{children}</div>
     </section>
   )
 }
@@ -69,19 +69,18 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
 
   return (
     <>
-      {/* Settings is not a tab: the bar shows Money, where its link lives, until the top bar gets its gear. */}
-      <TopBar tab="money" view={view} d={d} />
-      <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
-        <h1 className="text-3xl font-extrabold tracking-tight text-ink">Settings</h1>
-        <p className="mt-2 max-w-[80ch] text-sm text-ink-3">What only you can tell the dashboard: bank balance, vFulfill exports, product costs and stages, fixed costs, GST, capital &amp; loans.</p>
+      <TopBar view={view} d={d} />
+      <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+        <div className="px-2 py-3"><h1 className="text-3xl font-extrabold tracking-tight text-ink">Settings</h1>
+        <p className="mt-2 max-w-[80ch] text-sm text-ink-3">What only you can tell the dashboard: bank balance, vFulfill exports, product costs and stages, fixed costs, GST, capital &amp; loans.</p></div>
 
         {d.source !== 'supabase' ? (
-          <p className="mt-8 rounded-xl bg-raised p-6 text-ink-2">Settings edits real data only: set DATA_SOURCE=supabase.</p>
+          <p className="glass p-5 text-ink-2">Settings edits real data only: set DATA_SOURCE=supabase.</p>
         ) : error || !s ? (
-          <p className="mt-8 rounded-xl bg-raised p-6 text-ink-2">{error}</p>
+          <p className="glass p-5 text-ink-2">{error}</p>
         ) : (
           <>
-            <Section id="bank-h" title="Bank balance" note="Counts in All VXP cash only (one account for every store). The newest date wins; a second entry on the same day replaces the first.">
+            <nav aria-label="Settings sections" className="glass flex flex-wrap gap-2 p-3">{[['bank-h', 'Bank balance'], ['vf-h', 'vFulfill'], ['prod-h', 'Products'], ['fixed-h', 'Fixed costs'], ['gst-h', 'GST'], ['capital-h', 'Capital & loans']].map(([id, title]) => <a key={id} href={`#${id}`} className="glass-pill px-3 py-2 text-sm text-ink-2 hover:text-ink">{title}</a>)}</nav><Section id="bank-h" title="Bank balance" note="Counts in All VXP cash only (one account for every store). The newest date wins; a second entry on the same day replaces the first.">
               <p className="text-ink">
                 {s.bank[0] ? <>Latest <span className="font-semibold">{rs(s.bank[0].amountPaise)}</span> on {day(s.bank[0].enteredOn)}{s.bank[0].note ? ` · ${s.bank[0].note}` : ''}</> : 'No balance entered yet.'}
               </p>
@@ -110,8 +109,8 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
 
             <Section id="fixed-h" title="Fixed costs" note="Monthly costs bill on their start date's day each month until the end date, quarterly ones every third month from their start; one-time costs land on their date. A store's costs count in that store's P&L; shared ones (no store) in All VXP only. End a cost that stopped; delete only one entered by mistake.">
               {s.fixedCosts.length === 0 ? <p className="text-ink-3">No fixed costs yet.</p> : (
-                <div className="overflow-x-auto rounded-xl bg-raised">
-                  <table className="w-full min-w-[980px] text-left text-sm tabular-nums">
+                <div className="@container min-w-0">
+                  <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
                         {['Cost', 'Store', 'Amount', 'Billing', 'From', 'Until', ''].map((h, i) => <th key={i} scope="col" className={`${th} ${i === 2 ? 'text-right' : ''}`}>{h}</th>)}
@@ -121,13 +120,13 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                       {s.fixedCosts.map((f) => {
                         const ended = f.endDate !== null && f.endDate < today
                         return (
-                          <tr key={f.id} className={`border-b border-line align-top last:border-0 ${ended ? 'text-ink-3' : ''}`}>
+                          <tr key={f.id} className={`glass-row align-top ${ended ? 'text-ink-3' : ''}`}>
                             <th scope="row" className="px-4 py-3 font-semibold text-ink">{f.name}{f.note ? <span className="block text-xs font-normal text-ink-3">{f.note}</span> : null}</th>
-                            <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
-                            <td className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
-                            <td className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : f.frequency === 'quarterly' ? 'Every 3 months' : 'One-time'}</td>
-                            <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
-                            <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
+                            <td data-label="Store" className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.storeId ? <span className="inline-flex items-center gap-2"><StoreDot id={f.storeId as StoreId} />{storeName(f.storeId)}</span> : storeName(null)}</td>
+                            <td data-label="Amount" className="px-4 py-3 text-right text-ink">{rs(f.amountPaise)}<span className="block text-xs text-ink-3">{f.rcm ? 'from abroad: RCM' : f.gstInclusive ? 'incl. GST' : 'ex-GST'}</span></td>
+                            <td data-label="Billing" className="px-4 py-3 text-ink-2">{f.frequency === 'monthly' ? 'Monthly' : f.frequency === 'quarterly' ? 'Every 3 months' : 'One-time'}</td>
+                            <td data-label="From" className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(f.startDate)}</td>
+                            <td data-label="Until" className="px-4 py-3 text-ink-2 whitespace-nowrap">{f.frequency === 'one-time' ? '—' : f.endDate ? day(f.endDate) : 'Ongoing'}</td>
                             <td className="px-4 py-3">
                               <div className="flex flex-wrap items-start gap-3">
                                 {f.frequency !== 'one-time' ? (
@@ -155,7 +154,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <SettingsForm action={addFixedCost} submit="Add cost" className="mt-3 flex flex-wrap items-end gap-3">
                 <label className={labelCls}>Name<input name="name" required maxLength={80} placeholder="Shopify plan" className={`${inputCls} w-48`} /></label>
                 <label className={labelCls}>Store
-                  <select name="store" defaultValue="" className={inputCls}>
+                  <select name="store" defaultValue="" className={`${inputCls} [&_option]:bg-raised`}>
                     <option value="">All VXP (shared)</option>
                     {d.stores.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
                   </select>
@@ -164,7 +163,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                 <label className="flex items-center gap-2 self-center pt-5 text-sm text-ink"><input name="gst" type="checkbox" className="size-4" />Amount includes GST</label>
                 <label className="flex items-center gap-2 self-center pt-5 text-sm text-ink"><input name="rcm" type="checkbox" className="size-4" />Billed from abroad (RCM)</label>
                 <label className={labelCls}>Billing
-                  <select name="frequency" defaultValue="monthly" className={inputCls}>
+                  <select name="frequency" defaultValue="monthly" className={`${inputCls} [&_option]:bg-raised`}>
                     <option value="monthly">Monthly</option>
                     <option value="quarterly">Every 3 months</option>
                     <option value="one-time">One-time</option>
@@ -204,8 +203,8 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <h3 className="mt-10 text-base font-semibold text-ink">Other GST entries</h3>
               <p className="mt-1 max-w-[80ch] text-sm text-ink-3">A purchase with GST that Money doesn&apos;t read (packaging, equipment), a sale outside Shopify, or a one-off foreign charge (RCM, e.g. a Shopify app). Never vFulfill, Meta, fees or a fixed cost flagged RCM: those count already.</p>
               {s.gst.entries.length === 0 ? <p className="mt-3 text-ink-3">No entries yet.</p> : (
-                <div className="mt-3 overflow-x-auto rounded-xl bg-raised">
-                  <table className="w-full min-w-[760px] text-left text-sm tabular-nums">
+                <div className="mt-3 @container min-w-0">
+                  <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
                         {['Month', 'Kind', 'Supplier', 'Taxable', 'GST', ''].map((h, i) => <th key={i} scope="col" className={`${th} ${i === 3 || i === 4 ? 'text-right' : ''}`}>{h}</th>)}
@@ -213,12 +212,12 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                     </thead>
                     <tbody>
                       {s.gst.entries.map((e) => (
-                        <tr key={e.id} className="border-b border-line align-top last:border-0">
-                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{monthName(e.month)}</td>
-                          <td className="px-4 py-3 text-ink-2">{GST_KIND_LABEL[e.kind]}</td>
+                        <tr key={e.id} className="glass-row align-top">
+                          <td data-label="Month" className="px-4 py-3 text-ink-2 whitespace-nowrap">{monthName(e.month)}</td>
+                          <td data-label="Kind" className="px-4 py-3 text-ink-2">{GST_KIND_LABEL[e.kind]}</td>
                           <th scope="row" className="px-4 py-3 font-semibold text-ink">{e.source}{e.description || e.note ? <span className="block text-xs font-normal text-ink-3">{[e.description, e.note].filter(Boolean).join(' · ')}</span> : null}</th>
-                          <td className="px-4 py-3 text-right text-ink-2">{exact(e.taxablePaise)}<span className="block text-xs text-ink-3">at {e.rate}%</span></td>
-                          <td className="px-4 py-3 text-right font-semibold text-ink">{exact(e.gstPaise)}</td>
+                          <td data-label="Taxable" className="px-4 py-3 text-right text-ink-2">{exact(e.taxablePaise)}<span className="block text-xs text-ink-3">at {e.rate}%</span></td>
+                          <td data-label="GST" className="px-4 py-3 text-right font-semibold text-ink">{exact(e.gstPaise)}</td>
                           <td className="px-4 py-3">
                             <details>
                               <summary className="cursor-pointer py-1.5 text-sm text-ink-3 hover:text-ink">Delete…</summary>
@@ -236,7 +235,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <SettingsForm action={addGstEntry} submit="Add entry" className="mt-4 flex flex-wrap items-end gap-3">
                 <label className={labelCls}>Return month<input name="month" type="month" required defaultValue={today.slice(0, 7)} className={inputCls} /></label>
                 <label className={labelCls}>Kind
-                  <select name="kind" defaultValue="itc" className={inputCls}>
+                  <select name="kind" defaultValue="itc" className={`${inputCls} [&_option]:bg-raised`}>
                     {GST_KINDS.map((k) => <option key={k} value={k}>{GST_KIND_LABEL[k]}</option>)}
                   </select>
                 </label>
@@ -250,8 +249,8 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
 
             <Section id="capital-h" title="Capital & loans" note="Money put into VXP: partners' capital, and loans with what is still owed. Interest is simple and yearly, on the full amount from the day it came in. Record repayments as the total repaid so far.">
               {s.capital.length === 0 ? <p className="text-ink-3">No entries yet.</p> : (
-                <div className="overflow-x-auto rounded-xl bg-raised">
-                  <table className="w-full min-w-[900px] text-left text-sm tabular-nums">
+                <div className="@container min-w-0">
+                  <table className="w-full text-left text-sm tabular-nums @max-4xl:block @max-4xl:[&_thead]:sr-only @max-4xl:[&_tbody]:block @max-4xl:[&_tr]:block @max-4xl:[&_td]:block @max-4xl:[&_th]:block @max-4xl:[&_tbody_td]:text-left @max-4xl:[&_tbody_[data-label]]:before:mb-1 @max-4xl:[&_tbody_[data-label]]:before:block @max-4xl:[&_tbody_[data-label]]:before:text-xs @max-4xl:[&_tbody_[data-label]]:before:font-normal @max-4xl:[&_tbody_[data-label]]:before:text-ink-3 @max-4xl:[&_tbody_[data-label]]:before:content-[attr(data-label)]">
                     <thead>
                       <tr className="border-b border-line">
                         {['Who', 'Kind', 'Amount', 'Received', 'Interest', 'Due', 'Repaid so far (₹)', ''].map((h, i) => <th key={i} scope="col" className={`${th} ${i === 2 ? 'text-right' : ''}`}>{h}</th>)}
@@ -259,14 +258,14 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
                     </thead>
                     <tbody>
                       {s.capital.map((c) => (
-                        <tr key={c.id} className="border-b border-line align-top last:border-0">
+                        <tr key={c.id} className="glass-row align-top">
                           <th scope="row" className="px-4 py-3 font-semibold text-ink">{c.name}{c.note ? <span className="block max-w-[40ch] text-xs font-normal text-ink-3">{c.note}</span> : null}</th>
-                          <td className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? 'Loan' : 'Partner capital'}</td>
-                          <td className="px-4 py-3 text-right text-ink">{rs(c.amountPaise)}</td>
-                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(c.receivedOn)}</td>
-                          <td className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? `${+((c.interestRate ?? 0) * 100).toFixed(2)}% a year` : '—'}</td>
-                          <td className="px-4 py-3 text-ink-2 whitespace-nowrap">{c.dueOn ? day(c.dueOn) : '—'}</td>
-                          <td className="px-4 py-3">
+                          <td data-label="Kind" className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? 'Loan' : 'Partner capital'}</td>
+                          <td data-label="Amount" className="px-4 py-3 text-right text-ink">{rs(c.amountPaise)}</td>
+                          <td data-label="Received" className="px-4 py-3 text-ink-2 whitespace-nowrap">{day(c.receivedOn)}</td>
+                          <td data-label="Interest" className="px-4 py-3 text-ink-2">{c.kind === 'loan' ? `${+((c.interestRate ?? 0) * 100).toFixed(2)}% a year` : '—'}</td>
+                          <td data-label="Due" className="px-4 py-3 text-ink-2 whitespace-nowrap">{c.dueOn ? day(c.dueOn) : '—'}</td>
+                          <td data-label="Repaid so far (₹)" className="px-4 py-3">
                             <SettingsForm action={saveRepaid} submit="Save" tone="quiet" className="flex flex-wrap items-center gap-2">
                               <input type="hidden" name="id" value={c.id} />
                               <input name="repaid" required inputMode="decimal" aria-label={`Total repaid to ${c.name}`} defaultValue={rupees(c.repaidPaise)} className={`${inputCls} w-32 py-1.5`} />
@@ -289,7 +288,7 @@ async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>
               <h3 className="mt-8 text-base font-semibold text-ink">Add a loan or partner capital</h3>
               <SettingsForm action={addCapital} submit="Add" className="mt-3 flex flex-wrap items-end gap-3">
                 <label className={labelCls}>Kind
-                  <select name="kind" defaultValue="loan" className={inputCls}>
+                  <select name="kind" defaultValue="loan" className={`${inputCls} [&_option]:bg-raised`}>
                     <option value="loan">Loan</option>
                     <option value="partner">Partner capital</option>
                   </select>
@@ -318,7 +317,7 @@ function ProductCard({ p, today, storeName }: { p: SettingsProduct; today: strin
   const current = [...p.costs].reverse().find((c) => c.effectiveFrom <= today) ?? null
   const future = p.costs.filter((c) => c.effectiveFrom > today)
   return (
-    <div className="rounded-xl bg-raised p-5">
+    <div className="glass-row p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <p className="font-semibold text-ink">
           <span className="inline-flex items-center gap-2"><StoreDot id={p.storeId as StoreId} />{p.name}</span>
@@ -327,7 +326,7 @@ function ProductCard({ p, today, storeName }: { p: SettingsProduct; today: strin
         <SettingsForm action={saveStage} submit="Set stage" tone="quiet" className="flex flex-wrap items-center gap-2">
           <input type="hidden" name="store" value={p.storeId} />
           <input type="hidden" name="sku" value={p.sku} />
-          <select name="stage" defaultValue={p.stage} aria-label={`Stage of ${p.name}`} className={`${inputCls} py-1.5`}>
+          <select name="stage" defaultValue={p.stage} aria-label={`Stage of ${p.name}`} className={`${inputCls} py-1.5 [&_option]:bg-raised`}>
             {STAGES.map((st) => <option key={st} value={st}>{STAGE_LABEL[st]}</option>)}
           </select>
         </SettingsForm>

@@ -1,11 +1,13 @@
 import Link from 'next/link'
-import { ArrowRight } from 'lucide-react'
+import { AlertTriangle, ArrowRight } from 'lucide-react'
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
 import { fmtX, inr, MIN_SAMPLE, pct, type Closed, type DeliveryRow, type Metrics, type Period, type Rate, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { OrderDay, OrderPayment, ProductStage, StoreId } from '@/lib/types'
+import { codShareLabel, verdict } from './Home'
 import { PaceChart } from './PaceChart'
-import { Delta, Headline, Signed, StoreDot } from './bits'
+import { RoasTrack } from './RoasTrack'
+import { Delta, Signed, StoreDot, tone } from './bits'
 
 const STAGE: Record<ProductStage, { label: string; tone: string }> = {
   testing: { label: 'Testing', tone: 'text-ink-3' },
@@ -19,84 +21,123 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
   const store = m.storeById(id)
   const products = m.relevantProducts(id, period)
   const pts = m.series([id], period)
-  const camps = m.campaigns(id, period)
+  const camps = [...m.campaigns(id, period)].sort((a, b) => b.spend - a.spend)
+  const off = m.metaNotConnected(id)
+  // Profit-affecting warnings first, so they survive the 3-line cut.
   const warnings = [
+    ...(s.ordersMissingCogs > 0 ? [`${s.ordersMissingCogs} ${s.ordersMissingCogs === 1 ? 'order has a line' : 'orders have a line'} with no cost on record: profit is overstated`] : []),
+    ...(s.unmappedSpend > 0 ? [`${inr(s.unmappedSpend)} spend whose ad URL matches no product, check the handle`] : []),
     ...s.unknownSkus.map((sku) => `Orders for SKU ${sku} have no product set up: add it to see breakeven`),
     ...products.filter((p) => p.cogs === null).map((p) => `No cost on record for SKU ${p.sku}`),
-    ...(s.ordersMissingCogs > 0 ? [`${s.ordersMissingCogs} ${s.ordersMissingCogs === 1 ? 'order has a line' : 'orders have a line'} with no cost on record: profit is overstated`] : []),
+  ]
+  const e = s.economics
+  const liveSince = new Date(`${store.liveSince}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+  const src = (metric: string, from: string) => `${metric} · ${period.short} · ${from}`
+  const stats: { k: string; label: string; value: string; sub: React.ReactNode }[] = [
+    { k: 'rev', label: src('Revenue', 'Shopify'), value: inr(s.revenue), sub: <Delta now={s.revenue} prev={s.prev.revenue} suffix={`vs ${period.prevLabel}`} /> },
+    { k: 'spend', label: src('Spend', 'Meta'), value: inr(s.spend), sub: <Delta now={s.spend} prev={s.prev.spend} neutral suffix={`vs ${period.prevLabel}`} /> },
+    { k: 'orders', label: src('Orders', 'Shopify'), value: String(s.orders), sub: codShareLabel(s) ? <span className="text-sm text-ink-2">{codShareLabel(s)}</span> : null },
+    { k: 'cpa', label: src('CPA', 'Meta'), value: s.cpa ? inr(s.cpa) : '—', sub: <span className="text-sm text-ink-3">{e === null ? 'Breakeven needs a product cost' : breaksEven(e) ? `breakeven ${inr(e.breakevenCpa)} per order` : `loses ${inr(-e.breakevenCpa)} per order before ads`}</span> },
+    { k: 'cpm', label: src('CPM', 'Meta'), value: s.cpm ? inr(s.cpm) : '—', sub: s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null },
+    { k: 'ctr', label: src('CTR', 'Meta'), value: s.ctr ? pct(s.ctr, 1) : '—', sub: <span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span> },
   ]
 
   return (
-    <main className="mx-auto max-w-[1440px] px-4 pb-16 sm:px-8 lg:px-10">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 pt-8">
-        <h1 className="flex items-center gap-3 text-2xl font-extrabold tracking-tight text-ink"><StoreDot id={id} size={12} />{store.name}</h1>
-        <p className="text-ink-2">{products.map((p) => <span key={p.sku}>{p.name} {inr(p.price)} <span className={`text-sm font-semibold ${STAGE[p.stage].tone}`}>{STAGE[p.stage].label}</span> · </span>)}store live since {new Date(`${store.liveSince}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</p>
-      </div>
+    <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+      <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,auto)_auto]">
+        <div className="min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <p className="flex min-w-0 items-center gap-2.5 text-[1.6rem] font-bold tracking-[-0.02em]"><StoreDot id={id} size={11} /><span className="truncate">{store.name}</span></p>
+            <CallChip s={s} off={off} />
+          </div>
+          <h1 className="mt-2 text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict([s], m.metaNotConnected)}</h1>
+          <p className="mt-2 text-sm text-ink-2">{products.map((p) => <span key={p.sku}>{p.name} {inr(p.price)} <span className={`font-semibold ${STAGE[p.stage].tone}`}>{STAGE[p.stage].label}</span> · </span>)}live since {liveSince}</p>
+          {warnings.length > 0 && (
+            <div className="mt-1 text-sm text-warn">
+              <ul className="space-y-0.5">
+                {warnings.slice(0, 3).map((w, i) => <li key={w} className="flex items-start gap-1.5">{i === 0 && <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />}<span className={i === 0 ? '' : 'pl-[1.375rem]'}>{w}</span></li>)}
+              </ul>
+              {warnings.length > 3 && (
+                <details className="mt-0.5 pl-[1.375rem]">
+                  <summary className="cursor-pointer text-ink-3">+{warnings.length - 3} more</summary>
+                  <ul className="mt-0.5 space-y-0.5">{warnings.slice(3).map((w) => <li key={w}>{w}</li>)}</ul>
+                </details>
+              )}
+            </div>
+          )}
+        </div>
 
-      <section className="mt-8 max-w-[880px]" aria-label="Revenue and ad spend">
-        <Headline
-          short={period.short} scope={store.name} prevLabel={period.prevLabel}
-          revenue={s.revenue} prevRevenue={s.prev.revenue} spend={s.spend} prevSpend={s.prev.spend}
-        />
-        <p className="mt-6 text-ink-2">
-          {s.orders} orders · profit (est.) <Signed value={s.contribution} className="font-semibold text-ink" />
-          {s.unmappedSpend > 0 && <> · <span className="text-warn">{inr(s.unmappedSpend)} spend whose ad URL matches no product, check the handle</span></>}
-        </p>
-        {warnings.length > 0 && (
-          <ul className="mt-2 space-y-1 text-sm text-warn">{warnings.map((w) => <li key={w}>{w}</li>)}</ul>
-        )}
+        <div className="border-line lg:border-l lg:pl-8">
+          <p className="label">ROAS vs breakeven · {period.short} · Meta</p>
+          <div className="mt-1">
+            {s.roas === null ? (
+              <>
+                <p className="text-lg text-ink-2">{off ? 'Meta not connected' : 'No ads ran in this period.'}</p>
+                <p className="text-sm text-ink-3">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked</p>
+                {e === null ? <p className="text-xs text-warn">Breakeven needs a product cost</p>
+                  : breaksEven(e) ? <p className="text-xs text-ink-2">Breakeven {fmtX(e.breakevenRoas)} · target {fmtX(e.targetRoas)}</p>
+                  : <p className="text-xs text-bad">{noBreakevenText(e)}</p>}
+              </>
+            ) : e === null ? (
+              <><p className="text-[1.3rem] font-bold text-revenue">{fmtX(s.roas)}</p><p className="text-xs text-warn">Breakeven needs a product cost</p></>
+            ) : !breaksEven(e) ? (
+              <><p className="text-[1.3rem] font-bold text-bad">{fmtX(s.roas)}</p><p className="text-xs text-bad">{noBreakevenText(e)}</p></>
+            ) : (
+              <>
+                <RoasTrack roas={s.roas} be={e.breakevenRoas} target={e.targetRoas} zone={s.zone} />
+                {s.zone === 'covering' && <p className="mt-1 text-xs text-ink-2">{fmtX(e.targetRoas - s.roas)} short of target</p>}
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="border-line lg:border-l lg:pl-8">
+          <p className="label">Profit (est.) · {period.short} · Estimate</p>
+          <p className={`mt-1 text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></p>
+          {s.contribution < 0 && <p className="mt-1 text-xs text-bad">loss this period</p>}
+          <p className="mt-1 text-sm text-ink-2">{s.orders} orders</p>
+        </div>
       </section>
 
-      <div className="mt-14 grid gap-x-12 gap-y-10 border-t border-line pt-10 lg:grid-cols-12">
-        <section className="lg:col-span-6" aria-labelledby="roas-h">
-          <h2 id="roas-h" className="label">ROAS · {period.short} · Meta (incl. GST)</h2>
-          {s.roas === null ? (
-            <div className="mt-6 rounded-xl bg-raised p-8">
-              <p className="text-xl font-semibold text-ink">{m.metaNotConnected(id) ? 'Meta not connected for this store.' : 'No ads ran in this period.'}</p>
-              <p className="mt-2 text-ink-2">{s.orders} organic {s.orders === 1 ? 'order' : 'orders'} · {inr(s.revenue)} booked. {s.economics === null ? 'Breakeven needs a product cost.' : !breaksEven(s.economics) ? `${s.economics.weightedNames.join(', ')}: ${noBreakevenText(s.economics)}.` : <>Breakeven for {s.economics.weightedNames.join(', ')} is {fmtX(s.economics.breakevenRoas)}; your target is {fmtX(s.economics.targetRoas)}.</>}</p>
+      <section aria-label="Key numbers" className="glass rise p-2 @container [--delay:80ms]">
+        <dl className="grid grid-cols-2 @min-[44rem]:grid-cols-3 @min-[72rem]:grid-cols-6">
+          {stats.map((c) => (
+            <div key={c.k} className="min-w-0 border-line px-3 py-3 @min-[44rem]:border-l @min-[44rem]:nth-[3n+1]:border-l-0 @min-[72rem]:nth-[3n+1]:border-l @min-[72rem]:first:border-l-0">
+              <dt className="label">{c.label}</dt>
+              <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{c.value}</dd>
+              <dd className="mt-0.5 min-h-5">{c.sub}</dd>
             </div>
-          ) : (
-            <Gauge s={s} />
-          )}
-        </section>
+          ))}
+        </dl>
+      </section>
 
-        <section className="lg:col-span-6" aria-label="Meta numbers">
-          <dl className="grid gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-3">
-            <Stat label="CPA" value={s.cpa ? inr(s.cpa) : '—'} sub={<span className="text-sm text-ink-3">{s.economics === null ? 'Breakeven needs a product cost' : breaksEven(s.economics) ? `breakeven ${inr(s.economics.breakevenCpa)} per order` : `loses ${inr(-s.economics.breakevenCpa)} per order before ads`}</span>} />
-            <Stat label="CPM" value={s.cpm ? inr(s.cpm) : '—'} sub={s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null} />
-            <Stat label="CTR" value={s.ctr ? pct(s.ctr, 1) : '—'} sub={<span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span>} />
-          </dl>
-        </section>
-      </div>
-
-      <div className="mt-14 grid gap-x-12 gap-y-10 border-t border-line pt-10 lg:grid-cols-12">
-        <div className="min-w-0 lg:col-span-8">
-          <PaceChart points={pts} title={`Pace · ${period.range}`} prevLabel={period.prevLabel} unit={period.id === 'today' ? 'hour' : 'day'} />
-        </div>
-        <section className="lg:col-span-4" aria-labelledby="camp-h">
-          <div className="flex items-baseline justify-between">
-            <h2 id="camp-h" className="text-base font-semibold text-ink">Campaigns</h2>
+      {/* Campaigns first in the DOM so phones read them before the chart; desktop puts them on the right. */}
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <section aria-labelledby="camp-h" className="glass rise p-2 lg:col-start-2 lg:row-start-1 [--delay:120ms]">
+          <div className="flex items-baseline justify-between gap-3 px-3 pt-2">
+            <h2 id="camp-h" className="text-lg font-bold">Campaigns</h2>
             <Link href={href('/ads', view)} className="inline-flex items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">All campaigns <ArrowRight className="size-4" aria-hidden /></Link>
           </div>
           {camps.length === 0 ? (
-            <p className="mt-4 text-ink-3">No campaigns spent in this period.</p>
+            <p className="px-3 pb-2 pt-3 text-ink-3">No campaigns spent in this period.</p>
           ) : (
-            <ul className="mt-3 divide-y divide-line">
-              {camps.sort((a, b) => b.spend - a.spend).map((c) => {
+            <ul className="mt-3 space-y-1.5">
+              {camps.map((c) => {
                 const over = (c.vsBreakeven !== null && c.vsBreakeven > 1) || c.noSalesLoss
                 return (
-                  <li key={c.id} className="py-3">
-                    <p className="font-semibold text-ink">{c.name}</p>
-                    <p className="mt-0.5 text-sm text-ink-2">
-                      {inr(c.spend)} · {c.orders} orders · CPA <span className={over ? 'font-semibold text-bad' : 'font-semibold text-ink'}>{c.cpa ? inr(c.cpa) : '—'}</span>
-                      {c.noSalesLoss ? <span className="text-bad"> · {inr(c.spend)} spent, no orders</span> : over && <span className="text-bad"> · over breakeven CPA</span>}
-                      {c.sku === null && <span className="text-warn"> · URL matches no product</span>}
-                    </p>
+                  <li key={c.id} className="glass-row px-3 py-2.5">
+                    <p className="line-clamp-2 font-semibold text-ink">{c.name}</p>
+                    <p className="mt-0.5 text-sm text-ink-2">{inr(c.spend)} · {c.orders} orders · CPA <span className={over ? 'font-semibold text-bad' : 'font-semibold text-ink'}>{c.cpa ? inr(c.cpa) : '—'}</span></p>
+                    {c.noSalesLoss ? <p className="text-xs text-bad">{inr(c.spend)} spent, no orders</p> : over && <p className="text-xs text-bad">over breakeven CPA</p>}
+                    {c.sku === null && <p className="text-xs text-warn">URL matches no product</p>}
                   </li>
                 )
               })}
             </ul>
           )}
+        </section>
+        <section aria-label="Pace" className="glass min-w-0 px-5 pb-3 pt-4 lg:col-start-1 lg:row-start-1">
+          <PaceChart points={pts} title={`Pace · ${period.range}`} prevLabel={period.prevLabel} unit={period.id === 'today' ? 'hour' : 'day'} />
         </section>
       </div>
 
@@ -106,78 +147,15 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
   )
 }
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: React.ReactNode }) {
-  return (
-    <div className="bg-ground p-6">
-      <dt className="label">{label}</dt>
-      <dd className="mt-2 text-4xl font-extrabold tracking-tight text-ink">{value}</dd>
-      <dd className="mt-1.5 min-h-5">{sub}</dd>
-    </div>
-  )
-}
-
-/** Semicircle with three zones on Meta's scale: below breakeven, covering costs, above target. */
-function Gauge({ s }: { s: StoreStats }) {
-  const roas = s.roas!
-  if (s.economics === null) {
-    return (
-      <div className="mt-4 rounded-xl bg-raised p-8">
-        <p className="text-5xl font-extrabold tracking-tight text-ink">{fmtX(roas)}</p>
-        <p className="mt-2 text-ink-2">{s.orders} orders · {inr(s.spend)} spent · Breakeven needs a product cost</p>
-      </div>
-    )
-  }
-  if (!breaksEven(s.economics)) {
-    return (
-      <div className="mt-4 rounded-xl bg-raised p-8">
-        <p className="text-5xl font-extrabold tracking-tight text-ink">{fmtX(roas)}</p>
-        <p className="mt-2 text-lg font-semibold text-bad">{noBreakevenText(s.economics)}</p>
-        <p className="mt-1 text-ink-2">{s.orders} orders · {inr(s.spend)} spent · check the cost, price and delivery rate</p>
-      </div>
-    )
-  }
-  const { breakevenRoas: be, targetRoas: target } = s.economics
-  const max = Math.ceil(Math.max(target * 1.25, roas * 1.1))
-  const W = 420, H = 240, cx = W / 2, cy = 214, r = 172
-  const ang = (v: number) => Math.PI * (1 - Math.min(v, max) / max)
-  const pt = (v: number, rad = r) => [cx + rad * Math.cos(ang(v)), cy - rad * Math.sin(ang(v))] as const
-  const arc = (a: number, b: number) => {
-    const [x1, y1] = pt(a), [x2, y2] = pt(b)
-    return `M${x1},${y1} A${r},${r} 0 0 1 ${x2},${y2}`
-  }
-  const [nx, ny] = pt(roas, r - 22)
-  const [bx, by] = pt(roas, r - 62)
-  const zone = s.zone!
-  const word = zone === 'below' ? 'Below breakeven' : zone === 'covering' ? 'Covering costs' : 'Above your target'
-  const tone = zone === 'below' ? 'text-bad' : zone === 'covering' ? 'text-warn' : 'text-good'
-  const tick = (v: number, text: string, strong: boolean) => {
-    const [x1, y1] = pt(v, r - 16), [x2, y2] = pt(v, r + 14), [tx, ty] = pt(v, r + 30)
-    return (
-      <g>
-        <line x1={x1} y1={y1} x2={x2} y2={y2} className={strong ? 'stroke-ink' : 'stroke-ink-2'} strokeWidth={2} />
-        <text x={tx} y={ty} textAnchor="middle" dy="0.3em" className="fill-ink-2 text-[12px] font-semibold">{text}</text>
-      </g>
-    )
-  }
-  return (
-    <div className="mt-4">
-      <svg viewBox={`0 -24 ${W} ${H + 24}`} className="w-full max-w-[460px]" role="img" aria-label={`ROAS ${fmtX(roas)}. Breakeven ${fmtX(be)}, target ${fmtX(target)}. ${word}.`}>
-        <path d={arc(0, be)} fill="none" className="stroke-bad/55" strokeWidth={14} />
-        <path d={arc(be, target)} fill="none" className="stroke-warn/55" strokeWidth={14} />
-        <path d={arc(target, max)} fill="none" className="stroke-good/55" strokeWidth={14} />
-        {tick(be, `BE ${be.toFixed(2)}`, false)}
-        {tick(target, `Target ${target.toFixed(2)}`, true)}
-        <line x1={bx} y1={by} x2={nx} y2={ny} className="stroke-ink" strokeWidth={4} strokeLinecap="round" />
-        <circle cx={nx} cy={ny} r={5} className="fill-ink" />
-        <text x={cx} y={cy - 8} textAnchor="middle" className="fill-ink text-[68px] font-extrabold" letterSpacing="-0.04em">{fmtX(roas)}</text>
-      </svg>
-      <p className={`mt-2 text-lg font-semibold ${tone}`}>{word}</p>
-      <p className="mt-1 text-ink-2">
-        {s.orders} orders · {inr(s.spend)} spent · breakeven {fmtX(be)}, target {fmtX(target)}
-        {zone === 'covering' && <> · {fmtX(target - roas)} short of target</>}
-      </p>
-    </div>
-  )
+/** One word per store, from where its ROAS sits against breakeven and target (same call as Home's row). */
+function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
+  const [word, cls] =
+    s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-2 ring-line-strong']
+    : s.economics === null ? ['Add cost', 'text-warn ring-warn/40 bg-warn/10']
+    : !breaksEven(s.economics) || s.zone === 'below' ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
+    : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
+    : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
+  return <span className={`inline-block min-w-[5.25rem] shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${cls}`}>{word}</span>
 }
 
 function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; m: Metrics; orders: OrderDay[] }) {
@@ -190,19 +168,19 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
   }
   const shown = dots.slice(0, 120)
   return (
-    <section aria-labelledby="dots-h" className="mt-14 border-t border-line pt-10">
-      <div className="flex flex-wrap items-baseline justify-between gap-4">
-        <h2 id="dots-h" className="text-base font-semibold text-ink">Orders · {period.short} · {s.orders}</h2>
-        <ul className="flex gap-5 text-sm text-ink-2" aria-label="Legend">
+    <section aria-labelledby="dots-h" className="glass px-5 py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 id="dots-h" className="text-lg font-bold">Orders · {period.short} · {s.orders}</h2>
+        <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-ink-2" aria-label="Legend">
           <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-prepaid" />Prepaid {prepaid}</li>
           <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-cod" />COD {s.codOrders}</li>
           {s.unknownPayOrders > 0 && <li className="flex items-center gap-2"><span className="size-2.5 rounded-[3px] bg-ink-3" />Payment unknown {s.unknownPayOrders}</li>}
         </ul>
       </div>
       {shown.length === 0 ? (
-        <p className="mt-4 text-ink-3">No orders in this period.</p>
+        <p className="mt-3 text-ink-3">No orders in this period.</p>
       ) : (
-        <div className="mt-4 flex flex-wrap gap-1.5" role="img" aria-label={`${prepaid} prepaid and ${s.codOrders} COD orders${s.unknownPayOrders ? `, ${s.unknownPayOrders} with payment unknown` : ''}`}>
+        <div className="mt-3 flex flex-wrap gap-1.5" role="img" aria-label={`${prepaid} prepaid and ${s.codOrders} COD orders${s.unknownPayOrders ? `, ${s.unknownPayOrders} with payment unknown` : ''}`}>
           {shown.map((d, i) => <span key={i} className={`size-3.5 rounded-[4px] ${d === 'cod' ? 'bg-cod' : d === 'prepaid' ? 'bg-prepaid' : 'bg-ink-3'}`} />)}
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
@@ -210,20 +188,20 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
       {m.relevantProducts(store.id, period).map((p, _, all) => {
         const share = m.codShare(p.storeId, p.sku)
         return (
-          <div key={p.sku} className="mt-8">
+          <div key={p.sku} className="mt-4 border-t border-line pt-4">
             {all.length > 1 && <h3 className="mb-3 font-semibold text-ink">{p.name}</h3>}
-            <dl className="grid gap-x-12 gap-y-6 sm:grid-cols-3">
+            <dl className="grid gap-4 sm:grid-cols-3">
               <div>
-                <dt className="label">COD share · last 30 days</dt>
-                <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(share.value)}</dd>
+                <dt className="label">COD share · 30D</dt>
+                <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(share.value)}</dd>
                 <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders')}</dd>
               </div>
               {(['cod', 'prepaid'] as const).map((pay) => {
                 const rate = m.deliveryRate(p.storeId, p.sku, pay)
                 return (
                   <div key={pay}>
-                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · last 30 days</dt>
-                    <dd className="mt-1 text-2xl font-extrabold text-ink">{pct(rate.value, 1)}</dd>
+                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · 30D</dt>
+                    <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(rate.value, 1)}</dd>
                     <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, store.name, 'closed orders')}</dd>
                   </div>
                 )
@@ -242,32 +220,35 @@ const rateOf = (c: Closed) => { const n = c.delivered + c.rto; return n === 0 ? 
 /**
  * Delivered ÷ (delivered + RTO) per product, by the date the shipment closed: the store's own shipments only,
  * with the count beside each rate, so a rate from a handful of shipments reads as such.
+ * Narrow panels (a 390 px phone) stack each product as a card with labelled values; no horizontal scroll.
  */
 export function DeliveryTable({ rows }: { rows: DeliveryRow[] }) {
+  const grid = '@min-[40rem]:grid @min-[40rem]:grid-cols-[minmax(8rem,1.4fr)_repeat(3,minmax(5rem,1fr))] @min-[40rem]:items-start @min-[40rem]:gap-x-3'
   return (
-    <section aria-labelledby="delivery-h" className="mt-14 border-t border-line pt-10">
-      <h2 id="delivery-h" className="text-base font-semibold text-ink">Delivery rate</h2>
-      <p className="mt-1 text-sm text-ink-3">Delivered ÷ (delivered + RTO), by the day the shipment closed. From vFulfill; payment type from Shopify.</p>
+    <section aria-labelledby="delivery-h" className="glass p-2 @container">
+      <h2 id="delivery-h" className="px-3 pt-2 text-lg font-bold">Delivery rate</h2>
+      <p className="px-3 text-sm text-ink-3">Delivered ÷ (delivered + RTO), by the day the shipment closed. From vFulfill; payment type from Shopify.</p>
       {rows.length === 0 ? (
-        <p className="mt-4 text-ink-3">No shipments closed yet.</p>
+        <p className="px-3 pb-2 pt-3 text-ink-3">No shipments closed yet.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[520px] text-left">
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className="label py-2 pr-4 font-normal">Product</th>
-                {WINDOWS.map(([w, label]) => <th key={w} scope="col" className="label py-2 pr-4 text-right font-normal">{label}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.sku ?? 'all'} className={`border-b border-line align-top ${r.sku === null ? 'font-semibold' : ''}`}>
-                  <th scope="row" className="py-3 pr-4 font-semibold text-ink">{r.name}</th>
-                  {WINDOWS.map(([w]) => <td key={w} className="py-3 pr-4 text-right"><DeliveryCell c={r.cells[w]} /></td>)}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div role="table" aria-label="Delivery rate" className="mt-3">
+          <div role="row" className={`${grid} hidden px-3 pb-2`}>
+            <span role="columnheader" className="label">Product</span>
+            {WINDOWS.map(([w, label]) => <span key={w} role="columnheader" className="label text-right">{label}</span>)}
+          </div>
+          <div className="space-y-1.5">
+            {rows.map((r) => (
+              <div key={r.sku ?? 'all'} role="row" className={`glass-row px-3 py-2.5 ${grid} ${r.sku === null ? 'font-bold' : ''}`}>
+                <span role="rowheader" className="block font-semibold text-ink">{r.name}</span>
+                {WINDOWS.map(([w, label]) => (
+                  <span key={w} role="cell" className="mt-2 grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 @min-[40rem]:mt-0 @min-[40rem]:block @min-[40rem]:text-right">
+                    <span className="label self-start pt-1 font-normal @min-[40rem]:hidden">{label}</span>
+                    <span className="min-w-0"><DeliveryCell c={r.cells[w]} /></span>
+                  </span>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
@@ -280,9 +261,9 @@ function DeliveryCell({ c }: { c: DeliveryRow['cells']['lifetime'] }) {
   const part = (label: string, x: Closed) => { const v = rateOf(x); return `${label} ${v === null ? '—' : pct(v, 1)}` }
   return (
     <>
-      <span className="block text-lg font-extrabold text-ink">{pct(all, 1)}</span>
+      <span className="block text-base font-bold text-ink">{pct(all, 1)}</span>
       <span className="block text-xs text-ink-3">{c.all.delivered + c.all.rto} closed</span>
-      <span className="mt-1 block text-sm font-normal text-ink-2">{part('COD', c.cod)} · {part('Prepaid', c.prepaid)}</span>
+      <span className="block text-xs font-normal text-ink-2">{part('COD', c.cod)} · {part('Prepaid', c.prepaid)}</span>
     </>
   )
 }

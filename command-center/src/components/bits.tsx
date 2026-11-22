@@ -49,6 +49,9 @@ export function Headline({ short, scope, prevLabel, revenue, prevRevenue, spend,
   )
 }
 
+/** Gain green, loss red, zero plain: ₹0 is not a gain. */
+export const tone = (n: number) => (n > 0 ? 'text-good' : n < 0 ? 'text-bad' : 'text-ink-2')
+
 export function Signed({ value, className = '' }: { value: number; className?: string }) {
   const neg = value < 0
   return (

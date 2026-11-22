@@ -34,16 +34,19 @@ const settlementRow = (s: Cash['settlements'], total: number): Row => ({
 
 function Rows({ rows }: { rows: Row[] }) {
   return (
-    <dl className="mt-6 divide-y divide-line border-t border-line">
+    <dl className="mt-5 space-y-1.5">
       {rows.map((r) => (
-        <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-          <dt className="text-ink-2">{r.label}<span className="block text-xs text-ink-3">{r.note}</span></dt>
-          <dd className="font-semibold text-ink">{r.value}</dd>
+        <div key={r.label} className="glass-row flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 px-3 py-3">
+          <dt className="min-w-0 flex-1 basis-56 font-semibold text-ink">{r.label}<span className="mt-0.5 block text-xs font-normal text-ink-3">{r.note}</span></dt>
+          <dd className="text-[1.3rem] font-bold tabular-nums text-ink">{r.value}</dd>
         </div>
       ))}
     </dl>
   )
 }
+
+const PANEL = 'glass rise p-5'
+const HERO = 'mt-3 text-[2.1rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums text-ink'
 
 /**
  * Money's cash card: the total, how many days of ad spend it covers, and each part with where it comes from.
@@ -53,19 +56,19 @@ function Rows({ rows }: { rows: Row[] }) {
 export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; name: string } }) {
   if (!c) {
     return (
-      <section aria-labelledby="cash-h" className="rounded-xl bg-raised p-6">
-        <h2 id="cash-h" className="text-base font-semibold text-ink">Cash</h2>
-        <p className="mt-2 text-ink-2">No cash source yet: import vFulfill transactions or enter a bank balance.</p>
+      <section aria-labelledby="cash-h" className={PANEL}>
+        <h2 id="cash-h" className="text-lg font-bold">Cash</h2>
+        <p className="mt-3 text-ink-2">No cash source yet: import vFulfill transactions or enter a bank balance.</p>
       </section>
     )
   }
   if (store) {
     const s = storeCash(c, store.id)
     return (
-      <section aria-labelledby="cash-h" className="rounded-xl bg-raised p-6">
-        <h2 id="cash-h" className="text-base font-semibold text-ink">Cash · {store.name}</h2>
-        <p className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{inr(s.total)}</p>
-        <p className="mt-1 text-sm text-ink-2">
+      <section aria-labelledby="cash-h" className={PANEL}>
+        <h2 id="cash-h" className="text-lg font-bold">Cash · {store.name}</h2>
+        <p className={HERO}>{inr(s.total)}</p>
+        <p className="mt-2 max-w-[75ch] text-sm text-ink-2">
           {store.name}&apos;s money on its way in: COD vFulfill owes and gateway settlements.
           {s.settlements ? null : <> Without gateway settlements.</>}{' '}
           Bank{s.shared.bank ? ` (${inr(s.shared.bank.amount)})` : ''} and the vFulfill wallet ({rupees(s.shared.vfulfillWallet)}) serve all
@@ -79,7 +82,7 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
     {
       label: 'Bank',
       value: c.bank ? inr(c.bank.amount) : <span className="text-ink-3">Not entered</span>,
-      note: c.bank ? `Entered ${day(c.bank.enteredAt)}` : 'Not entered yet: add it on Settings (link above)',
+      note: c.bank ? `Entered ${day(c.bank.enteredAt)}` : 'Not entered yet: add it in Settings (the gear in the top bar)',
     },
     {
       label: 'vFulfill wallet',
@@ -90,10 +93,10 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
     settlementRow(c.settlements, c.settlementsTotal),
   ]
   return (
-    <section aria-labelledby="cash-h" className="rounded-xl bg-raised p-6">
-      <h2 id="cash-h" className="text-base font-semibold text-ink">Cash</h2>
-      <p className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{inr(c.total)}</p>
-      <p className="mt-1 text-sm text-ink-2">
+    <section aria-labelledby="cash-h" className={PANEL}>
+      <h2 id="cash-h" className="text-lg font-bold">Cash</h2>
+      <p className={HERO}>{inr(c.total)}</p>
+      <p className="mt-2 max-w-[75ch] text-sm text-ink-2">
         {c.missing.length > 0 ? <>Without {c.missing.join(' and ')}. </> : null}
         {c.bank && c.coversDays !== null
           ? <>Covers {Math.floor(c.coversDays)} days of ad spend at {inr(c.dailySpend)} a day (last 7 days).</>

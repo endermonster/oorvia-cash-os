@@ -4,9 +4,10 @@ import { breaksEven, noBreakevenText } from '@/lib/calculator'
 import { fmtX, inr, MIN_SAMPLE, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { StoreId } from '@/lib/types'
-import { Delta, Signed, StoreDot } from './bits'
+import { Delta, Signed, StoreDot, tone } from './bits'
 import { LiveMap } from './LiveMap'
 import { RevenueChart } from './RevenueChart'
+import { RoasTrack } from './RoasTrack'
 
 export function HomeView({ view, period, m, now, mock }: { view: ViewState; period: Period; m: Metrics; now: Date; mock: boolean }) {
   const pf = m.portfolio(period)
@@ -83,8 +84,10 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   )
 }
 
-/** Gain green, loss red, zero plain: ₹0 is not a gain. */
-const tone = (n: number) => (n > 0 ? 'text-good' : n < 0 ? 'text-bad' : 'text-ink-2')
+export function codShareLabel({ orders, codOrders, unknownPayOrders }: Pick<StoreStats, 'orders' | 'codOrders' | 'unknownPayOrders'>): string | undefined {
+  const knownOrders = orders - unknownPayOrders
+  return knownOrders > 0 ? `${pct(codOrders / knownOrders)} COD` : undefined
+}
 
 /** Cells share one first baseline, so a row's primary figures sit on one line and sub-lines hang below. */
 const ROW = 'grid grid-cols-2 gap-x-4 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 gap-y-3 @min-[50rem]:content-center @min-[50rem]:items-baseline @min-[50rem]:gap-y-0 @min-[50rem]:grid-cols-[minmax(6.75rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.75rem,0.9fr)_minmax(9.5rem,1.9fr)_minmax(6.75rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] @min-[60rem]:grid-cols-[minmax(7.5rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.5rem,0.9fr)_minmax(10.5rem,1.9fr)_minmax(5rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"rev_profit"] @min-[50rem]:[grid-template-areas:"name_spend_orders_roas_rev_profit_call"]'
@@ -114,7 +117,7 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
                 </Link>
               </span>
               <Cell area="spend" label="Spend" value={inr(s.spend)} />
-              <Cell area="orders" label="Orders" value={String(s.orders)} sub={s.orders ? `${pct(s.codOrders / s.orders)} COD` : undefined} />
+              <Cell area="orders" label="Orders" value={String(s.orders)} sub={codShareLabel(s)} />
               <span role="cell" className="[grid-area:roas]"><RoasBar s={s} off={notConnected(s.store.id)} /></span>
               <Cell area="rev" label="Booked revenue" value={inr(s.revenue)} />
               <span role="cell" className="[grid-area:profit]">
@@ -161,7 +164,7 @@ function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
   if (!breaksEven(s.economics)) {
     return <div><p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-bad">{fmtX(s.roas)}</p><p className="text-xs text-bad">{noBreakevenText(s.economics)}</p></div>
   }
-  return <Bar roas={s.roas} be={s.economics.breakevenRoas} target={s.economics.targetRoas} zone={s.zone} />
+  return <RoasTrack roas={s.roas} be={s.economics.breakevenRoas} target={s.economics.targetRoas} zone={s.zone} />
 }
 
 /** VXP's blended ROAS against its own breakeven: the stores' breakevens weighted by revenue, plus fixed costs. */
@@ -179,31 +182,7 @@ function VxpRoas({ total }: { total: Portfolio['total'] }) {
     )
   }
   const note = [b.fixedOnRecord ? `Incl. ${inr(b.fixedCosts)} fixed costs` : 'No fixed costs on record', b.leftOut.length ? `Incomplete: ${b.leftOut.join(', ')} has no cost` : null]
-  return <Bar roas={total.roas} be={b.breakevenRoas} target={b.targetRoas} zone={total.zone} after={blended} note={note.filter(Boolean).join(' · ')} />
-}
-
-function Bar({ roas, be, target, zone, after, note }: { roas: number; be: number; target: number; zone: StoreStats['zone']; after?: React.ReactNode; note?: string }) {
-  const max = Math.max(target * 1.12, roas * 1.05)
-  const at = (v: number) => `${(v / max) * 100}%`
-  const fill = zone === null ? 'bg-ink-3' : zone === 'below' ? 'bg-bad' : zone === 'profit' ? 'bg-good' : 'bg-revenue'
-  const word = zone === null ? 'Breakeven incomplete' : zone === 'below' ? 'Below breakeven' : zone === 'covering' ? 'Covering costs' : 'Above target'
-  return (
-    <div title={`${word}: breakeven ${fmtX(be)}, target ${fmtX(target)}${note ? `. ${note}` : ''}`}>
-      <p className={`text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight ${zone === null ? 'text-ink-2' : zone === 'below' ? 'text-bad' : 'text-revenue'}`}>{fmtX(roas)}{after}<span className="sr-only"> {word}</span></p>
-      <div className="relative mt-1.5 h-2 rounded-full bg-[rgb(150_180_225/0.16)]">
-        <div className={`absolute inset-y-0 left-0 rounded-full ${fill}`} style={{ width: at(roas) }} />
-        {/* Dark edge keeps a tick visible when the fill of the same colour runs past it. */}
-        <span aria-hidden className="absolute -top-1 h-4 w-0.5 rounded bg-bad shadow-[0_0_0_1px_rgb(6_10_19/0.85)]" style={{ left: at(be) }} />
-        <span aria-hidden className="absolute -top-1 h-4 w-0.5 rounded bg-good shadow-[0_0_0_1px_rgb(6_10_19/0.85)]" style={{ left: at(target) }} />
-      </div>
-      {/* A key, not labels on the ticks: the two ticks sit ~60px apart, too close for two centred labels to fit. */}
-      <div className="mt-1.5 flex items-center justify-between gap-3 whitespace-nowrap text-[0.6875rem] leading-none">
-        <span className="flex items-center gap-1.5 text-ink-2"><span aria-hidden className="h-2.5 w-0.5 rounded bg-bad" />BE {fmtX(be)}</span>
-        <span className="flex items-center gap-1.5 text-ink-2"><span aria-hidden className="h-2.5 w-0.5 rounded bg-good" />Target {fmtX(target)}</span>
-      </div>
-      {note && <p className="mt-1 truncate text-[0.6875rem] leading-tight text-ink-3">{note}</p>}
-    </div>
-  )
+  return <RoasTrack roas={total.roas} be={b.breakevenRoas} target={b.targetRoas} zone={total.zone} after={blended} note={note.filter(Boolean).join(' · ')} />
 }
 
 /** One word per store, from where its ROAS sits against breakeven and target. */
@@ -256,6 +235,10 @@ function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
 
 function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: Period }) {
   const c = m.cash()
+  const cashDetails = c ? [
+    c.bank && c.coversDays !== null ? `covers ${Math.floor(c.coversDays)} days of spend` : '',
+    c.missing.length ? `without ${c.missing.join(' and ')}` : '',
+  ].filter(Boolean).join(' · ') : ''
   const g = m.gst()
   const share = m.ownerShare()
   const month = (iso: string) => new Date(`${iso}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', timeZone: 'UTC' })
@@ -269,7 +252,7 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
         <span className="min-w-0 flex-1">
           {c ? <>
             <span className="block text-lg"><span className="font-semibold">Cash</span> <span className="font-bold">{inr(c.total)}</span></span>
-            <span className="block text-sm text-ink-2">{c.bank && c.coversDays !== null ? `covers ${Math.floor(c.coversDays)} days of spend` : c.missing.length ? `without ${c.missing.join(' and ')}` : 'cash on hand'}</span>
+            <span className="block text-sm text-ink-2">{cashDetails || 'cash on hand'}</span>
           </> : <span className="text-ink-3">Cash connects in a later stage</span>}
         </span>
         {meta(`Period: ${period.short}`, 'Source: cash ledger')}

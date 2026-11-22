@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, Database, House, Infinity as MetaMark, Megaphone, Package } from 'lucide-react'
+import { AlertTriangle, Database, House, Infinity as MetaMark, Megaphone, Package, Settings } from 'lucide-react'
 import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
@@ -8,12 +8,13 @@ import { SyncButton } from './SyncButton'
 
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
 const seg = 'rounded-[0.6rem] px-3.5 py-[5px] text-sm font-medium whitespace-nowrap transition-colors'
+const navSeg = `${seg} max-sm:px-2.5`
 
 /** vFulfill data older than this is called out, not just dated. */
 const VF_STALE_DAYS = 2
 
-export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome }) {
-  const tabPath = TABS.find((t) => t.id === tab)!.path
+export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome }) {
+  const tabPath = TABS.find((t) => t.id === tab)?.path
   const s = d.sync
   const unconnected = s.metaNotConnected.map((id) => d.stores.find((x) => x.id === id)?.name ?? id)
   const stores = [{ id: 'all' as const, name: 'All VXP' }, ...d.stores.map((x) => ({ id: x.id, name: x.name }))]
@@ -29,28 +30,32 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
   return (
     <header className="px-3 pt-1.5 sm:px-4">
       <div className="glass mx-auto max-w-[1536px] px-4 py-2.5 sm:px-5">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5 sm:gap-x-5">
           <Link href={href('/', view)} className="flex items-baseline gap-2 pr-2">
             <span className="text-[1.65rem] font-extrabold leading-none tracking-[-0.03em]">VXP</span>
             {/* Below ~1360 px the subtitle would push the period switch onto a second row. */}
             <span className="hidden text-[0.95rem] font-medium text-ink-2 min-[1360px]:inline">Command Center</span>
           </Link>
 
+          {/* Icon-only tabs and Settings fit beside the VXP wordmark at 390 px. */}
           <nav aria-label="Sections" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar">
             {TABS.map((t) => {
               const Icon = ICON[t.id]
               const on = t.id === tab
               return (
                 <Link key={t.id} href={href(t.path, view)} aria-current={on ? 'page' : undefined}
-                  title={t.label} className={`${seg} flex items-center gap-2 ${on ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
-                  {/* Icons only on phones, so the tabs share the first row with the logo. */}
+                  title={t.label} className={`${navSeg} flex items-center gap-2 ${on ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
                   <Icon className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">{t.label}</span>
                 </Link>
               )
             })}
+            <Link href={href('/settings', view)} aria-label="Settings" aria-current={tab === undefined ? 'page' : undefined}
+              title="Settings" className={`${navSeg} flex items-center self-stretch ${tab === undefined ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
+              <Settings className="size-4" aria-hidden />
+            </Link>
           </nav>
 
-          <div role="group" aria-label="Store" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-6 max-sm:[mask-image:linear-gradient(to_right,#000_82%,transparent)]">
+          {tabPath && <div role="group" aria-label="Store" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-6 max-sm:[mask-image:linear-gradient(to_right,#000_82%,transparent)]">
             {stores.map((st) => {
               const on = view.store === st.id
               return (
@@ -60,9 +65,9 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
                 </Link>
               )
             })}
-          </div>
+          </div>}
 
-          <div role="group" aria-label="Period" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto">
+          {tabPath && <div role="group" aria-label="Period" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto">
             {PERIODS.map((p) => {
               const on = view.period === p.id
               return (
@@ -72,7 +77,7 @@ export function TopBar({ tab, view, d }: { tab: Tab; view: ViewState; d: Chrome 
                 </Link>
               )
             })}
-          </div>
+          </div>}
         </div>
 
         {/* One scrolling row on phones instead of two wrapped ones. */}

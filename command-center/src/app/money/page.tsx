@@ -1,5 +1,3 @@
-import { Settings } from 'lucide-react'
-import Link from 'next/link'
 import { Suspense } from 'react'
 import { CashCard } from '@/components/CashCard'
 import { CapitalCard, ForecastCard, GstCard } from '@/components/MoneyParts'
@@ -59,34 +57,33 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
   const store = view.store === 'all' ? null : view.store
   const storeName = store ? (d.stores.find((s) => s.id === store)?.name ?? store) : 'All VXP'
   const storeFirst = store ? d.stores.find((s) => s.id === store)?.liveSince.slice(0, 7) || undefined : undefined
+  const hasCapital = d.source === 'supabase' && capital !== null
   const forecast = pnl && baselines ? computeForecast(pnl, baselines, store, currentMonth, storeFirst) : null
 
   return (
     <>
       <TopBar tab="money" view={view} d={d} />
-      <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <h1 className="text-3xl font-extrabold tracking-tight text-ink">Money</h1>
-          {/* Until the top bar has its gear icon. */}
-          <Link href="/settings" className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-2 hover:text-ink"><Settings className="size-4" aria-hidden />Settings: bank, vFulfill, costs, GST, loans</Link>
-        </div>
-        <div className="mt-8 grid gap-10 lg:grid-cols-12">
-          <div className="space-y-10 lg:col-span-6">
+      <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+        <h1 className="sr-only">Money</h1>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
+          <div className="min-w-0 lg:col-start-1 lg:row-start-1">
             <CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} />
-            {d.source === 'supabase' ? <CapitalCard c={capital} /> : null}
           </div>
-          <div className="lg:col-span-6"><GstCard g={gst} today={today} vfDaysAgo={d.sync.vfulfillImportDaysAgo} /></div>
-          <div className="lg:col-span-12">
+          <div className={`min-w-0 lg:col-start-2 lg:row-start-1 ${hasCapital ? 'lg:row-span-2' : ''}`}>
+            <GstCard g={gst} today={today} vfDaysAgo={d.sync.vfulfillImportDaysAgo} />
+          </div>
+          {hasCapital ? <div className="min-w-0 lg:col-start-1 lg:row-start-2"><CapitalCard c={capital} /></div> : null}
+          <div className="min-w-0 lg:col-span-2">
             {pnl ? (
               <PnlTable pnl={pnl} store={store} storeName={storeName} currentMonth={currentMonth} />
             ) : (
-              <section className="rounded-xl bg-raised p-6">
-                <h2 className="text-base font-semibold text-ink">Monthly P&amp;L</h2>
+              <section className="glass px-5 py-4">
+                <h2 className="text-lg font-bold">Monthly P&amp;L</h2>
                 <p className="mt-2 text-ink-2">{pnlError ?? 'The P&L reads real data only: set DATA_SOURCE=supabase.'}</p>
               </section>
             )}
           </div>
-          {forecast ? <div className="lg:col-span-12"><ForecastCard f={forecast} scope={storeName} /></div> : null}
+          {forecast ? <div className="min-w-0 lg:col-span-2"><ForecastCard f={forecast} scope={storeName} /></div> : null}
         </div>
       </main>
     </>

@@ -18,8 +18,9 @@ export function SettingsForm({ action, submit, pendingText = 'Saving…', classN
   const [state, formAction, pending] = useActionState(action, null)
   const [tooBig, setTooBig] = useState<string | null>(null)
   const form = useRef<HTMLFormElement>(null)
-  const btn = tone === 'primary' ? 'bg-ink text-ground font-semibold'
-    : tone === 'danger' ? 'text-bad ring-1 ring-bad/50 hover:bg-bad/10' : 'text-ink-2 ring-1 ring-line hover:text-ink'
+  // Primary is a solid surface: .glass-pill is unlayered, so its see-through background would beat bg-ink and hide the text.
+  const btn = tone === 'primary' ? 'rounded-xl bg-ink text-ground font-semibold'
+    : tone === 'danger' ? 'glass-pill text-bad ring-1 ring-bad/50 hover:bg-bad/10' : 'glass-pill text-ink-2 ring-1 ring-line hover:text-ink'
 
   // React would clear the form after every action. Clear it only after a save that wrote something, so a failed
   // save or a "Check only" import keeps what was typed and the files chosen.
@@ -50,7 +51,7 @@ export function SettingsForm({ action, submit, pendingText = 'Saving…', classN
     >
       {children}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" disabled={pending} className={`rounded-md px-4 py-2 text-sm disabled:opacity-50 ${btn}`}>{pending ? pendingText : submit}</button>
+        <button type="submit" disabled={pending} className={`h-10 px-4 text-sm focus-visible:outline-2 focus-visible:outline-sodium disabled:opacity-50 ${btn}`}>{pending ? pendingText : submit}</button>
         {tooBig ? <p role="alert" className="text-sm text-bad">{tooBig}</p>
           : state && !pending ? <p role="status" className={`text-sm ${state.ok ? 'text-good' : 'text-bad'}`}>{state.message}</p> : null}
       </div>

@@ -20,63 +20,97 @@ const ROWS: Row[] = [
   { label: 'Net profit', value: (l) => l.netProfit, strong: true, signed: true },
 ]
 
+const tone = (v: number, signed: boolean) => (signed ? (v < 0 ? 'text-bad' : v > 0 ? 'text-good' : 'text-ink-2') : v === 0 ? 'text-ink-2' : 'text-ink')
+const show = (v: number, signed: boolean) => (v === 0 ? '—' : `${signed && v > 0 ? '+' : ''}${rs(v)}`)
+
 /**
  * Monthly P&L from real data: one column per month, newest first. `store` null shows the VXP total, which also
- * carries the costs no store does (vFulfill storage and subscription, shared fixed costs).
+ * carries the costs no store does (vFulfill storage and subscription, shared fixed costs). Wide panel: a table.
+ * Narrow panel: one stacked card per month, so it never overflows a phone.
  */
 export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResult; store: string | null; storeName: string; currentMonth: string }) {
   const months = [...pnl.months].reverse()
   const line = (m: (typeof months)[number]) => (store ? m.stores[store] : m.vxp)
   const shareRow = months.some((m) => line(m).ownerShare !== null)
+  const share = (m: (typeof months)[number]) => line(m).ownerShare ?? 0
   return (
-    <section aria-labelledby="pnl-h" className="rounded-xl bg-raised p-6">
-      <h2 id="pnl-h" className="text-base font-semibold text-ink">Monthly P&amp;L · {storeName}</h2>
+    <section aria-labelledby="pnl-h" className="glass rise p-5">
+      <h2 id="pnl-h" className="text-lg font-bold">Monthly P&amp;L · {storeName}</h2>
       <p className="mt-1 max-w-[75ch] text-sm text-ink-3">
         Actual, ex-GST. A delivered order counts in the month it was delivered (vFulfill); an RTO or cancelled order earns ₹0 in
         the month it was placed but its fees count. {store ? 'Costs shared by all stores are in the All VXP view only.' : 'Includes costs shared by all stores.'}
       </p>
-      <div className="mt-4 overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left tabular-nums">
-          <thead>
-            <tr className="border-b border-line">
-              <th scope="col" className="label py-2 pr-4 font-normal"><span className="sr-only">Line</span></th>
-              {months.map((m) => (
-                <th key={m.month} scope="col" className="label py-2 pl-4 text-right font-normal whitespace-nowrap">
-                  {monthLabel(m.month)}{m.month === currentMonth ? <span className="block text-ink-3">to date</span> : null}
-                </th>
+      <div className="@container mt-3">
+        <div className="hidden overflow-x-auto @min-[50rem]:block">
+          <table className="w-full text-left tabular-nums">
+            <thead>
+              <tr className="border-b border-line">
+                <th scope="col" className="label py-2 pr-4 font-normal"><span className="sr-only">Line</span></th>
+                {months.map((m) => (
+                  <th key={m.month} scope="col" className="label py-2 pl-4 text-right font-normal whitespace-nowrap">
+                    {monthLabel(m.month)}{m.month === currentMonth ? <span className="block text-[0.6875rem] normal-case tracking-normal text-ink-3">to date</span> : null}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {ROWS.map((r) => (
+                <tr key={r.label} className="border-b border-line">
+                  <th scope="row" className="py-3 pr-4 font-normal text-ink-2 whitespace-nowrap">
+                    <span className={r.strong ? 'font-bold text-ink' : ''}>{r.label}</span>
+                    {r.note ? <span className="block text-xs text-ink-3">{r.note}</span> : null}
+                  </th>
+                  {months.map((m) => {
+                    const l = line(m)
+                    const v = r.value(l)
+                    return (
+                      <td key={m.month} title={r.title?.(l) || undefined} className={`py-3 pl-4 text-right whitespace-nowrap ${r.strong ? 'text-[1.125rem] font-bold' : ''} ${tone(v, !!r.signed)}`}>
+                        {show(v, !!r.signed)}
+                      </td>
+                    )
+                  })}
+                </tr>
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {ROWS.map((r) => (
-              <tr key={r.label} className={`border-b border-line ${r.strong ? 'font-semibold' : ''}`}>
-                <th scope="row" className="py-3 pr-4 font-normal text-ink-2 whitespace-nowrap">
-                  <span className={r.strong ? 'font-semibold text-ink' : ''}>{r.label}</span>
-                  {r.note ? <span className="block text-xs text-ink-3">{r.note}</span> : null}
-                </th>
-                {months.map((m) => {
-                  const l = line(m)
-                  const v = r.value(l)
-                  const tone = r.signed ? (v < 0 ? 'text-bad' : v > 0 ? 'text-good' : 'text-ink-3') : v === 0 ? 'text-ink-3' : 'text-ink'
-                  return (
-                    <td key={m.month} title={r.title?.(l) || undefined} className={`py-3 pl-4 text-right whitespace-nowrap ${tone}`}>
-                      {v === 0 ? '—' : rs(v)}
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-            {shareRow ? (
-              <tr>
-                <th scope="row" className="py-3 pr-4 font-normal text-ink-2">Your 50% share</th>
-                {months.map((m) => {
-                  const s = line(m).ownerShare
-                  return <td key={m.month} className="py-3 pl-4 text-right whitespace-nowrap text-ink">{s === null || s === 0 ? '—' : rs(s)}</td>
-                })}
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+              {shareRow ? (
+                <tr>
+                  <th scope="row" className="py-3 pr-4 font-normal text-ink-2">Your 50% share</th>
+                  {months.map((m) => (
+                    <td key={m.month} className={`py-3 pl-4 text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</td>
+                  ))}
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+        <div className="space-y-1.5 @min-[50rem]:hidden">
+          {months.map((m) => {
+            const l = line(m)
+            return (
+              <div key={m.month} className="glass-row px-3 py-3">
+                <p className="flex items-baseline justify-between gap-3">
+                  <span className="text-base font-bold">{monthLabel(m.month)}{m.month === currentMonth ? <span className="ml-2 text-xs font-normal text-ink-3">to date</span> : null}</span>
+                </p>
+                <dl className="mt-2 divide-y divide-line tabular-nums">
+                  {ROWS.map((r) => {
+                    const v = r.value(l)
+                    return (
+                      <div key={r.label} title={r.title?.(l) || undefined} className="flex items-baseline justify-between gap-4 py-1.5">
+                        <dt className={`min-w-0 ${r.strong ? 'font-bold text-ink' : 'text-ink-2'}`}>{r.label}{r.note ? <span className="block text-xs text-ink-3">{r.note}</span> : null}</dt>
+                        <dd className={`text-right whitespace-nowrap ${r.strong ? 'text-[1.3rem] font-bold' : ''} ${tone(v, !!r.signed)}`}>{show(v, !!r.signed)}</dd>
+                      </div>
+                    )
+                  })}
+                  {shareRow ? (
+                    <div className="flex items-baseline justify-between gap-4 py-1.5">
+                      <dt className="text-ink-2">Your 50% share</dt>
+                      <dd className={`text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</dd>
+                    </div>
+                  ) : null}
+                </dl>
+              </div>
+            )
+          })}
+        </div>
       </div>
       {!store && months.some((m) => Object.keys(m.shared.vfByHead).length + Object.keys(m.shared.fixed).length > 0) ? (
         <p className="mt-3 text-xs text-ink-3">

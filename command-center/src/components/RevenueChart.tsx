@@ -28,8 +28,10 @@ export function RevenueChart({ points, unit }: { points: SeriesPoint[]; unit: 'h
   const [w, setW] = useState(900)
   const [H, setH] = useState(MIN_H)
   const [hover, setHover] = useState<number | null>(null)
+  const hasPoints = points.length > 0
 
   useEffect(() => {
+    if (!hasPoints) return
     const el = wrap.current
     if (!el) return
     const ro = new ResizeObserver(([e]) => {
@@ -38,7 +40,7 @@ export function RevenueChart({ points, unit }: { points: SeriesPoint[]; unit: 'h
     })
     ro.observe(el)
     return () => ro.disconnect()
-  }, [])
+  }, [hasPoints])
 
   const narrow = w < NARROW_BELOW
   const pad = narrow ? NARROW : WIDE

@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
-import { AdsStatsRow, CampaignsTable, DailyTable, StoreAdsTable } from '@/components/AdsParts'
+import { AdsStatsRow, AdsVerdict, CampaignsTable, DailyTable, StoreAdsTable } from '@/components/AdsParts'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
 import { campaignStats, dailyAds, monthDays, sortCampaigns, SORTS, spendWeightedBreakeven, storeAds, type SortKey, type StoreAds } from '@/lib/ads'
@@ -22,6 +22,12 @@ export default function Page({ searchParams }: PageProps<'/ads'>) {
 type Raw = Record<string, string | string[] | undefined>
 const one = (p: Raw, k: string) => (typeof p[k] === 'string' ? (p[k] as string) : '')
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+const shortMonth = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', timeZone: 'UTC' })
+const monthSegment = 'inline-flex h-[30px] items-center gap-1 whitespace-nowrap rounded-[0.6rem] px-2 text-ink-2'
+
+function MonthName({ month }: { month: string }) {
+  return <><span className="sm:hidden">{shortMonth(month)}</span><span className="hidden sm:inline">{monthLabel(month)}</span></>
+}
 
 async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchParams'] }) {
   const d = await getData()
@@ -87,45 +93,40 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
   total.cpa = total.orders > 0 ? total.spendPaise / 100 / total.orders : null
   const single = view.store !== 'all'
   const notConnected = storeIds.filter((id) => m.metaNotConnected(id)).map(storeName)
+  const be = single ? stores[0]?.be ?? null : null
+  const short = view.period === 'month' ? shortMonth(shown) : period.short
+  const months = (
+    <nav aria-label="Month" className="glass-pill ml-auto inline-flex p-[3px] text-sm">
+      <Link href={link({ period: 'month', month: prevMonth })} aria-label={`Previous month, ${monthLabel(prevMonth)}`} className={`${monthSegment} hover:text-ink`}>‹ <MonthName month={prevMonth} /></Link>
+      <span className={`${monthSegment} ${view.period === 'month' ? 'glass-pill-on font-semibold text-ink' : ''}`}><MonthName month={shown} /></span>
+      {nextMonth && <Link href={link({ period: 'month', month: nextMonth })} aria-label={`Next month, ${monthLabel(nextMonth)}`} className={`${monthSegment} hover:text-ink`}><MonthName month={nextMonth} /> ›</Link>}
+    </nav>
+  )
 
   return (
     <>
       <TopBar tab="ads" view={{ ...view, keep: { path: '/ads', params: keep } }} d={d} />
-      <main className="mx-auto max-w-[1440px] px-4 py-10 sm:px-8 lg:px-10">
-        <div className="flex flex-wrap items-baseline justify-between gap-4">
-          <h1 className="text-3xl font-extrabold tracking-tight text-ink">Ads <span className="text-xl font-semibold text-ink-2">· {rangeLabel}</span></h1>
-          <nav aria-label="Month" className="flex items-center gap-3 text-sm">
-            <Link href={link({ period: 'month', month: prevMonth })} className="rounded-md px-2 py-1 text-ink-2 hover:text-ink">‹ {monthLabel(prevMonth)}</Link>
-            {view.period === 'month' ? <span className="font-semibold text-ink">{monthLabel(shown)}</span> : null}
-            {nextMonth
-              ? <Link href={link({ period: 'month', month: nextMonth })} className="rounded-md px-2 py-1 text-ink-2 hover:text-ink">{monthLabel(nextMonth)} ›</Link>
-              : null}
-          </nav>
-        </div>
-
-        {d.source !== 'supabase' ? (
-          <p className="mt-8 rounded-xl bg-raised p-6 text-ink-2">Ads reads real data only: set DATA_SOURCE=supabase.</p>
-        ) : error || !data ? (
-          <p className="mt-8 rounded-xl bg-raised p-6 text-ink-2">{error}</p>
+      <main className="mx-auto max-w-[1536px] space-y-3 px-3 pb-6 pt-3 sm:px-4">
+        {d.source !== 'supabase' || error || !data ? (
+          <section className="glass px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h1 className="label">Ads · {rangeLabel} · {single ? storeName(view.store) : 'All VXP'}</h1>
+              {months}
+            </div>
+            <p className="mt-3 text-ink-2">{d.source !== 'supabase' ? 'Ads reads real data only: set DATA_SOURCE=supabase.' : error}</p>
+          </section>
         ) : (
           <>
-            <p className="mt-2 max-w-[80ch] text-sm text-ink-3">
+            <AdsVerdict t={total} be={be} single={single} rows={camps} range={rangeLabel} period={short} scope={single ? storeName(view.store) : 'All VXP'} months={months} notConnected={notConnected} allDisconnected={notConnected.length === storeIds.length} />
+            <AdsStatsRow t={total} be={be} single={single} period={short} />
+            {!single && <StoreAdsTable rows={stores} storeName={storeName} period={short} />}
+            <CampaignsTable rows={camps} sort={sort} sortHref={(k) => link({ sort: k })} storeName={storeName} showStore={!single} period={short} />
+            <DailyTable rows={days} range={rangeLabel} period={short} />
+            <footer aria-label="How these are counted" className="max-w-[80ch] px-1 text-xs text-ink-3">
               Spend from Meta, orders from Shopify. A campaign&apos;s orders and ROAS count only orders carrying its campaign ID,
               so they read low by the untracked share; the store ROAS counts every order. Breakeven uses today&apos;s costs and
               the last 30 days&apos; delivery rates, on Meta&apos;s scale (incl. GST){pastMonth ? <>; a store&apos;s is weighted over {monthLabel(pastMonth)}&apos;s products by their ad spend</> : null}.
-              {notConnected.length > 0 ? <span className="text-warn"> Meta not connected yet: {notConnected.join(', ')}.</span> : null}
-            </p>
-            <div className="mt-6"><AdsStatsRow t={total} be={single ? stores[0]?.be ?? null : null} single={single} /></div>
-
-            {!single ? <div className="mt-8"><StoreAdsTable rows={stores} storeName={storeName} /></div> : null}
-
-            <h2 className="mt-10 text-base font-semibold text-ink">Campaigns <span className="font-normal text-ink-3">· {camps.length}</span></h2>
-            <div className="mt-3">
-              <CampaignsTable rows={camps} sort={sort} sortHref={(k) => link({ sort: k })} storeName={storeName} showStore={!single} />
-            </div>
-
-            <h2 className="mt-10 text-base font-semibold text-ink">Daily</h2>
-            <div className="mt-3"><DailyTable rows={days} /></div>
+            </footer>
           </>
         )}
       </main>

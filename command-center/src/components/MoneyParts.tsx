@@ -1,7 +1,9 @@
+import { AlertTriangle, CircleCheck, Clock } from 'lucide-react'
 import type { capitalSummary } from '@/lib/capital'
 import type { Forecast } from '@/lib/forecast'
 import type { GstMonth, GstResult } from '@/lib/gst'
 import { inr } from '@/lib/metrics'
+import { ForecastChart } from './ForecastChart'
 
 /** To the paisa: the portal asks for exact figures. */
 const exact = (paise: number) => `₹${(paise / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -10,11 +12,18 @@ const day = (iso: string) => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleD
 const monthName = (ym: string) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 const daysFrom = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
 
-function Due({ label, on, today }: { label: string; on: string; today: string }) {
+const HERO = 'text-[2.1rem] font-extrabold leading-none tracking-[-0.03em] tabular-nums'
+
+/** A return's due date: plain when far off, amber within 3 days, red when late. The state is always in words. */
+function Due({ gstr, on, today }: { gstr: '1' | '3B'; on: string; today: string }) {
   const left = daysFrom(today, on)
+  const state = left < 0 ? ` · ${-left} ${-left === 1 ? 'day' : 'days'} late` : left === 0 ? ' · today' : left <= 3 ? ` · in ${left} ${left === 1 ? 'day' : 'days'}` : ''
+  const tone = left < 0 ? 'bg-bad/12 text-bad ring-bad/45' : left <= 3 ? 'bg-warn/10 text-warn ring-warn/40' : 'text-ink-2 ring-line-strong'
+  const Icon = left < 0 ? AlertTriangle : left <= 3 ? Clock : null
   return (
-    <span className={left < 0 ? 'font-semibold text-bad' : left <= 3 ? 'font-semibold text-warn' : 'text-ink-2'}>
-      {label} {day(on)}{left < 0 ? ` (${-left} ${-left === 1 ? 'day' : 'days'} late)` : left === 0 ? ' (today)' : ''}
+    <span className={`inline-flex h-[26px] items-center gap-1 whitespace-nowrap rounded-lg px-2.5 text-xs font-semibold ring-1 ${tone}`}>
+      {Icon ? <Icon className="size-3.5 shrink-0" aria-hidden /> : null}
+      <span><span className="@max-sm:hidden">GSTR-</span>{gstr} · {day(on)}{state}</span>
     </span>
   )
 }
@@ -24,7 +33,7 @@ function MonthBlock({ m, today }: { m: GstMonth; today: string }) {
     ['vFulfill', m.itc.vfulfill], ['Meta ads', m.itc.meta], ['checkout', m.itc.checkout], ['gateways', m.itc.gateway],
     ['RCM claimed back', m.itc.rcm], ['entered by hand', m.itc.manual],
   ].filter(([, v]) => v !== 0).map(([k, v]) => `${k} ${exact(v as number)}`)
-  const rows: { label: string; note: string; value: string }[] = [
+  const rows: { label: string; note: string; value: string; plain?: boolean }[] = [
     {
       label: 'Output tax',
       note: m.output.orders === 0 && m.output.manual === 0
@@ -33,21 +42,26 @@ function MonthBlock({ m, today }: { m: GstMonth; today: string }) {
       value: exact(m.output.total),
     },
     { label: 'Input credit (estimate)', note: itcParts.length ? itcParts.join(' · ') : 'None yet', value: exact(m.itc.total) },
-    { label: 'Credit ledger', note: `${exact(m.opening)} at the start, ${exact(m.closing)} left after this return`, value: m.payable > 0 ? `${exact(m.payable)} short` : 'Covers it' },
+    { label: 'Credit ledger', note: `${exact(m.opening)} at the start, ${exact(m.closing)} left after this return`, value: m.payable > 0 ? `${exact(m.payable)} short` : 'Covers it', plain: m.payable <= 0 },
     { label: 'RCM, paid in cash', note: 'Fixed costs billed from abroad (Shopify, Claude, ChatGPT) and RCM entries: 18% IGST, claimed back as credit the same month', value: exact(m.rcm) },
   ]
   return (
-    <div className="mt-6 border-t border-line pt-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h3 className="font-semibold text-ink">{monthName(m.month)}{m.partial ? ' so far' : ''}</h3>
-        <p className="text-sm"><Due label="GSTR-1" on={m.gstr1Due} today={today} /> · <Due label="GSTR-3B" on={m.gstr3bDue} today={today} /></p>
+    <div className="glass-row px-3 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+        <h3 className="font-bold text-ink">{monthName(m.month)}{m.partial ? <span className="ml-2 text-xs font-normal text-ink-3">so far</span> : null}</h3>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Due gstr="1" on={m.gstr1Due} today={today} />
+          <Due gstr="3B" on={m.gstr3bDue} today={today} />
+        </div>
       </div>
-      <p className="mt-2 text-ink-2">Cash with the GSTR-3B <span className="text-xl font-extrabold tracking-tight text-ink">{exact(m.cash)}</span>{m.cash > m.rcm ? <span className="text-sm"> (RCM {exact(m.rcm)} + tax {exact(m.payable)})</span> : null}</p>
-      <dl className="mt-3 divide-y divide-line">
+      <p className="mt-2 text-sm text-ink-2">Cash with the GSTR-3B</p>
+      <p className="text-[1.3rem] font-bold tabular-nums text-ink">{exact(m.cash)}</p>
+      {m.cash > m.rcm ? <p className="text-xs text-ink-3">RCM {exact(m.rcm)} + tax {exact(m.payable)}</p> : null}
+      <dl className="mt-2 divide-y divide-line">
         {rows.map((r) => (
-          <div key={r.label} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-2.5">
-            <dt className="text-ink-2">{r.label}<span className="block max-w-[64ch] text-xs text-ink-3">{r.note}</span></dt>
-            <dd className="font-semibold text-ink tabular-nums">{r.value}</dd>
+          <div key={r.label} className="flex items-baseline justify-between gap-x-6 py-2">
+            <dt className="min-w-0 flex-1 text-sm text-ink-2">{r.label}<span className="block text-xs text-ink-3">{r.note}</span></dt>
+            <dd className={`text-sm font-semibold tabular-nums ${r.plain ? 'text-ink-2' : 'text-ink'}`}>{r.value}</dd>
           </div>
         ))}
       </dl>
@@ -62,8 +76,8 @@ function MonthBlock({ m, today }: { m: GstMonth; today: string }) {
 export function GstCard({ g, today, vfDaysAgo }: { g: GstResult | null; today: string; vfDaysAgo: number | null }) {
   if (!g) {
     return (
-      <section aria-labelledby="gst-h" className="rounded-xl bg-raised p-6">
-        <h2 id="gst-h" className="text-base font-semibold text-ink">GST</h2>
+      <section aria-labelledby="gst-h" className="glass rise px-5 py-4">
+        <h2 id="gst-h" className="text-lg font-bold">GST</h2>
         <p className="mt-2 text-ink-2">GST reads real data only, or could not be loaded: see the server log.</p>
       </section>
     )
@@ -71,22 +85,37 @@ export function GstCard({ g, today, vfDaysAgo }: { g: GstResult | null; today: s
   const unfiled = g.months.filter((m) => !m.partial)
   const next = g.months[0]
   return (
-    <section aria-labelledby="gst-h" className="rounded-xl bg-raised p-6">
-      <h2 id="gst-h" className="text-base font-semibold text-ink">GST · one GSTIN, all stores</h2>
-      {next ? (
-        <p className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{rs(next.cash)}<span className="ml-2 text-base font-semibold text-ink-2">{next.partial ? `so far for ${monthName(next.month)}` : `due with ${monthName(next.month)}'s GSTR-3B`}</span></p>
-      ) : null}
-      <p className="mt-1 text-sm text-ink-2">
-        {g.seed
-          ? <>Filed through {monthName(g.seed.month)}, leaving {exact(g.seed.balancePaise)} of credit (as entered on Settings). </>
-          : <>No credit balance entered on Settings: the ledger starts at ₹0. </>}
-        {unfiled.length > 0 ? <span className="text-warn">{unfiled.length} past {unfiled.length === 1 ? 'month' : 'months'} not marked filed. </span> : null}
-        Estimate: the GSTR-2B decides the credit, and vFulfill and Meta invoices often reach it a month late. Late fees and interest not included.
-      </p>
-      {vfDaysAgo === null || vfDaysAgo > 3 ? (
-        <p className="mt-2 text-sm text-warn">Output tax counts delivered orders from the vFulfill shipments export, last imported {vfDaysAgo === null ? 'never' : `${vfDaysAgo} days ago`}: orders delivered since are missing.</p>
-      ) : null}
-      {g.months.map((m) => <MonthBlock key={m.month} m={m} today={today} />)}
+    <section aria-labelledby="gst-h" className="glass rise @container h-full p-2">
+      <div className="px-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 pt-2">
+          <h2 id="gst-h" className="text-lg font-bold">GST</h2>
+          <span className="text-sm text-ink-3">One GSTIN · all stores · estimate</span>
+        </div>
+        {next ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div>
+              <p className={`${HERO} ${next.cash === 0 ? 'text-ink-2' : 'text-ink'}`}>{rs(next.cash)}</p>
+              <p className="mt-1 text-sm text-ink-2">{next.partial ? `so far for ${monthName(next.month)}` : `due with ${monthName(next.month)}'s GSTR-3B`}</p>
+            </div>
+            <Due gstr="3B" on={next.gstr3bDue} today={today} />
+          </div>
+        ) : null}
+        <div className="mt-2 space-y-1 text-sm">
+          <p className="text-ink-2">
+            {g.seed ? <>Filed through {monthName(g.seed.month)}, {exact(g.seed.balancePaise)} credit left</> : <>No credit balance entered on Settings: the ledger starts at ₹0.</>}
+          </p>
+          {unfiled.length > 0 ? (
+            <p className="flex items-start gap-1.5 text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />{unfiled.length} past {unfiled.length === 1 ? 'month' : 'months'} not marked filed</p>
+          ) : null}
+          {vfDaysAgo === null || vfDaysAgo > 3 ? (
+            <p className="flex items-start gap-1.5 text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />Output tax counts delivered orders from the vFulfill shipments export, last imported {vfDaysAgo === null ? 'never' : `${vfDaysAgo} days ago`}: orders delivered since are missing.</p>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-3 space-y-1.5">
+        {g.months.map((m) => <MonthBlock key={m.month} m={m} today={today} />)}
+      </div>
+      <p className="mt-3 px-3 pb-2 text-xs text-ink-3">Estimate: the GSTR-2B decides the credit, and vFulfill and Meta invoices often reach it a month late. Late fees and interest not included.</p>
     </section>
   )
 }
@@ -97,34 +126,55 @@ type Capital = ReturnType<typeof capitalSummary>
 export function CapitalCard({ c }: { c: Capital | null }) {
   if (!c) return null
   const open = c.loans.filter((l) => !l.settled)
+  const row = 'glass-row flex items-baseline justify-between gap-x-6 px-3 py-3'
   return (
-    <section aria-labelledby="capital-h" className="rounded-xl bg-raised p-6">
-      <h2 id="capital-h" className="text-base font-semibold text-ink">Capital &amp; loans · All VXP</h2>
-      {c.loans.length === 0 && c.partners.length === 0 ? <p className="mt-2 text-ink-2">Nothing entered yet: add loans and partner capital on Settings.</p> : (
+    <section aria-labelledby="capital-h" className="glass rise h-full p-2">
+      <div className="flex flex-wrap items-baseline gap-x-3 px-3 pt-2">
+        <h2 id="capital-h" className="text-lg font-bold">Capital &amp; loans</h2>
+        <span className="text-sm text-ink-3">All VXP</span>
+      </div>
+      {c.loans.length === 0 && c.partners.length === 0 ? <p className="mt-3 px-3 pb-2 text-ink-2">Nothing entered yet: add loans and partner capital on Settings.</p> : (
         <>
-          <p className="mt-2 text-3xl font-extrabold tracking-tight text-ink">{rs(c.loanTotalDue)}<span className="ml-2 text-base font-semibold text-ink-2">owed on {open.length} {open.length === 1 ? 'loan' : 'loans'}</span></p>
-          <dl className="mt-6 divide-y divide-line border-t border-line">
-            {c.loans.map((l) => (
-              <div key={l.id} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-                <dt className="text-ink-2">{l.name}
-                  <span className="block text-xs text-ink-3">
-                    {rs(l.amountPaise)} on {day(l.receivedOn)}{l.repaidPaise ? `, ${rs(l.repaidPaise)} repaid` : ''}
-                    {l.interestRate ? ` · ${+(l.interestRate * 100).toFixed(2)}% a year: ${rs(l.interest)} interest so far` : ' · no interest'}
-                  </span>
-                  {l.settled ? <span className="block text-xs text-good">Repaid in full</span>
-                    : l.daysOverdue !== null ? <span className="block text-xs font-semibold text-bad">Was due {day(l.dueOn!)}: {l.daysOverdue} days overdue</span>
-                      : l.dueOn ? <span className="block text-xs text-ink-3">Due {day(l.dueOn)}</span> : null}
-                </dt>
-                <dd className="font-semibold text-ink">{rs(l.totalDue)}</dd>
-              </div>
-            ))}
-            {c.partners.map((p) => (
-              <div key={p.name} className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-                <dt className="text-ink-2">{p.name}<span className="block text-xs text-ink-3">Partner capital, {p.entries.length} {p.entries.length === 1 ? 'entry' : 'entries'}{p.repaid ? `, ${rs(p.repaid)} returned` : ''}</span></dt>
-                <dd className="font-semibold text-ink">{rs(p.outstanding)}</dd>
-              </div>
-            ))}
-          </dl>
+          <p className="mt-3 flex flex-wrap items-baseline gap-x-3 px-3">
+            <span className={`${HERO} ${c.loanTotalDue === 0 ? 'text-ink-2' : 'text-ink'}`}>{rs(c.loanTotalDue)}</span>
+            <span className="text-sm text-ink-2">owed on {open.length} {open.length === 1 ? 'loan' : 'loans'}</span>
+          </p>
+          {c.loans.length > 0 ? (
+            <ul className="mt-3 space-y-1.5">
+              {c.loans.map((l) => (
+                <li key={l.id} className={row}>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-ink">{l.name}</p>
+                    <p className="text-xs text-ink-3">
+                      {rs(l.amountPaise)} on {day(l.receivedOn)}{l.repaidPaise ? `, ${rs(l.repaidPaise)} repaid` : ''}
+                      {l.interestRate ? ` · ${+(l.interestRate * 100).toFixed(2)}% a year: ${rs(l.interest)} interest so far` : ' · no interest'}
+                    </p>
+                    {l.settled ? <p className="mt-0.5 flex items-center gap-1 text-xs text-good"><CircleCheck className="size-3.5 shrink-0" aria-hidden />Repaid in full</p>
+                      : l.daysOverdue !== null ? <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-bad"><AlertTriangle className="size-3.5 shrink-0" aria-hidden />Was due {day(l.dueOn!)}: {l.daysOverdue} days overdue</p>
+                        : l.dueOn ? <p className="mt-0.5 text-xs text-ink-3">Due {day(l.dueOn)}</p> : null}
+                  </div>
+                  <span className="text-[1.3rem] font-bold tabular-nums text-ink">{rs(l.totalDue)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {c.partners.length > 0 ? (
+            <>
+              <p className="label mt-4 px-3">Partner capital</p>
+              <ul className="mt-2 space-y-1.5">
+                {c.partners.map((p) => (
+                  <li key={p.name} className={row}>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-ink">{p.name}</p>
+                      <p className="text-xs text-ink-3">{p.entries.length} {p.entries.length === 1 ? 'entry' : 'entries'}{p.repaid ? `, ${rs(p.repaid)} returned` : ''}</p>
+                    </div>
+                    <span className="text-[1.3rem] font-bold tabular-nums text-ink">{rs(p.outstanding)}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          <div className="pb-2" />
         </>
       )}
     </section>
@@ -141,14 +191,14 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
   if (!f) return null
   const tone = (p: number) => (p < 0 ? 'text-bad' : p > 0 ? 'text-good' : 'text-ink')
   return (
-    <section aria-labelledby="forecast-h" className="rounded-xl bg-raised p-6">
-      <h2 id="forecast-h" className="text-base font-semibold text-ink">Forecast · {scope}</h2>
-      <p className={`mt-2 text-3xl font-extrabold tracking-tight ${tone(f.cumulative)}`}>{signed(f.cumulative)}<span className="ml-2 text-base font-semibold text-ink-2">running total from Day 1</span></p>
+    <section aria-labelledby="forecast-h" className="glass rise p-5">
+      <h2 id="forecast-h" className="text-lg font-bold">Forecast · {scope}</h2>
+      <p className={`mt-3 ${HERO} ${tone(f.cumulative)}`}>{signed(f.cumulative)}<span className="ml-2 text-sm font-semibold tracking-normal text-ink-2">running total from Day 1</span></p>
       <p className="mt-1 max-w-[80ch] text-sm text-ink-2">
         {f.opening.periodEnd ? <>Opens at {signed(f.opening.netPaise)} up to {day(f.opening.periodEnd)} (old Cash OS, before GST), then </> : <>From </>}
         every month of the P&amp;L above{f.rows.some((r) => r.partial) ? ', this month as it stands so far' : ''}. Net profit, ex-GST.
       </p>
-      <div className="mt-6 grid gap-x-10 gap-y-6 border-t border-line pt-5 sm:grid-cols-2">
+      <div className="mt-4 grid gap-x-10 gap-y-6 sm:grid-cols-2">
         <div>
           <p className="label">Average finished month</p>
           {f.average === null ? <p className="mt-1 text-ink-2">No finished month yet.</p> : (
@@ -174,7 +224,8 @@ export function ForecastCard({ f, scope }: { f: Forecast | null; scope: string }
           </div>
         ) : <p className="text-good">The running total is not negative: nothing left to win back.</p>}
       </div>
-      <div className="mt-6 overflow-x-auto">
+      <ForecastChart forecast={f} />
+      <div className="mt-4 overflow-x-auto">
         <table className="w-full min-w-[420px] text-left text-sm tabular-nums">
           <thead>
             <tr className="border-b border-line">
