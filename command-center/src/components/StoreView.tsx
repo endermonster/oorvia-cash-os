@@ -6,7 +6,7 @@ import { href, type ViewState } from '@/lib/nav'
 import type { OrderDay, OrderPayment, ProductStage, StoreId } from '@/lib/types'
 import { codShareLabel, verdict } from './Home'
 import { PaceChart } from './PaceChart'
-import { RoasTrack } from './RoasTrack'
+import { atBreakeven, nearBreakevenWord, RoasTrack } from './RoasTrack'
 import { Delta, Signed, StoreDot, tone } from './bits'
 
 const STAGE: Record<ProductStage, { label: string; tone: string }> = {
@@ -85,7 +85,11 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
             ) : (
               <>
                 <RoasTrack roas={s.roas} be={e.breakevenRoas} target={e.targetRoas} zone={s.zone} />
-                {s.zone === 'covering' && <p className="mt-1 text-xs text-ink-2">{fmtX(e.targetRoas - s.roas)} short of target</p>}
+                {(s.zone === 'covering' || (s.zone === 'below' && atBreakeven(s.roas, e.breakevenRoas))) && (
+                  <p className="mt-1 text-xs text-ink-2">
+                    {[atBreakeven(s.roas, e.breakevenRoas) && nearBreakevenWord(s.zone), s.zone === 'covering' && `${fmtX(e.targetRoas - s.roas)} short of target`].filter(Boolean).join(' · ')}
+                  </p>
+                )}
               </>
             )}
           </div>
@@ -152,7 +156,8 @@ function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
   const [word, cls] =
     s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-2 ring-line-strong']
     : s.economics === null ? ['Add cost', 'text-warn ring-warn/40 bg-warn/10']
-    : !breaksEven(s.economics) || s.zone === 'below' ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
+    // A store losing money this period never reads a calm Hold, even when its ROAS sits on the product breakeven.
+    : !breaksEven(s.economics) || s.zone === 'below' || s.contribution < 0 ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
     : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
     : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
   return <span className={`inline-block min-w-[5.25rem] shrink-0 whitespace-nowrap rounded-lg px-3 py-1.5 text-center text-sm font-semibold ring-1 ${cls}`}>{word}</span>

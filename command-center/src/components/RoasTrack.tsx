@@ -1,10 +1,16 @@
 import { fmtX, type StoreStats } from '@/lib/metrics'
 
+/** Within 3% of breakeven: a 2.32× ROAS against a 2.32× breakeven is neither reassuringly covering costs nor clearly below. */
+export const atBreakeven = (roas: number, be: number) => be > 0 && Math.abs(roas / be - 1) <= 0.03
+
+/** "At breakeven" or "Just below breakeven" inside the band, so the word keeps the direction the bar's colour shows. */
+export const nearBreakevenWord = (zone: StoreStats['zone']) => (zone === 'below' ? 'Just below breakeven' : 'At breakeven')
+
 export function RoasTrack({ roas, be, target, zone, after, note }: { roas: number; be: number; target: number; zone: StoreStats['zone']; after?: React.ReactNode; note?: string }) {
   const max = Math.max(target * 1.12, roas * 1.05)
   const at = (v: number) => `${(v / max) * 100}%`
   const fill = zone === null ? 'bg-ink-3' : zone === 'below' ? 'bg-bad' : zone === 'profit' ? 'bg-good' : 'bg-revenue'
-  const word = zone === null ? 'Breakeven incomplete' : zone === 'below' ? 'Below breakeven' : zone === 'covering' ? 'Covering costs' : 'Above target'
+  const word = zone === null ? 'Breakeven incomplete' : zone !== 'profit' && atBreakeven(roas, be) ? nearBreakevenWord(zone) : zone === 'below' ? 'Below breakeven' : zone === 'covering' ? 'Covering costs' : 'Above target'
   return (
     <div title={`${word}: breakeven ${fmtX(be)}, target ${fmtX(target)}${note ? `. ${note}` : ''}`}>
       <p className={`text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight ${zone === null ? 'text-ink-2' : zone === 'below' ? 'text-bad' : 'text-revenue'}`}>{fmtX(roas)}{after}<span className="sr-only"> {word}</span></p>

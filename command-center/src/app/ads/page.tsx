@@ -94,6 +94,8 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
   const single = view.store !== 'all'
   const notConnected = storeIds.filter((id) => m.metaNotConnected(id)).map(storeName)
   const be = single ? stores[0]?.be ?? null : null
+  // Stores losing money this period, from the same profit estimate Home uses; a past month has no such estimate.
+  const losing: StoreId[] = pastMonth ? [] : m.portfolio(period, storeIds).stores.filter((s) => s.contribution < 0).map((s) => s.store.id)
   const short = view.period === 'month' ? shortMonth(shown) : period.short
   const months = (
     <nav aria-label="Month" className="glass-pill ml-auto inline-flex p-[3px] text-sm">
@@ -119,7 +121,7 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
           <>
             <AdsVerdict t={total} be={be} single={single} rows={camps} range={rangeLabel} period={short} scope={single ? storeName(view.store) : 'All VXP'} months={months} notConnected={notConnected} allDisconnected={notConnected.length === storeIds.length} />
             <AdsStatsRow t={total} be={be} single={single} period={short} />
-            {!single && <StoreAdsTable rows={stores} storeName={storeName} period={short} />}
+            {!single && <StoreAdsTable rows={stores} storeName={storeName} period={short} losing={losing} />}
             <CampaignsTable rows={camps} sort={sort} sortHref={(k) => link({ sort: k })} storeName={storeName} showStore={!single} period={short} />
             <DailyTable rows={days} range={rangeLabel} period={short} />
             <footer aria-label="How these are counted" className="max-w-[80ch] px-1 text-xs text-ink-3">

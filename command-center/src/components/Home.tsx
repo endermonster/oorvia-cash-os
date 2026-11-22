@@ -19,6 +19,7 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   const orders = m.recentOrders(ids, 60)
   const series = m.series(ids, period)
   const end = series.at(-1)
+  const fixedIn = pf.total.breakeven?.fixedOnRecord ? pf.total.breakeven.fixedCosts : 0
 
   return (
     <main className={`${pageFrame} space-y-3 pb-6 pt-3`}>
@@ -37,6 +38,7 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
               : <span className="text-sm text-ink-3">vs {inr(pf.total.prevContribution)} {period.prevLabel}</span>}
           </div>
           {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
+          {fixedIn > 0 && <p className="mt-1 w-0 min-w-full text-xs text-ink-2">Before {inr(fixedIn)} fixed costs</p>}
           {borrowed.length > 0 && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {borrowed.join(', ')} on VXP delivery rates until {MIN_SAMPLE} resolve</p>}
         </div>
         <div className="border-line lg:border-l lg:pl-8">
@@ -97,6 +99,8 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
   const head = 'label whitespace-nowrap leading-tight'
   const moneyHead = `${head} text-right`
   const src = (s: string) => <span className="block text-[0.6875rem] font-normal normal-case tracking-normal text-ink-3">{period.short} · {s}</span>
+  // The total's profit is the stores' sum; fixed costs only enter its breakeven, so the figure says so.
+  const fixed = total.breakeven?.fixedOnRecord ? total.breakeven.fixedCosts : 0
   return (
     <section aria-labelledby="stores-h" className="glass rise p-2 [--delay:80ms]">
       <h2 id="stores-h" className="sr-only">Stores</h2>
@@ -139,6 +143,7 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
             <span role="cell" className="text-right tabular-nums [grid-area:profit]">
               <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
               <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(total.contribution)}`}>{total.contribution > 0 ? '+' : ''}<Signed value={total.contribution} /></span>
+              {fixed > 0 && <span className="text-xs text-ink-3">before {inr(fixed)} fixed</span>}
             </span>
             <span role="cell" aria-hidden className="[grid-area:call]" />
           </div>
@@ -184,7 +189,7 @@ function VxpRoas({ total }: { total: Portfolio['total'] }) {
       </div>
     )
   }
-  const note = [b.fixedOnRecord ? `Incl. ${inr(b.fixedCosts)} fixed costs` : 'No fixed costs on record', b.leftOut.length ? `Incomplete: ${b.leftOut.join(', ')} has no cost` : null]
+  const note = [b.fixedOnRecord ? `BE incl. ${inr(b.fixedCosts)} fixed costs` : 'No fixed costs on record', b.leftOut.length ? `Incomplete: ${b.leftOut.join(', ')} has no cost` : null]
   return <RoasTrack roas={total.roas} be={b.breakevenRoas} target={b.targetRoas} zone={total.zone} after={blended} note={note.filter(Boolean).join(' · ')} />
 }
 
@@ -193,7 +198,8 @@ function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
   const [word, cls] =
     s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-2 ring-line-strong']
     : s.economics === null ? ['Add cost', 'text-warn ring-warn/40 bg-warn/10']
-    : !breaksEven(s.economics) || s.zone === 'below' ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
+    // A store losing money this period never reads a calm Hold, even when its ROAS sits on the product breakeven.
+    : !breaksEven(s.economics) || s.zone === 'below' || s.contribution < 0 ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
     : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
     : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
   return <span className={`inline-flex h-8 min-w-[5.25rem] items-center justify-center whitespace-nowrap rounded-lg px-3 text-sm font-semibold ring-1 ${cls}`}>{word}</span>

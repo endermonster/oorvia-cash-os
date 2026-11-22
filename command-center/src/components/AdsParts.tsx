@@ -4,7 +4,7 @@ import { SORTS, type AdsDay, type AdsZone, type CampaignStats, type SortKey, typ
 import { breaksEven, noBreakevenText, roasZone, type Breakeven, type RoasZone } from '@/lib/calculator'
 import { fmtX, inr, pct } from '@/lib/metrics'
 import { StoreDot } from './bits'
-import { RoasTrack } from './RoasTrack'
+import { atBreakeven, RoasTrack } from './RoasTrack'
 
 const rs = (paise: number) => inr(paise / 100)
 const n = (x: number) => x.toLocaleString('en-IN')
@@ -26,16 +26,20 @@ function verdict(rows: CampaignStats[], spend: number, range: string, allDisconn
   const spending = rows.filter((c) => c.spendPaise > 0)
   const below = spending.filter((c) => c.zone === 'below')
   const profit = spending.filter((c) => c.zone === 'profit').length
-  const covering = spending.filter((c) => c.zone === 'covering').length
+  // A campaign within 3% of breakeven is "at breakeven", not reassuringly "covering costs".
+  const onBe = (c: CampaignStats) => c.roas !== null && c.be !== null && atBreakeven(c.roas, c.be.breakevenRoas)
+  const atBe = spending.filter((c) => c.zone === 'covering' && onBe(c)).length
+  const covering = spending.filter((c) => c.zone === 'covering' && !onBe(c)).length
   const early = spending.filter((c) => c.zone === 'early').length
   const missingCost = spending.filter((c) => c.zone === null).length
 
   const sentences: string[] = []
   if (below.length) {
     sentences.push(`${rs(below.reduce((sum, c) => sum + c.spendPaise, 0))} of ${rs(spend)} spend is in ${below.length} ${below.length === 1 ? 'campaign' : 'campaigns'} below breakeven.`)
-  } else if ((profit || covering) && !early && !missingCost && !hasDisconnected) {
+  } else if ((profit || covering) && !atBe && !early && !missingCost && !hasDisconnected) {
     sentences.push('No campaign is below breakeven.')
   }
+  if (atBe) sentences.push(`${atBe} ${atBe === 1 ? 'campaign is' : 'campaigns are'} only at breakeven.`)
   if (profit) sentences.push(`${profit} ${profit === 1 ? 'campaign is' : 'campaigns are'} above target.`)
   if (!below.length && !profit && covering) sentences.push(`${covering} ${covering === 1 ? 'campaign is' : 'campaigns are'} covering costs.`)
   if (early) sentences.push(`${early} ${early === 1 ? 'campaign is' : 'campaigns are'} too early to judge.`)
@@ -152,18 +156,19 @@ const calls = {
   early: ['Too early', neutral],
 } as const
 
-function CallChip({ roas, be, zone, unmatched = false, noSpend = 'No spend' }: {
-  roas: number | null; be: Breakeven | null; zone: AdsZone | null; unmatched?: boolean; noSpend?: string
+function CallChip({ roas, be, zone, unmatched = false, losing = false, noSpend = 'No spend' }: {
+  roas: number | null; be: Breakeven | null; zone: AdsZone | null; unmatched?: boolean; losing?: boolean; noSpend?: string
 }) {
   const [word, cls] = roas === null ? [noSpend, neutral]
     : unmatched ? ['Check URL', warning]
     : be === null ? ['Add cost', warning]
-    : !breaksEven(be) ? calls.below
+    // Same call as Home: a store losing money this period never reads Hold or Scale.
+    : !breaksEven(be) || losing ? calls.below
     : calls[zone ?? 'covering']
   return <span className={`inline-flex h-8 w-[5.25rem] items-center justify-center whitespace-nowrap rounded-lg text-sm font-semibold ring-1 ${cls}`}>{word}</span>
 }
 
-export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; storeName: (id: string) => string; period: string }) {
+export function StoreAdsTable({ rows, storeName, period, losing = [] }: { rows: StoreAds[]; storeName: (id: string) => string; period: string; losing?: string[] }) {
   return (
     <section aria-labelledby="ads-stores" className="glass p-2">
       <h2 id="ads-stores" className="sr-only">Stores</h2>
@@ -193,7 +198,7 @@ export function StoreAdsTable({ rows, storeName, period }: { rows: StoreAds[]; s
                 </div>
                 <Cell money area="rev" label="Revenue" value={rs(s.revenuePaise)} />
                 <Cell money area="cpa" label="CPA" value={s.cpa === null ? '—' : inr(s.cpa)} />
-                <div role="cell" className={callCell}><CallChip roas={s.roas} be={s.be} zone={s.zone} noSpend="No ads" /></div>
+                <div role="cell" className={callCell}><CallChip roas={s.roas} be={s.be} zone={s.zone} losing={losing.includes(s.storeId)} noSpend="No ads" /></div>
               </div>
             )
           })}

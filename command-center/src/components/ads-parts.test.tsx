@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { campaignStats, dailyAds, storeAds, type AdsCampaign, type CampaignStats } from '@/lib/ads'
 import { fromCpa } from '@/lib/calculator'
 import { AdsStatsRow, AdsVerdict, CampaignsTable, DailyTable, StoreAdsTable } from './AdsParts'
+import { RoasTrack } from './RoasTrack'
 
 const BE = fromCpa(1499, 400) // breakeven 3.75×, target 5.52×
 const camps: AdsCampaign[] = [
@@ -32,10 +33,16 @@ const verdictMarkup = (rows: CampaignStats[], notConnected: string[] = []) => re
 )
 
 describe('Ads parts', () => {
+  it('near breakeven: keeps the direction, and a losing store never reads Hold', () => {
+    expect(renderToStaticMarkup(<RoasTrack roas={2.26} be={2.32} target={4} zone="below" />)).toContain('Just below breakeven')
+    expect(renderToStaticMarkup(<RoasTrack roas={2.33} be={2.32} target={4} zone="covering" />)).toContain('At breakeven')
+    expect(renderToStaticMarkup(<StoreAdsTable rows={[{ ...store, zone: 'covering' }]} storeName={name} period={period} losing={['kaiven']} />)).toContain('Cut or fix')
+  })
+
   it('campaign table: zone against breakeven, Ads Manager link, warning for an unmatched URL', () => {
     const html = campaignMarkup(campaignRows)
-    expect(html).toContain('3.75×') // ₹1,499 on ₹400: covering costs
-    expect(html).toContain('Covering costs')
+    expect(html).toContain('3.75×') // ₹1,499 on ₹400: within 3% of breakeven
+    expect(html).toContain('At breakeven')
     expect(html).toContain('selected_campaign_ids=A')
     expect(html).toContain('URL matches no product')
     expect(html).toContain('Spend ↓')
@@ -63,7 +70,8 @@ describe('Ads parts', () => {
     ])
     expect(html).toContain('₹350 of ₹500 spend is in 2 campaigns below breakeven. 1 campaign is above target.')
     expect(html).toContain('Campaign ROAS counts tracked orders only (1 of 2).')
-    expect(verdictMarkup([base])).toContain('No campaign is below breakeven. 1 campaign is covering costs.')
+    expect(verdictMarkup([base])).toContain('1 campaign is only at breakeven.')
+    expect(verdictMarkup([{ ...base, roas: 4.5 }])).toContain('No campaign is below breakeven. 1 campaign is covering costs.')
     expect(verdictMarkup([])).toContain(`No ads ran in ${range}.`)
   })
 
@@ -80,7 +88,7 @@ describe('Ads parts', () => {
 
   it('reports confirmed results alongside campaigns that lack cost data', () => {
     const html = verdictMarkup(campaignRows)
-    expect(html).toContain('>1 campaign is covering costs. No cost data for 1 campaign.</h1>')
+    expect(html).toContain('>1 campaign is only at breakeven. No cost data for 1 campaign.</h1>')
   })
 
   it('reports a disconnected Meta account when there is no recorded spend', () => {
