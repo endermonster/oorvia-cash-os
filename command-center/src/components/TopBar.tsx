@@ -4,7 +4,8 @@ import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
 import { vfState } from './bits'
-import { SwitchGroup } from './SwitchGroup'
+import { viewKey } from '@/lib/view-key'
+import { ViewSwitches } from './ViewSwitches'
 import { SyncButton } from './SyncButton'
 
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
@@ -59,15 +60,18 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
             </Link>
           </nav>
 
-          {tabPath && <SwitchGroup label="Store" current={view.store}
-            items={stores.map((st) => ({ id: st.id, href: href(tabPath, { ...view, store: st.id }), label: st.name, dot: st.id === 'all' ? undefined : st.id }))}
-            className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]"
-            itemClass={`${seg} flex items-center gap-2 max-sm:min-h-9`} />}
-
-          {tabPath && (tab === 'home' || tab === 'ads') && <SwitchGroup label="Period" current={view.period}
-            items={PERIODS.map((p) => ({ id: p.id, href: href(tabPath, { ...view, period: p.id }), label: p.label }))}
-            className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto"
-            itemClass={`${seg} flex items-center max-sm:min-h-9`} />}
+          {tabPath && <ViewSwitches store={view.store} period={view.period}
+            hrefs={Object.fromEntries(stores.flatMap((st) => PERIODS.map((p) => [viewKey({ store: st.id, period: p.id }), href(tabPath, { ...view, store: st.id, period: p.id })])))}
+            stores={{
+              label: 'Store', items: stores.map((st) => ({ id: st.id, label: st.name, dot: st.id === 'all' ? undefined : st.id })),
+              className: 'glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]',
+              itemClass: `${seg} flex items-center gap-2 max-sm:min-h-9`,
+            }}
+            periods={tab === 'home' || tab === 'ads' ? {
+              label: 'Period', items: PERIODS.map((p) => ({ id: p.id, label: p.label })),
+              className: 'glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto',
+              itemClass: `${seg} flex items-center max-sm:min-h-9`,
+            } : null} />}
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">

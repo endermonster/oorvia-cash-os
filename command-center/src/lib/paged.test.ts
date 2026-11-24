@@ -71,40 +71,46 @@ describe('selectAll', () => {
       expect(f.calls).toEqual([[0, 999], [1000, 1999]])
     })
 
-    it('fetches the remaining pages in parallel, no empty page', async () => {
+    it('reads pages one at a time and stops on the short last page, no empty page', async () => {
       const f = fake(3333, { counts: true })
       expect(await selectAll<number>(f.build)).toEqual(all(3333))
       expect(f.calls).toEqual([[0, 999], [1000, 1999], [2000, 2999], [3000, 3999]])
+      expect(f.inFlight.max).toBe(1)
     })
 
-    it('pages by the server cap when it is below the page size', async () => {
+    it('does not skip rows when the server caps pages below the page size', async () => {
       const f = fake(1300, { counts: true, cap: 500 })
       expect(await selectAll<number>(f.build)).toEqual(all(1300))
-      expect(f.calls).toEqual([[0, 999], [500, 999], [1000, 1499]])
+      expect(f.calls).toEqual([[0, 999], [500, 1499], [1000, 1999]])
     })
 
-    it('falls back to paging one by one when rows change mid-read, losing none', async () => {
-      const f = fake(2500, { counts: true, grow: 7 })
-      expect(await selectAll<number>(f.build)).toEqual(all(2507))
+    it('reads rows added at the end during the read', async () => {
+      expect(await selectAll<number>(fake(2000, { counts: true, grow: 7 }).build)).toEqual(all(2007))
+      expect(await selectAll<number>(fake(2500, { counts: true, grow: 7 }).build)).toEqual(all(2507))
     })
 
-    it('reads rows added at the end when the counted pages all come back full', async () => {
-      const f = fake(2000, { counts: true, grow: 7 })
-      expect(await selectAll<number>(f.build)).toEqual(all(2007))
-    })
-
-    it('keeps at most 4 pages of one read in flight', async () => {
-      const f = fake(10_500, { counts: true })
-      expect(await selectAll<number>(f.build)).toEqual(all(10_500))
-      expect(f.inFlight.max).toBe(4)
-      expect(f.calls).toHaveLength(11)
+    it('loses no existing row when one is inserted mid-table during the read', async () => {
+      let table = all(2500)
+      let reads = 0
+      const build = () => {
+        let wantCount = false
+        return {
+          setHeader: () => { wantCount = true },
+          range: async (from: number, to: number) => {
+            if (++reads === 2) table = [...table.slice(0, 500), -1, ...table.slice(500)] // lands before page 2 is read
+            return { data: table.slice(from, to + 1), error: null, count: wantCount ? table.length : null }
+          },
+        }
+      }
+      const rows = await selectAll<number>(build)
+      expect(all(2500).filter((r) => !rows.includes(r))).toEqual([])
     })
 
     it('returns nothing for an empty table', async () => {
       expect(await selectAll<number>(fake(0, { counts: true }).build)).toEqual([])
     })
 
-    it('surfaces errors from a parallel page', async () => {
+    it('surfaces errors from a later page', async () => {
       await expect(selectAll<number>(fake(2500, { counts: true, failAt: 1000 }).build)).rejects.toThrow('boom')
     })
   })

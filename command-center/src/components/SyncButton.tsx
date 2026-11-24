@@ -23,10 +23,15 @@ export function SyncButton() {
       const d = summarize(body)
       setError(res.ok ? d.alert : (d.alert ?? 'Sync failed'))
       setNote(d.note)
-      // Also on a partial failure: the stores that did sync have new numbers. The cache goes first, or the refresh
-      // could read the figures from before the sync.
-      await dropDashboardCache().catch(() => {})
-      startRefresh(() => router.refresh())
+      // Also on a partial failure: the stores that did sync have new numbers. The action drops the cache and
+      // refreshes the page in one round trip; if it fails, a plain refresh still shows what it can.
+      startRefresh(async () => {
+        try {
+          await dropDashboardCache()
+        } catch {
+          router.refresh()
+        }
+      })
     } catch {
       setError('Sync failed: could not reach the server')
     } finally {
