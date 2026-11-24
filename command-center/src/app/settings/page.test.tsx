@@ -2,11 +2,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
+// The page reads settings only against the real database (its getChrome mock says supabase too).
+vi.stubEnv('DATA_SOURCE', 'supabase')
 vi.mock('./actions', () => {
   const a = async () => null
   return { addCapital: a, addFixedCost: a, addGstEntry: a, deleteCapital: a, deleteCogs: a, deleteFixedCost: a, deleteGstCredit: a, deleteGstEntry: a, endFixedCost: a, importVf: a, saveBank: a, saveCogs: a, saveGstCredit: a, saveRepaid: a, saveStage: a }
 })
 vi.mock('@/components/TopBar', () => ({ TopBar: () => null }))
+vi.mock('@/lib/auth/server', () => ({ requireUser: async () => ({ id: 'u' }) }))
 vi.mock('@/lib/data', async () => {
   const { MOCK } = await import('@/lib/mock')
   return { getChrome: async () => ({ ...MOCK, source: 'supabase' }) }

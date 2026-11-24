@@ -424,9 +424,11 @@ export async function loadData(now = new Date()): Promise<Data> {
   const dayCols = `${orderCols}, orders_missing_cogs`
   const campCols = 'store_id, campaign_id, sku, spend, impressions, clicks, meta_purchases, attributed_orders'
 
-  const [{ stores, metaStoreIds }, productRows, cogsRows, orders, ordersToday, ordersYesterday, campaignRows, campaignDays, campsToday, campsYesterday, resolved, recent, fixedRows] =
+  // Cash and sync start with everything else, not after it: sync waits only for the store list.
+  const storesRead = readStores(sb)
+  const [{ stores }, productRows, cogsRows, orders, ordersToday, ordersYesterday, campaignRows, campaignDays, campsToday, campsYesterday, resolved, recent, fixedRows, cash, sync] =
     await Promise.all([
-      readStores(sb),
+      storesRead,
       selectAll<ProductRow>(() => sb.from('cc_products').select('store_id, sku, name, price_paise, packed_weight_grams, handle, stage, live_since').order('store_id').order('sku')),
       selectAll<CogsRow>(() => sb.from('cc_cogs_history').select('store_id, sku, cogs_paise, effective_from').order('store_id').order('sku').order('effective_from')),
       selectAll<OrderDayRow>(() => sb.from('cc_order_days').select(`date, ${dayCols}`).gte('date', since).order('date').order('store_id').order('sku').order('payment')),
@@ -447,6 +449,8 @@ export async function loadData(now = new Date()): Promise<Data> {
       selectAll<{ store_id: string | null; name: string; amount_paise: Num; frequency: FixedCost['frequency']; start_date: string; end_date: string | null; gst_inclusive: boolean }>(
         () => sb.from('cc_fixed_costs').select('store_id, name, amount_paise, frequency, start_date, end_date, gst_inclusive').order('id'),
       ),
+      readCash(sb, now),
+      storesRead.then(({ stores: s, metaStoreIds }) => readSync(sb, s.map((x) => x.id), metaStoreIds, now)),
     ])
 
   const cogs = currentCogs(cogsRows, today)
@@ -467,8 +471,8 @@ export async function loadData(now = new Date()): Promise<Data> {
     campaignHoursYesterday: campsYesterday.map(mapCampaignHour),
     resolved: resolved.map(mapResolvedDay),
     recentOrders: recent.map((r) => mapRecentOrder(r, products)),
-    cash: await readCash(sb, now), gst: null, ownerShareMonth: null,
+    cash, gst: null, ownerShareMonth: null,
     fixedCostsRunRate: runRatePaise === null ? null : runRatePaise / 100,
-    sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now),
+    sync,
   }
 }

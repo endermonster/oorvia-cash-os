@@ -4,6 +4,7 @@ import { SettingsForm } from '@/components/SettingsForm'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
 import { StoreDot } from '@/components/bits'
+import { requireUser } from '@/lib/auth/server'
 import { getChrome } from '@/lib/data'
 import { istNow } from '@/lib/dates'
 import { inr } from '@/lib/metrics'
@@ -63,22 +64,22 @@ function Disclosure({ label, children, className = '' }: { label: string; childr
 }
 
 async function Settings({ searchParams }: { searchParams: PageProps<'/settings'>['searchParams'] }) {
-  const d = await getChrome()
-  const view = readView(await searchParams, d.stores)
+  const params = await searchParams
+  // The session is checked before any read starts; then the settings are read alongside the top bar's data, not after it.
+  await requireUser()
+  const [d, { s, error }] = await Promise.all([
+    getChrome(),
+    process.env.DATA_SOURCE === 'supabase'
+      ? loadSettings().then((s) => ({ s, error: null }), (e) => {
+        console.error(`settings: ${e instanceof Error ? e.message : String(e)}`)
+        return { s: null, error: 'Settings could not be loaded. Try again; if it keeps failing, check the server log.' }
+      })
+      : { s: null, error: null },
+  ])
+  const view = readView(params, d.stores)
   const today = istNow(d.now).today
   const lastMonth = addMonths(today.slice(0, 7), -1)
   const storeName = (id: string | null) => (id === null ? 'All VXP (shared)' : d.stores.find((s) => s.id === id)?.name ?? id)
-
-  let s: Awaited<ReturnType<typeof loadSettings>> | null = null
-  let error: string | null = null
-  if (d.source === 'supabase') {
-    try {
-      s = await loadSettings()
-    } catch (e) {
-      console.error(`settings: ${e instanceof Error ? e.message : String(e)}`)
-      error = 'Settings could not be loaded. Try again; if it keeps failing, check the server log.'
-    }
-  }
 
   return (
     <>
