@@ -542,49 +542,61 @@ export function createMetrics(d: Data) {
     })
   }
 
+  /**
+   * One store's ads state for "ads stopped" and the user-paused check. `stopped`: the call's detail when Meta stopped
+   * delivery or a verified drop hit campaigns still live; null otherwise (a user pause is never a stop).
+   */
+  function adsState(id: StoreId) {
+    const yesterday = addDays(TODAY, -1)
+    const weekStart = addDays(TODAY, -ADS_STATUS_DAYS)
+    const baselineStart = addDays(yesterday, -ADS_BASELINE_DAYS)
+    const week = d.campaignDays.filter((r) => r.storeId === id && r.date >= weekStart && r.date <= yesterday)
+    const yesterdaySpend = week.filter((r) => r.date === yesterday).reduce((s, r) => s + r.spend, 0)
+    // Yesterday's spend is only complete once this store's Meta sync has run since IST midnight (the cron runs at 06:00):
+    // before that, or when its sync is failing, a low "yesterday" is missing data, not stopped ads.
+    const metaAge = d.sync.metaMinutesAgoByStore[id]
+    // ...and only when that sync matched yesterday's campaign spend to the account total (a partial answer is not a stop).
+    const metaHasYesterday = metaAge !== undefined && metaAge <= d.nowHour * 60 + d.nowMinute && d.sync.metaYesterdayVerified[id] === true
+    const statusOf = (campaignId: string) => d.campaigns.find((c) => c.storeId === id && c.id === campaignId)?.status ?? null
+    const userStopped = (campaignId: string) => USER_STOPPED.has(statusOf(campaignId) ?? '')
+    const metaStopped = (campaignId: string) => META_STOPPED.has(statusOf(campaignId) ?? '')
+    // Campaigns the user paused are left out of the drop: his pause is not a call. A drop in what is still live is.
+    const live = week.filter((r) => !userStopped(r.campaignId))
+    const liveYesterday = live.filter((r) => r.date === yesterday).reduce((s, r) => s + r.spend, 0)
+    const liveDaily = live.filter((r) => r.date >= baselineStart && r.date < yesterday).reduce((s, r) => s + r.spend, 0) / ADS_BASELINE_DAYS
+    // Spend synced for today from a delivering campaign means ads are running again (a replacement, or a resume).
+    // A stopped campaign's spend does not count: a paused one can still bill a trickle (Kaiven: ₹28 after its pause).
+    const spendingToday = d.campaignDays.some((r) => r.storeId === id && r.date === TODAY && r.spend > 0 && !userStopped(r.campaignId) && !metaStopped(r.campaignId))
+    const spendDropped = metaHasYesterday && liveDaily >= ADS_MIN_DAILY_SPEND && liveYesterday < liveDaily * ADS_STOP_SPEND_SHARE
+    const spendingCampaigns = [...new Set(week.filter((r) => r.spend > 0).map((r) => r.campaignId))]
+    // A live campaign that has not spent yet (a replacement just launched) means delivery has not stopped.
+    const anyActive = d.campaigns.some((c) => c.storeId === id && c.status === 'ACTIVE')
+    const blocked = spendingCampaigns.filter(metaStopped)
+    const metaBlocked = blocked.length > 0 && !anyActive && spendingCampaigns.every((c) => metaStopped(c) || userStopped(c))
+    const why = [...new Set(blocked.map((c) => statusOf(c)!))].join(', ')
+    const stopped = !spendingToday && (spendDropped || metaBlocked)
+      ? [
+        spendDropped ? `${inr(liveYesterday)} yesterday vs ${inr(liveDaily)}/day before` : null,
+        metaBlocked ? `Meta stopped ${blocked.length === 1 ? 'the campaign' : `${blocked.length} campaigns`} (${why})` : null,
+      ].filter(Boolean).join(' · ')
+      : null
+    return { stopped, userStopped, anyActive, yesterdaySpend, weekStart, week }
+  }
+
+  /** Stores whose ads stopped (the `${id}-ads-stopped` rule), without the three-call cap of `calls()`. */
+  function adsStopped(storeIds: StoreId[] = d.stores.map((s) => s.id)): StoreId[] {
+    return storeIds.filter((id) => adsState(id).stopped !== null)
+  }
+
   /** "Needs your call": facts only, at most three, worst first. Empty is a valid answer. */
   function calls(p: Period, storeIds: StoreId[] = d.stores.map((s) => s.id)): Call[] {
     const out: Call[] = []
     const yesterday = addDays(TODAY, -1)
-    const weekStart = addDays(TODAY, -ADS_STATUS_DAYS)
-    const baselineStart = addDays(yesterday, -ADS_BASELINE_DAYS)
     for (const id of storeIds) {
       const store = storeById(id)
       const eco = storeEconomics(id)
-      const week = d.campaignDays.filter((r) => r.storeId === id && r.date >= weekStart && r.date <= yesterday)
-      const yesterdaySpend = week.filter((r) => r.date === yesterday).reduce((s, r) => s + r.spend, 0)
-      // Yesterday's spend is only complete once this store's Meta sync has run since IST midnight (the cron runs at 06:00):
-      // before that, or when its sync is failing, a low "yesterday" is missing data, not stopped ads.
-      const metaAge = d.sync.metaMinutesAgoByStore[id]
-      // ...and only when that sync matched yesterday's campaign spend to the account total (a partial answer is not a stop).
-      const metaHasYesterday = metaAge !== undefined && metaAge <= d.nowHour * 60 + d.nowMinute && d.sync.metaYesterdayVerified[id] === true
-      const statusOf = (campaignId: string) => d.campaigns.find((c) => c.storeId === id && c.id === campaignId)?.status ?? null
-      const userStopped = (campaignId: string) => USER_STOPPED.has(statusOf(campaignId) ?? '')
-      const metaStopped = (campaignId: string) => META_STOPPED.has(statusOf(campaignId) ?? '')
-      // Campaigns the user paused are left out of the drop: his pause is not a call. A drop in what is still live is.
-      const live = week.filter((r) => !userStopped(r.campaignId))
-      const liveYesterday = live.filter((r) => r.date === yesterday).reduce((s, r) => s + r.spend, 0)
-      const liveDaily = live.filter((r) => r.date >= baselineStart && r.date < yesterday).reduce((s, r) => s + r.spend, 0) / ADS_BASELINE_DAYS
-      // Spend synced for today from a delivering campaign means ads are running again (a replacement, or a resume).
-      // A stopped campaign's spend does not count: a paused one can still bill a trickle (Kaiven: ₹28 after its pause).
-      const spendingToday = d.campaignDays.some((r) => r.storeId === id && r.date === TODAY && r.spend > 0 && !userStopped(r.campaignId) && !metaStopped(r.campaignId))
-      const spendDropped = metaHasYesterday && liveDaily >= ADS_MIN_DAILY_SPEND && liveYesterday < liveDaily * ADS_STOP_SPEND_SHARE
-      const spendingCampaigns = [...new Set(week.filter((r) => r.spend > 0).map((r) => r.campaignId))]
-      // A live campaign that has not spent yet (a replacement just launched) means delivery has not stopped.
-      const anyActive = d.campaigns.some((c) => c.storeId === id && c.status === 'ACTIVE')
-      const blocked = spendingCampaigns.filter(metaStopped)
-      const metaBlocked = blocked.length > 0 && !anyActive && spendingCampaigns.every((c) => metaStopped(c) || userStopped(c))
-      if (!spendingToday && (spendDropped || metaBlocked)) {
-        const why = [...new Set(blocked.map((c) => statusOf(c)!))].join(', ')
-        out.push({
-          id: `${id}-ads-stopped`, tone: 'warn', storeId: id,
-          title: `${store.name} ads stopped`,
-          detail: [
-            spendDropped ? `${inr(liveYesterday)} yesterday vs ${inr(liveDaily)}/day before` : null,
-            metaBlocked ? `Meta stopped ${blocked.length === 1 ? 'the campaign' : `${blocked.length} campaigns`} (${why})` : null,
-          ].filter(Boolean).join(' · '),
-        })
-      }
+      const { stopped, userStopped, anyActive, yesterdaySpend, weekStart, week } = adsState(id)
+      if (stopped !== null) out.push({ id: `${id}-ads-stopped`, tone: 'warn', storeId: id, title: `${store.name} ads stopped`, detail: stopped })
       // Every campaign that spent in the period (or the last week) is user-paused and nothing was spent yesterday: he
       // stopped the ads himself, so the store's loss is no longer a decision to make. It still shows on the store row.
       const pausedFrom = p.from < weekStart ? p.from : weekStart
@@ -633,7 +645,8 @@ export function createMetrics(d: Data) {
         })
       }
     }
-    const { vfulfillImportDaysAgo: importAge, vfulfillDataDaysAgo: dataAge, shipmentsThrough, vfulfillMissingStores: missing, vfulfillOverdueOrders: overdue } = d.sync
+    const { vfulfillImportDaysAgo: importAge, vfulfillDataDaysAgo: dataAge, shipmentsThrough, vfulfillMissingStores: missing, vfulfillOverdueOrders: overdue, vfulfillOpenShipments: open } = d.sync
+    // Current: no order waiting on vFulfill and no recent shipment still open (it may have closed since the export).
     const dataOlder = dataAge !== null && (importAge === null || dataAge > importAge)
     const vf = dataOlder ? dataAge : importAge
     if (missing.length > 0) {
@@ -644,8 +657,7 @@ export function createMetrics(d: Data) {
         title: `${names.join(' and ')} not in the last vFulfill import`,
         detail: `Tick every store in vFulfill's shipments export · ${missing.length > 1 ? 'their' : 'its'} delivery rates and Resolved figures are out of date`,
       })
-    } else if (overdue !== 0 && (vf === null || vf > 3)) {
-      // overdue 0: no order is waiting on vFulfill, so an old import or an old newest shipment is not stale data.
+    } else if (!(overdue === 0 && (open ?? 0) === 0) && (vf === null || vf > 3)) {
       out.push({
         id: 'vf-stale', tone: 'warn',
         title: vf === null ? 'vFulfill never imported' : `vFulfill ${dataOlder ? 'shipments data' : 'import'} is ${vf} days old`,
@@ -729,7 +741,7 @@ export function createMetrics(d: Data) {
 
   return {
     resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, rateSources, storeStats, portfolio,
-    series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, resolvedCounts, minutesAgo, relevantProducts,
+    series, calls, adsStopped, cash, gst, ownerShare, sync, campaigns, recentOrders, resolvedCounts, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
     /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */
     metaNotConnected: (id: StoreId) => d.sync.metaNotConnected.includes(id),

@@ -146,7 +146,7 @@ describe('mapSync', () => {
       run('vf_shipments', '2026-11-14T09:00:00Z'), run('vf_shipments', '2026-11-14T09:00:00Z', 'selnova'),
     ], stores, now)
     expect(s).toEqual({
-      metaMinutesAgo: 4, metaMinutesAgoByStore: { kaiven: 4, selnova: 3 }, metaYesterdayVerified: { kaiven: false, selnova: false }, metaNotConnected: [], shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4, shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null,
+      metaMinutesAgo: 4, metaMinutesAgoByStore: { kaiven: 4, selnova: 3 }, metaYesterdayVerified: { kaiven: false, selnova: false }, metaNotConnected: [], shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4, shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null, vfulfillOpenShipments: null,
     })
   })
 
@@ -165,7 +165,7 @@ describe('mapSync', () => {
     ], stores, now)
     expect(s).toEqual({
       metaMinutesAgo: null, metaMinutesAgoByStore: {}, metaYesterdayVerified: {}, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null,
-      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null,
+      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null, vfulfillOpenShipments: null,
     })
   })
 
@@ -221,6 +221,11 @@ describe('mapSync', () => {
     expect(mapSync([], stores, now, stores, '2026-09-02', [{ storeId: 'kaiven', seenAt: '2026-11-10T06:00:00Z' }], 0).vfulfillDataDaysAgo).toBe(8)
   })
 
+  it('ages the data while a recent shipment is still open, even with nothing overdue', () => {
+    expect(mapSync([], stores, now, stores, '2026-09-02', [], 0, 1)).toMatchObject({ vfulfillDataDaysAgo: 77, vfulfillOpenShipments: 1 })
+    expect(mapSync([], stores, now, stores, '2026-09-02', [], 0, 0).vfulfillDataDaysAgo).toBeNull()
+  })
+
   it('ignores failed runs', () => {
     expect(mapSync([run('meta', '2026-11-18T09:59:00Z', 'kaiven', false)], ['kaiven'], now).metaMinutesAgo).toBeNull()
   })
@@ -251,7 +256,7 @@ describe('mapSync', () => {
   it('reports null for every source when nothing ever ran', () => {
     expect(mapSync([], stores, now)).toEqual({
       metaMinutesAgo: null, metaMinutesAgoByStore: {}, metaYesterdayVerified: {}, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null,
-      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null,
+      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [], vfulfillOverdueOrders: null, vfulfillOpenShipments: null,
     })
   })
 })

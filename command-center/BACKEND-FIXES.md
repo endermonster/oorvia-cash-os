@@ -1,5 +1,12 @@
 # Backend fixes from the site critique (2026-11-22)
 
+## Status 2026-11-24: front end wired for 1, 2, 3, 3b, 4, 5
+
+Home headline and VXP row show `total.net` ("after ₹X fixed costs at run rate"); footer reads `getHomeData()` ("Source: monthly P&L");
+one rate note (`rateSourceNote` in `components/bits.tsx`) on Home, the Ads footnote and the store view (labels show the window);
+one freshness rule (`vfState` in `bits.tsx`, honours `vfulfillOverdueOrders` and missing stores) for the TopBar chip, GstCard,
+CashCard and Orders; Orders rows read "No shipment data" from `noShipmentData`; Home's verdict leads with a Meta ads stop.
+
 ## Status 2026-11-22: backend done for 1, 2, 3 (vFulfill part), 4, 5 — front end must wire
 
 The backend now exposes the fields below. Nothing on screen changes until a component reads them (the user chose
@@ -17,6 +24,8 @@ The backend now exposes the fields below. Nothing on screen changes until a comp
 | 4 | `calls()` now emits `${id}-ads-stopped` (tone `warn`) | No wiring needed; it shows in Needs your call. The spend-drop rule needs `d.sync.metaYesterdayVerified[store]` (the Meta run matched yesterday's campaign spend to the account total); "all paused" needs no ACTIVE campaign. Home's hero sentence ("Kaiven is paying for itself") should not lead when that call is present. |
 | 4b | 2026-11-24, "Needs your call lists only decisions not yet made" | A user-set status (PAUSED, CAMPAIGN_PAUSED, ADSET_PAUSED, ARCHIVED, DELETED) is never a call: `-ads-stopped` fires only for Meta stops (DISAPPROVED, WITH_ISSUES, PENDING_BILLING_INFO) or a verified drop in campaigns still live. `-loss` / `-below` are skipped when every campaign that spent in the period is user-paused, none is ACTIVE and nothing spent yesterday; the loss still shows on the store row. Campaign-level status only: a pause at ad-set or ad level is not seen. |
 | 3b | `d.sync.vfulfillOverdueOrders` (2026-11-24) | Orders vFulfill should have shipped (stores with vFulfill history, real, uncancelled, placed after `shipmentsThrough` and > 3 days ago, no shipment row). 0 = data current: `vfulfillDataDaysAgo` is null and `vf-stale` stays quiet however old the newest shipment or import. Stores that have never shipped (Kaiven, Selnova today) are never flagged: no upload warning, orders keep "Not shipped". |
+| 3c | `d.sync.vfulfillOpenShipments` (2026-11-24) | Shipments still open in the last export, for orders placed in the last 60 days at stores with vFulfill history (older open rows are stuck: 5 Oorvia rows from May 2026 still read In Transit). The data is current only when this AND `vfulfillOverdueOrders` are 0; `vfulfillDataDaysAgo` and `vf-stale` follow the same rule. |
+| 4c | `m.adsStopped(storeIds?)` → `StoreId[]` (2026-11-24) | Stores whose ads stopped, same rule as `${id}-ads-stopped`, without the three-call cap of `calls()`. Home's headline should read this, not search `calls()`. |
 | 5 | `getHomeData()` (src/lib/data.ts) | `src/app/page.tsx`: swap `getData()` for `getHomeData()`. Then `m.gst()` (= Money's GST headline, `owed` = GSTR-3B cash) and `m.ownerShare()` (= Money's P&L "Your 50% share" for this month) are filled and `BottomLine` renders them. Footer source label for the share should say "monthly P&L", not "profit model". |
 
 Fixed costs, two methods ("Also seen"): kept both on purpose. Period profit (7D/30D/Month on Home) spreads fixed costs as

@@ -178,4 +178,11 @@ export type SyncStatus = {
    * 0 = the data is current even when `shipmentsThrough` is old (nothing new to ship). Null = not checked.
    */
   vfulfillOverdueOrders: number | null
+  /**
+   * Shipments still open (in transit, NDR) in the last export, for orders placed in the last OPEN_WINDOW_DAYS (60) at
+   * stores with vFulfill history: each may have closed since, so the data counts as current only when this and
+   * `vfulfillOverdueOrders` are both 0. Older open rows are stuck in vFulfill, not moving, and are left out.
+   * Null = not checked.
+   */
+  vfulfillOpenShipments: number | null
 }

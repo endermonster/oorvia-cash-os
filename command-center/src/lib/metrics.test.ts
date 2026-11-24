@@ -693,6 +693,20 @@ describe('ads stopped calls', () => {
   })
 })
 
+describe('adsStopped', () => {
+  const campaign: Campaign = { id: 'kv1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Broad', status: 'DISAPPROVED' }
+  const day = (storeId: StoreId, campaignId: string, daysAgo: number, spend: number): CampaignDay => ({
+    date: addDays(TODAY, -daysAgo), storeId, campaignId, sku: 'X', spend, impressions: 1000, clicks: 10, metaPurchases: 0, attributedOrders: 0,
+  })
+
+  it('lists every stopped store by the same rule as the call, with no cap', () => {
+    const at = createMetrics({ ...MOCK, cash: null, campaigns: [...MOCK.campaigns.filter((c) => c.storeId !== 'kaiven'), campaign],
+      campaignDays: [...MOCK.campaignDays.filter((r) => r.storeId !== 'kaiven'), day('kaiven', 'kv1', 3, 100), day('kaiven', 'kv1', 1, 100)] })
+    expect(at.adsStopped()).toEqual(['kaiven'])
+    expect(at.adsStopped(['oorvia'])).toEqual([])
+  })
+})
+
 describe('user-paused stores', () => {
   const id = 'kaiven'
   const campaign: Campaign = { id: 'kv1', storeId: id, sku: 'KV-DHS', name: 'Scalp – Broad', status: 'PAUSED' }
@@ -753,11 +767,12 @@ describe('vFulfill staleness calls', () => {
     expect(at([])).toBeUndefined()
   })
 
-  it('stays quiet when no order is waiting on vFulfill, however old the newest shipment or import', () => {
-    const at = (vfulfillOverdueOrders: number | null) =>
-      createMetrics({ ...MOCK, sync: { ...MOCK.sync, vfulfillImportDaysAgo: 4, vfulfillDataDaysAgo: null, shipmentsThrough: '2026-09-02', vfulfillOverdueOrders } })
+  it('stays quiet when no order is waiting on vFulfill and no recent shipment is open, however old the data', () => {
+    const at = (vfulfillOverdueOrders: number | null, vfulfillOpenShipments: number | null = 0) =>
+      createMetrics({ ...MOCK, sync: { ...MOCK.sync, vfulfillImportDaysAgo: 4, vfulfillDataDaysAgo: null, shipmentsThrough: '2026-09-02', vfulfillOverdueOrders, vfulfillOpenShipments } })
         .calls(resolvePeriod('7d'), []).find((c) => c.id === 'vf-stale')
     expect(at(0)).toBeUndefined()
+    expect(at(0, 2)?.title).toBe('vFulfill import is 4 days old')
     expect(at(6)?.title).toBe('vFulfill import is 4 days old')
     expect(at(null)?.title).toBe('vFulfill import is 4 days old')
   })

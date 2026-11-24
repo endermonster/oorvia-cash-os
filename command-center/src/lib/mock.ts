@@ -329,7 +329,7 @@ export const FIXED_COSTS_MONTHLY = 14200
 /** This month's VXP net from the P&L, and the 50% share. Mock. */
 export const OWNER_SHARE_MONTH = { month: '2026-11', net: 41800, share: 20900 }
 
-export const SYNC: SyncStatus = { metaMinutesAgo: 4, metaMinutesAgoByStore: { oorvia: 4, kaiven: 4, selnova: 4 }, metaYesterdayVerified: { oorvia: true, kaiven: true, selnova: true }, metaNotConnected: [], shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4, shipmentsThrough: '2026-11-15', vfulfillDataDaysAgo: 3, vfulfillMissingStores: [], vfulfillOverdueOrders: 2 }
+export const SYNC: SyncStatus = { metaMinutesAgo: 4, metaMinutesAgoByStore: { oorvia: 4, kaiven: 4, selnova: 4 }, metaYesterdayVerified: { oorvia: true, kaiven: true, selnova: true }, metaNotConnected: [], shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4, shipmentsThrough: '2026-11-15', vfulfillDataDaysAgo: 3, vfulfillMissingStores: [], vfulfillOverdueOrders: 2, vfulfillOpenShipments: 3 }
 
 /**
  * The mock as one Data object. Built from the same array instances the named exports

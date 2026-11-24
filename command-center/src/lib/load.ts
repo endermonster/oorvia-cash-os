@@ -131,7 +131,7 @@ const META_SOURCES = ['meta']
 // run for every store and keeps this honest.
 export function mapSync(
   runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds, shipmentsThrough: string | null = null,
-  missingStores: { storeId: string; seenAt: string }[] = [], overdueOrders: number | null = null,
+  missingStores: { storeId: string; seenAt: string }[] = [], overdueOrders: number | null = null, openShipments: number | null = null,
 ): SyncStatus {
   // `skipUnseen`: a store with no ok run ever is left out instead of making the whole source "never" (Meta only).
   const unseen: string[] = []
@@ -166,9 +166,11 @@ export function mapSync(
   }
   const daysSince = (day: string) => Math.max(0, Math.floor((Date.parse(istNow(now).today) - Date.parse(day.slice(0, 10))) / 864e5))
   // The worse of the newest closed shipment and any store left out of the newest import (aged from its own last one).
-  // An old closed shipment is not stale data when no order since is waiting on vFulfill (a quiet store, nothing to ship).
+  // An old closed shipment is not stale data when no order since is waiting on vFulfill and no recent shipment is still
+  // open (a quiet store with nothing to ship or deliver).
+  const current = overdueOrders === 0 && (openShipments ?? 0) === 0
   const ages = [
-    ...(shipmentsThrough === null || overdueOrders === 0 ? [] : [daysSince(shipmentsThrough)]),
+    ...(shipmentsThrough === null || current ? [] : [daysSince(shipmentsThrough)]),
     ...missingStores.map((m) => daysSince(istNow(new Date(m.seenAt)).today)),
   ]
   const vfulfillDataDaysAgo = ages.length === 0 ? null : Math.max(...ages)
@@ -183,6 +185,7 @@ export function mapSync(
     vfulfillDataDaysAgo,
     vfulfillMissingStores: missingStores.map((m) => sid(m.storeId)),
     vfulfillOverdueOrders: overdueOrders,
+    vfulfillOpenShipments: openShipments,
   }
 }
 
@@ -325,6 +328,28 @@ async function readOverdueOrders(sb: Client, { through, seenByStore }: ShipmentC
   return due.filter((o) => !shipped.has(`${o.store_id}|${o.order_name}`)).length
 }
 
+/** Days an open shipment counts as possibly still moving; older open rows are stuck in vFulfill (seen: 5 from May). */
+const OPEN_WINDOW_DAYS = 60
+
+/** Open shipments at stores with vFulfill history whose order was placed in the last OPEN_WINDOW_DAYS. */
+async function readOpenShipments(sb: Client, { seenByStore }: ShipmentCoverage, now: Date): Promise<number> {
+  const stores = Object.keys(seenByStore)
+  if (stores.length === 0) return 0
+  const open = await selectAll<{ store_id: string; order_name: string }>(() => sb.from('cc_shipments').select('store_id, order_name')
+    .in('store_id', stores).eq('status', 'open').order('store_id').order('order_name'))
+  const keys = new Set(open.map((r) => `${r.store_id}|${r.order_name}`))
+  const names = [...new Set(open.map((r) => r.order_name))]
+  const since = new Date(now.getTime() - OPEN_WINDOW_DAYS * 864e5).toISOString()
+  let recent = 0
+  for (let i = 0; i < names.length; i += 100) {
+    const part = names.slice(i, i + 100)
+    const rows = await selectAll<{ store_id: string; order_name: string }>(() => sb.from('cc_orders').select('store_id, order_name')
+      .in('order_name', part).gte('placed_at', since).order('store_id').order('order_name'))
+    recent += rows.filter((r) => keys.has(`${r.store_id}|${r.order_name}`)).length
+  }
+  return recent
+}
+
 /** Stores left out of the newest shipments import that have an order proving they should have been in it. */
 async function readMissingStores(sb: Client, seenByStore: Record<string, string>): Promise<{ storeId: string; seenAt: string }[]> {
   const found = await Promise.all(coverageChecks(seenByStore).map(async (c) => {
@@ -349,8 +374,9 @@ async function readSync(sb: Client, storeIds: string[], metaStoreIds: string[], 
   const coverage = readShipmentCoverage(sb, storeIds)
   const missing = coverage.then((c) => readMissingStores(sb, c.seenByStore))
   const overdue = coverage.then((c) => readOverdueOrders(sb, c, now))
-  const [{ through }, missingStores, overdueOrders, ...runs] = await Promise.all([coverage, missing, overdue, ...runQueries])
-  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores, overdueOrders)
+  const open = coverage.then((c) => readOpenShipments(sb, c, now))
+  const [{ through }, missingStores, overdueOrders, openShipments, ...runs] = await Promise.all([coverage, missing, overdue, open, ...runQueries])
+  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores, overdueOrders, openShipments)
 }
 
 /** The newest orders only, for the live map: two small reads, no history. */
