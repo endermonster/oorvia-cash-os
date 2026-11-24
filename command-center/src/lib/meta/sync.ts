@@ -57,6 +57,11 @@ export type MetaResult = {
   warnings: string[]
   /** True when at least one account synced and every other one is only no_access (not shared yet); false otherwise. */
   ok: boolean
+  /**
+   * Yesterday is in this run's range and every account read matched its campaign spend to the account total for it.
+   * The "ads stopped" call trusts a drop in yesterday's spend only then: a partial answer is not a stop.
+   */
+  yesterday_verified: boolean
   /** Dry run only: the campaigns that would be written. */
   plan?: { campaigns: { id: string; name: string; handle: string | null; status: string | null; spend_paise: number }[] }
 }
@@ -111,7 +116,7 @@ async function runMeta(storeId: string, since: string, today: string, lock: Lock
 
   const result: MetaResult = {
     since, until: today, accounts: [], campaigns: 0, day_rows: 0, hour_rows: 0, spend_paise: 0,
-    stale_days_removed: 0, stale_hours_removed: 0, skipped: [], warnings: [], ok: true,
+    stale_days_removed: 0, stale_hours_removed: 0, skipped: [], warnings: [], ok: true, yesterday_verified: since <= addDays(today, -1),
   }
   if (dryRun) result.plan = { campaigns: [] }
   for (const account of accounts) {
@@ -125,8 +130,15 @@ async function runMeta(storeId: string, since: string, today: string, lock: Lock
   // ok: at least one account synced and every other account's only problem is that it has not been shared yet (no_access).
   // A store where every account is no_access stays ok:false, so it stays "Meta not connected".
   result.ok = result.accounts.some((a) => a.status === 'ok') && result.accounts.every((a) => a.status === 'ok' || a.status === 'no_access')
+  result.yesterday_verified = result.yesterday_verified && allAccountsRead(result.accounts)
   return result
 }
+
+/**
+ * Every account of the store was read. A no_access account keeps the run ok (freshness), but its spend is missing,
+ * so the store's total cannot be trusted: an account that lost access would read as "ads stopped".
+ */
+export const allAccountsRead = (accounts: Pick<AccountResult, 'status'>[]) => accounts.length > 0 && accounts.every((a) => a.status === 'ok')
 
 type Ctx = {
   storeId: string; since: string; today: string; dryRun: boolean; lock: Lock | null; call: CallOpts
@@ -174,6 +186,8 @@ async function runAccount(ctx: Ctx, account: AdAccount, out: MetaResult): Promis
     // Any mismatch still blocks the delete; only one on an earlier day is reported.
     const pastMismatch = mismatch && totalsMismatch(accountDays.filter((a) => a.date_start !== today), days.filter((d) => d.date !== today))
     const hourGap = hours.length !== hourInsights.length
+    const yesterday = addDays(today, -1)
+    if (totalsMismatch(accountDays.filter((a) => a.date_start === yesterday), days.filter((d) => d.date === yesterday))) out.yesterday_verified = false
 
     const spendBy = new Map<string, number>()
     for (const d of days) spendBy.set(d.campaign_id, (spendBy.get(d.campaign_id) ?? 0) + d.spend_paise)
@@ -237,7 +251,6 @@ async function runAccount(ctx: Ctx, account: AdAccount, out: MetaResult): Promis
     } else {
       // The hours must add up to each day's spend, or an empty or partial hourly answer would erase stored hours.
       // Today's hours can lag like the account total: still kept, but only an earlier day is reported.
-      const yesterday = addDays(today, -1)
       const hourMismatch = hoursMismatch(days, hours, yesterday)
       if (hourMismatch) {
         const notToday = <T extends { date: string }>(rows: T[]) => rows.filter((r) => r.date !== today)

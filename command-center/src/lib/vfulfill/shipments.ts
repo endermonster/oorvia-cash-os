@@ -115,3 +115,48 @@ export function wouldReopen(rows: ShipmentRow[], stored: ReadonlyMap<string, Shi
  */
 export const shipmentsComplete = (report: Pick<ShipmentsReport, 'unknownStatus' | 'noStore'>, written: number) =>
   written > 0 && Object.keys(report.unknownStatus).length === 0 && report.noStore.length === 0
+
+/**
+ * Days an order may take to show up in vFulfill's shipments export. An order older than this at import time should be
+ * in the file; a newer one may not have been picked up yet.
+ */
+export const SHIP_LAG_DAYS = 3
+
+type CoverageOrder = { store_id: string; placed_at: string; cancelled_at: string | null; is_test: boolean }
+
+/**
+ * Stores with no row in this file although they have real, uncancelled orders that should be in it: placed on or
+ * after the file's earliest closed date and at least SHIP_LAG_DAYS before `now`. vFulfill exports only the stores
+ * ticked in its export dialog, so this is usually a store left unticked. Empty for a file with no closed shipment.
+ */
+export function storesMissingFromFile(
+  rows: Pick<ShipmentRow, 'store_id' | 'closed_on'>[], storeIds: string[], orders: CoverageOrder[], now: Date,
+): { storeId: string; orders: number }[] {
+  const closed = rows.map((r) => r.closed_on).filter((d): d is string => d !== null).sort()
+  if (closed.length === 0) return []
+  const from = Date.parse(`${closed[0]}T00:00:00+05:30`)
+  const to = now.getTime() - SHIP_LAG_DAYS * 864e5
+  const inFile = new Set(rows.map((r) => r.store_id))
+  return storeIds.filter((id) => !inFile.has(id)).map((storeId) => ({
+    storeId,
+    orders: orders.filter((o) => o.store_id === storeId && !o.is_test && o.cancelled_at === null
+      && Date.parse(o.placed_at) >= from && Date.parse(o.placed_at) <= to).length,
+  })).filter((s) => s.orders > 0)
+}
+
+/**
+ * The stores to check for having been left out of the newest shipments import: those whose own last import
+ * (`seenByStore`, the newest `imported_at` of its rows) falls on an earlier IST day than the newest import of any
+ * store. For each, the window in which an order would prove it was left out: placed after its own last import and
+ * at least SHIP_LAG_DAYS before the newest import. A store with no rows at all is not checked (no vFulfill history).
+ */
+export function coverageChecks(seenByStore: Record<string, string>): { storeId: string; seenAt: string; to: string }[] {
+  const ist = (ts: string) => new Date(Date.parse(ts) + 5.5 * 3_600_000).toISOString().slice(0, 10)
+  const all = Object.values(seenByStore)
+  if (all.length === 0) return []
+  const latest = all.reduce((a, b) => (Date.parse(b) > Date.parse(a) ? b : a))
+  const to = new Date(Date.parse(latest) - SHIP_LAG_DAYS * 864e5).toISOString()
+  return Object.entries(seenByStore)
+    .filter(([, seenAt]) => ist(seenAt) < ist(latest) && Date.parse(seenAt) < Date.parse(to))
+    .map(([storeId, seenAt]) => ({ storeId, seenAt, to }))
+}

@@ -56,8 +56,39 @@ describe('buildOrders', () => {
   })
 
   it('matches shipments and charges by store as well as name (#1001 exists in two stores)', () => {
-    expect(rows.find((r) => r.storeId === 'kaiven')).toMatchObject({ status: 'not_shipped', rtoChargesPaise: 0 })
-    expect(rows.find((r) => r.storeId === 'selnova')).toMatchObject({ status: 'rto', rtoChargesPaise: 5_000 })
+    expect(rows.find((r) => r.storeId === 'kaiven')).toMatchObject({ status: 'not_shipped', noShipmentData: true, rtoChargesPaise: 0 })
+    expect(rows.find((r) => r.storeId === 'selnova')).toMatchObject({ status: 'rto', noShipmentData: false, rtoChargesPaise: 5_000 })
+  })
+
+  it('flags missing shipments only for uncancelled orders placed after the data cutoff in IST', () => {
+    const before = '2026-10-04T18:29:59Z' // 4 Oct, 23:59:59 IST
+    const same = '2026-10-04T18:30:00Z' // 5 Oct, 00:00:00 IST
+    const after = '2026-10-05T18:30:00Z' // 6 Oct, 00:00:00 IST
+    const views = buildOrders([
+      order('#before', { placedAt: before }),
+      order('#same', { placedAt: same }),
+      order('#after', { placedAt: after }),
+      order('#shipped', { placedAt: after }),
+      order('#cancelled', { placedAt: after, cancelledAt: '2026-10-06T00:00:00Z' }),
+    ], [ship('#shipped', 'open', { closedOn: null })], [], { oorvia: '2026-10-05' })
+    expect(views.map(({ orderName, status, noShipmentData }) => [orderName, status, noShipmentData])).toEqual([
+      ['#after', 'not_shipped', true],
+      ['#cancelled', 'cancelled', false],
+      ['#shipped', 'in_transit', false],
+      ['#same', 'not_shipped', false],
+      ['#before', 'not_shipped', false],
+    ])
+  })
+})
+
+describe('buildOrders per-store shipments cutoff', () => {
+  it("uses each order's own store: a store with no shipments data flags even old orders", () => {
+    const views = buildOrders([
+      order('#OV9', { placedAt: '2026-10-01T10:00:00+05:30' }),
+      order('#KV9', { storeId: 'kaiven', placedAt: '2026-10-01T10:00:00+05:30' }),
+      order('#SN9', { storeId: 'selnova', placedAt: '2026-10-08T10:00:00+05:30' }),
+    ], [], [], { oorvia: '2026-10-20', selnova: '2026-10-05' })
+    expect(Object.fromEntries(views.map((v) => [v.orderName, v.noShipmentData]))).toEqual({ '#OV9': false, '#KV9': true, '#SN9': true })
   })
 })
 

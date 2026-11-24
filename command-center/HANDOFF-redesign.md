@@ -4,6 +4,8 @@ Branch `v2`, nothing committed yet. All changes are in the working tree (`git st
 
 **Next design agent: read `HANDOFF-next-tabs.md` first.** The other tabs wait until the backend is finished (decided 2026-11-21).
 
+**2026-11-22: backend fixes landed; the front end must wire them. Table at the top of `BACKEND-FIXES.md`.**
+
 ## Where it stands
 
 The Home tab (`/`) has been rebuilt in a new look: **India at Night**, dark plus Liquid Glass, both pinned by the user.

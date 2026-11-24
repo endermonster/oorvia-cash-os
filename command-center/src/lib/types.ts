@@ -102,6 +102,8 @@ export type Campaign = {
   /** From the ads' landing URL (`/products/{handle}`). One campaign sells one SKU. Null only if the handle matches no product. */
   sku: string | null
   name: string
+  /** Meta `effective_status` as last synced (ACTIVE, PAUSED, CAMPAIGN_PAUSED, ADSET_PAUSED, WITH_ISSUES, DISAPPROVED, …). Null when never listed. */
+  status: string | null
 }
 
 /** Source: Shopify webhooks. */
@@ -136,18 +138,38 @@ export type CashPosition = {
   codDueByStore: { storeId: StoreId; amount: number; orders: number }[]
 }
 
+/** The GST figure Money's GST card leads with: the oldest month not marked filed (src/lib/gst.ts GstResult.months[0]). */
 export type GstPosition = {
   month: string
-  outputTax: number
-  inputCredit: number
+  /** ₹, cash to pay with that month's GSTR-3B (GstMonth.cash: payable after credit + RCM). */
+  cash: number
   dueDate: string // GSTR-3B
+  /** The month is still running: figures so far. */
+  partial: boolean
 }
 
 export type SyncStatus = {
   /** Age of the oldest connected store's latest successful run. Null = no store has ever synced. */
   metaMinutesAgo: number | null
+  /** Each Meta store's own latest successful run, minutes ago. A store missing here has never synced. */
+  metaMinutesAgoByStore: Partial<Record<StoreId, number>>
+  /** Per Meta store: its latest successful sync covered yesterday and matched campaign spend to the account total. */
+  metaYesterdayVerified: Partial<Record<StoreId, boolean>>
   /** Stores expected to have Meta that have never had a successful sync (no access granted yet). */
   metaNotConnected: StoreId[]
   shopifyMinutesAgo: number | null
+  /** Days since the last successful shipments import ran. Says nothing about what the file contained. */
   vfulfillImportDaysAgo: number | null
+  /** Newest `closed_on` in cc_shipments (YYYY-MM-DD, IST): the shipments data runs to this day. Null = no closed shipment on record. */
+  shipmentsThrough: string | null
+  /**
+   * Whole days from `shipmentsThrough` to today (IST), or from a missing store's last import when that is older.
+   * Staleness of the shipments data itself: an import that added nothing, or left a store out, leaves it growing.
+   */
+  vfulfillDataDaysAgo: number | null
+  /**
+   * Stores left out of the newest shipments import (unticked in vFulfill's export) though they have orders that should
+   * be in it. Only stores with vFulfill history; one with no shipment rows yet is never listed.
+   */
+  vfulfillMissingStores: StoreId[]
 }

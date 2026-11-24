@@ -10,6 +10,7 @@ import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
 import { monthlyRunRate, type FixedCost } from './pnl'
 import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
+import { coverageChecks } from './vfulfill/shipments'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
@@ -38,11 +39,12 @@ export type CampaignDayRow = {
   spend: Num; impressions: Num; clicks: Num; meta_purchases: Num; attributed_orders: Num
 }
 export type CampaignHourRow = CampaignDayRow & { hour: Num }
-export type CampaignRow = { campaign_id: string; store_id: string; name: string; landing_handle: string | null }
+export type CampaignRow = { campaign_id: string; store_id: string; name: string; landing_handle: string | null; status: string | null }
 export type OrderRow = {
   store_id: string; order_name: string; placed_at: string; payment: string; total_paise: Num; primary_sku: string; city: string | null
 }
-export type SyncRunRow = { source: string; store_id: string | null; finished_at: string; ok: boolean }
+/** `detail`: the run's result as JSON text (see ./sync-run); only Meta's is read. */
+export type SyncRunRow = { source: string; store_id: string | null; finished_at: string; ok: boolean; detail?: string | null }
 export type WalletRow = { balance: Num; last_txn_date: string | null; transactions: Num }
 export type CodDueRow = { store_id: string; orders: Num; paise: Num }
 export type BankRow = { amount_paise: Num; entered_on: string }
@@ -102,7 +104,7 @@ export const mapCampaignHour = (r: CampaignHourRow): CampaignHour => ({ hour: n(
 /** A campaign sells the product in its store whose handle matches its landing handle; null if none does. */
 export function mapCampaign(r: CampaignRow, products: Product[]): Campaign {
   const p = r.landing_handle ? products.find((x) => x.storeId === r.store_id && x.handle === r.landing_handle) : undefined
-  return { id: r.campaign_id, storeId: sid(r.store_id), sku: p?.sku ?? null, name: r.name }
+  return { id: r.campaign_id, storeId: sid(r.store_id), sku: p?.sku ?? null, name: r.name, status: r.status }
 }
 
 export function mapRecentOrder(r: OrderRow, products: Pick<Product, 'storeId' | 'sku' | 'name'>[]): RecentOrder {
@@ -127,7 +129,10 @@ const META_SOURCES = ['meta']
 // A quiet store (no orders for days) has no recent webhook, so "the oldest store" can look stale although nothing is
 // wrong. The daily cron (deploy stage) runs `--orders --since yesterday` per store, which writes a shopify_backfill
 // run for every store and keeps this honest.
-export function mapSync(runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds): SyncStatus {
+export function mapSync(
+  runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds, shipmentsThrough: string | null = null,
+  missingStores: { storeId: string; seenAt: string }[] = [],
+): SyncStatus {
   // `skipUnseen`: a store with no ok run ever is left out instead of making the whole source "never" (Meta only).
   const unseen: string[] = []
   const oldestLatest = (sources: string[], ids: string[], skipUnseen = false): number | null => {
@@ -150,16 +155,46 @@ export function mapSync(runs: SyncRunRow[], storeIds: string[], now: Date, metaS
   const days = (t: number | null) => { const a = age(t); return a === null ? null : Math.floor(a / 864e5) }
   // A store that synced once and later loses access keeps its last ok time (it goes stale); only a store that never synced is "not connected".
   const metaMinutesAgo = minutes(oldestLatest(META_SOURCES, metaStoreIds, true))
+  const metaMinutesAgoByStore: SyncStatus['metaMinutesAgoByStore'] = {}
+  const metaYesterdayVerified: SyncStatus['metaYesterdayVerified'] = {}
+  for (const id of metaStoreIds) {
+    const ok = runs.filter((r) => r.ok && META_SOURCES.includes(r.source) && (r.store_id === id || r.store_id === null))
+    if (ok.length === 0) continue
+    const latest = ok.reduce((a, b) => (Date.parse(b.finished_at) > Date.parse(a.finished_at) ? b : a))
+    metaMinutesAgoByStore[sid(id)] = minutes(Date.parse(latest.finished_at))!
+    metaYesterdayVerified[sid(id)] = verifiedYesterday(latest.detail)
+  }
+  const daysSince = (day: string) => Math.max(0, Math.floor((Date.parse(istNow(now).today) - Date.parse(day.slice(0, 10))) / 864e5))
+  // The worse of the newest closed shipment and any store left out of the newest import (aged from its own last one).
+  const ages = [
+    ...(shipmentsThrough === null ? [] : [daysSince(shipmentsThrough)]),
+    ...missingStores.map((m) => daysSince(istNow(new Date(m.seenAt)).today)),
+  ]
+  const vfulfillDataDaysAgo = ages.length === 0 ? null : Math.max(...ages)
   return {
     metaMinutesAgo,
+    metaMinutesAgoByStore,
+    metaYesterdayVerified,
     metaNotConnected: unseen.map(sid),
     shopifyMinutesAgo: minutes(oldestLatest(SHOPIFY_SOURCES, storeIds)),
     vfulfillImportDaysAgo: days(oldestLatest(VFULFILL_SOURCES, storeIds)),
+    shipmentsThrough,
+    vfulfillDataDaysAgo,
+    vfulfillMissingStores: missingStores.map((m) => sid(m.storeId)),
   }
 }
 
 /** Stores a Meta sync is expected for: those with an allowlisted ad account (a constant, not cc_stores.meta_ad_account_id). */
 export const metaStoresAmong = (storeIds: string[]): string[] => metaStoreIds().filter((id) => storeIds.includes(id))
+
+/** A Meta run's `yesterday_verified`. False for a run recorded before the field existed, or unreadable detail. */
+function verifiedYesterday(detail: string | null | undefined): boolean {
+  try {
+    return (detail ? JSON.parse(detail) : null)?.yesterday_verified === true
+  } catch {
+    return false
+  }
+}
 
 // ── Read ─────────────────────────────────────────────────────────────────────
 
@@ -227,17 +262,68 @@ async function readStores(sb: Client): Promise<{ stores: Store[]; metaStoreIds: 
   return { stores: sortStores(rows.map(mapStore)), metaStoreIds: metaStoresAmong(rows.map((r) => r.id)) }
 }
 
+export type ShipmentCoverage = {
+  /** Newest closed shipment across all stores, as an IST calendar date. */
+  through: string | null
+  /** Each store's last shipments import that included it (newest `imported_at` of its rows). A store with no rows is absent. */
+  seenByStore: Record<string, string>
+}
+
+/** One-row queries: the newest closed shipment, then each store's newest imported row. */
+export async function readShipmentCoverage(sb: Client, storeIds: string[]): Promise<ShipmentCoverage> {
+  const [through, ...seen] = await Promise.all([
+    sb.from('cc_shipments').select('closed_on').not('closed_on', 'is', null).order('closed_on', { ascending: false }).limit(1)
+      .then(({ data, error }) => {
+        if (error) throw new Error(error.message)
+        // Date part only, should the column ever come back as a timestamp: callers compare it as YYYY-MM-DD.
+        return (data?.[0]?.closed_on as string | undefined)?.slice(0, 10) ?? null
+      }),
+    ...storeIds.map((id) => sb.from('cc_shipments').select('imported_at').eq('store_id', id).order('imported_at', { ascending: false }).limit(1)
+      .then(({ data, error }) => {
+        if (error) throw new Error(error.message)
+        return [id, (data?.[0]?.imported_at as string | undefined) ?? null] as const
+      })),
+  ])
+  return { through, seenByStore: Object.fromEntries(seen.filter((s): s is readonly [string, string] => s[1] !== null)) }
+}
+
+/**
+ * Per store, the IST day its shipments data runs to: the earlier of the newest closed shipment and its own last
+ * import. A store missing here has no shipments data at all, so its unshipped orders read "No shipment data".
+ */
+export function shipmentCutoffs({ through, seenByStore }: ShipmentCoverage): Record<string, string> {
+  if (through === null) return {}
+  return Object.fromEntries(Object.entries(seenByStore).map(([id, seenAt]) => {
+    const seen = istNow(new Date(seenAt)).today
+    return [id, seen < through ? seen : through]
+  }))
+}
+
+/** Stores left out of the newest shipments import that have an order proving they should have been in it. */
+async function readMissingStores(sb: Client, seenByStore: Record<string, string>): Promise<{ storeId: string; seenAt: string }[]> {
+  const found = await Promise.all(coverageChecks(seenByStore).map(async (c) => {
+    const { data, error } = await sb.from('cc_orders').select('order_name').eq('store_id', c.storeId).eq('is_test', false)
+      .is('cancelled_at', null).gt('placed_at', c.seenAt).lte('placed_at', c.to).limit(1)
+    if (error) throw new Error(error.message)
+    return (data?.length ?? 0) > 0 ? { storeId: c.storeId, seenAt: c.seenAt } : null
+  }))
+  return found.filter((f) => f !== null)
+}
+
 /** Latest successful run per (source group, store), one-row queries. A null store_id run counts for every store. */
 async function readSync(sb: Client, storeIds: string[], metaStoreIds: string[], now: Date): Promise<SyncStatus> {
   const groups: [string[], string[]][] = [[SHOPIFY_SOURCES, storeIds], [VFULFILL_SOURCES, storeIds], [META_SOURCES, metaStoreIds]]
-  const runs = (await Promise.all(groups.flatMap(([sources, ids]) => ids.map(async (id) => {
-    const { data, error } = await sb.from('cc_sync_runs').select('source, store_id, finished_at, ok')
+  const runQueries = groups.flatMap(([sources, ids]) => ids.map(async (id) => {
+    const { data, error } = await sb.from('cc_sync_runs').select('source, store_id, finished_at, ok, detail')
       .in('source', sources).eq('ok', true).or(`store_id.eq.${id},store_id.is.null`)
       .order('finished_at', { ascending: false }).limit(1)
     if (error) throw new Error(error.message)
     return (data ?? []) as SyncRunRow[]
-  })))).flat()
-  return mapSync(runs, storeIds, now, metaStoreIds)
+  }))
+  const coverage = readShipmentCoverage(sb, storeIds)
+  const missing = coverage.then((c) => readMissingStores(sb, c.seenByStore))
+  const [{ through }, missingStores, ...runs] = await Promise.all([coverage, missing, ...runQueries])
+  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores)
 }
 
 /** The newest orders only, for the live map: two small reads, no history. */
@@ -264,9 +350,8 @@ export async function loadChrome(): Promise<Chrome> {
   return { now, source: 'supabase', stores, sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now) }
 }
 
-export async function loadData(): Promise<Data> {
+export async function loadData(now = new Date()): Promise<Data> {
   const sb = await getClient()
-  const now = new Date()
   const { today, hour: nowHour, minute: nowMinute } = istNow(now)
   const yesterday = addDays(today, -1)
   const since = addDays(today, -HISTORY_DAYS)
@@ -283,7 +368,7 @@ export async function loadData(): Promise<Data> {
       selectAll<OrderDayRow>(() => sb.from('cc_order_days').select(`date, ${dayCols}`).gte('date', since).order('date').order('store_id').order('sku').order('payment')),
       selectAll<OrderHourRow>(() => sb.from('cc_order_hours').select(`hour, ${orderCols}`).eq('date', today).order('hour').order('store_id').order('sku').order('payment')),
       selectAll<OrderHourRow>(() => sb.from('cc_order_hours').select(`hour, ${orderCols}`).eq('date', yesterday).order('hour').order('store_id').order('sku').order('payment')),
-      selectAll<CampaignRow>(() => sb.from('cc_campaigns').select('campaign_id, store_id, name, landing_handle').order('store_id').order('campaign_id')),
+      selectAll<CampaignRow>(() => sb.from('cc_campaigns').select('campaign_id, store_id, name, landing_handle, status').order('store_id').order('campaign_id')),
       selectAll<CampaignDayRow>(() => sb.from('cc_campaign_day_rows').select(`date, ${campCols}`).gte('date', since).order('date').order('store_id').order('campaign_id').order('sku')),
       selectAll<CampaignHourRow>(() => sb.from('cc_campaign_hour_rows').select(`hour, ${campCols}`).eq('date', today).order('hour').order('store_id').order('campaign_id').order('sku')),
       selectAll<CampaignHourRow>(() => sb.from('cc_campaign_hour_rows').select(`hour, ${campCols}`).eq('date', yesterday).order('hour').order('store_id').order('campaign_id').order('sku')),
@@ -318,7 +403,7 @@ export async function loadData(): Promise<Data> {
     campaignHoursYesterday: campsYesterday.map(mapCampaignHour),
     resolved: resolved.map(mapResolvedDay),
     recentOrders: recent.map((r) => mapRecentOrder(r, products)),
-    cash: await readCash(sb, now), gst: null, fixedCostsMonthly: null,
+    cash: await readCash(sb, now), gst: null, ownerShareMonth: null,
     fixedCostsRunRate: runRatePaise === null ? null : runRatePaise / 100,
     sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now),
   }

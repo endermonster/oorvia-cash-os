@@ -166,6 +166,7 @@ describe('syncMeta', () => {
     expect(r.skipped.join()).toMatch(/no access: the token in META_ACCESS_TOKEN cannot read this account/)
     expect(upserts('cc_campaign_days')).toHaveLength(1)
     expect(r.ok).toBe(true)
+    expect(r.yesterday_verified).toBe(false) // the unread account's spend is missing: no "ads stopped" from this run
     expect(h.runs).toEqual(['oorvia:true'])
   })
 
@@ -443,6 +444,7 @@ describe('stale rows', () => {
     expect([r.stale_days_removed, r.stale_hours_removed]).toEqual([0, 0])
     expect(r.skipped.join()).toMatch(/does not match the account total \(2026-11-18: account 11\.01 vs campaigns 10\.00\): stale rows were not deleted/)
     expect(upserts('cc_campaign_days')[0].rows).toHaveLength(1)
+    expect(r.yesterday_verified).toBe(false)
   })
 
   it("only warns when today's totals disagree (still coming in), and still deletes nothing", async () => {
@@ -455,6 +457,7 @@ describe('stale rows', () => {
     expect(r.warnings.join()).toMatch(/today's campaign spend does not match the account total yet \(2026-11-19: account 1879\.61 vs campaigns 1906\.21\)/)
     expect(deletes('cc_campaign_days')).toEqual([])
     expect(r.stale_days_removed).toBe(0)
+    expect(r.yesterday_verified).toBe(true) // only today disagrees
   })
 
   it('reports an earlier day that disagrees even when today does too', async () => {

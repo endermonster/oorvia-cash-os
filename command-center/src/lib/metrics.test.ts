@@ -4,7 +4,7 @@ import {
   RESOLVED, STORES, TODAY,
 } from './mock'
 import { createMetrics, MIN_SAMPLE, type RateWindow } from './metrics'
-import type { ResolvedDay, StoreId } from './types'
+import type { Campaign, CampaignDay, OrderDay, ResolvedDay, StoreId } from './types'
 
 const m = createMetrics(MOCK)
 const { campaigns, deliveryRate, profitBeforeAds, productOf, resolvePeriod, series, skuEconomics, storeStats } = m
@@ -21,15 +21,15 @@ describe('delivery-rate windows (by shipment close date)', () => {
     const { delivered, n } = own('oorvia', 'OMS-1M', 'cod', '30d')
     expect(n).toBeGreaterThanOrEqual(MIN_SAMPLE)
     expect(n).toBeLessThan(own('oorvia', 'OMS-1M', 'cod', 'lifetime').n)
-    expect(deliveryRate('oorvia', 'OMS-1M', 'cod', '30d')).toEqual({ value: delivered / n, basis: 'sku', n })
+    expect(deliveryRate('oorvia', 'OMS-1M', 'cod', '30d')).toEqual({ value: delivered / n, basis: 'sku', n, window: '30d' })
   })
 
   it('lifetime counts every closed shipment', () => {
     const { delivered, n } = own('oorvia', 'OMS-1M', 'cod', 'lifetime')
-    expect(deliveryRate('oorvia', 'OMS-1M', 'cod', 'lifetime')).toEqual({ value: delivered / n, basis: 'sku', n })
+    expect(deliveryRate('oorvia', 'OMS-1M', 'cod', 'lifetime')).toEqual({ value: delivered / n, basis: 'sku', n, window: 'lifetime' })
   })
 
-  it('falls back within each window on its own sample size', () => {
+  it('uses the SKU only when it has enough shipments in the requested window', () => {
     for (const p of PRODUCTS) {
       for (const pay of ['cod', 'prepaid'] as const) {
         for (const w of ['7d', '30d', 'lifetime'] as const) {
@@ -37,6 +37,64 @@ describe('delivery-rate windows (by shipment close date)', () => {
           expect(deliveryRate(p.storeId, p.sku, pay, w).basis === 'sku', `${p.sku} ${pay} ${w}`).toBe(ownEnough)
         }
       }
+    }
+  })
+
+  const recent: ResolvedDay = { closedOn: TODAY, storeId: 'oorvia', sku: 'OMS-1M', payment: 'cod', delivered: 16, rto: 4 }
+  const older: ResolvedDay = { ...recent, closedOn: addDays(TODAY, -30), delivered: 444, rto: 131 }
+
+  it('uses the recent store rate when recent shipments across SKUs reach the minimum', () => {
+    const at = createMetrics({ ...MOCK, resolved: [recent, older, { ...recent, sku: 'OLD-1', delivered: 6 }] })
+    expect(at.deliveryRate('oorvia', 'OMS-1M', 'cod')).toEqual({ value: 22 / 30, basis: 'store', n: 30, window: '30d' })
+  })
+
+  it('uses the store lifetime rate even when VXP has enough recent shipments', () => {
+    const at = createMetrics({ ...MOCK, resolved: [recent, older, { ...recent, storeId: 'kaiven', delivered: 50 }] })
+    expect(at.deliveryRate('oorvia', 'OMS-1M', 'cod')).toEqual({ value: 460 / 595, basis: 'store', n: 595, window: 'lifetime' })
+  })
+
+  it('uses VXP lifetime for a new store even when VXP has enough recent shipments', () => {
+    const at = createMetrics({ ...MOCK, resolved: [recent, older, { ...recent, storeId: 'kaiven', delivered: 50 }] })
+    expect(at.deliveryRate('selnova', 'SN-PDRN', 'cod')).toEqual({ value: 510 / 649, basis: 'vxp', n: 649, window: 'lifetime' })
+  })
+
+  it('uses the sheet when lifetime history is too small', () => {
+    for (const resolved of [[], [recent]]) {
+      const at = createMetrics({ ...MOCK, resolved })
+      expect(at.deliveryRate('oorvia', 'OMS-1M', 'cod')).toEqual({ value: 0.9, basis: 'sheet', n: 0, window: null })
+    }
+  })
+})
+
+describe('COD share windows (by order date)', () => {
+  const recent: OrderDay = {
+    date: TODAY, storeId: 'oorvia', sku: 'OMS-1M', payment: 'cod', orders: 18,
+    units: 18, revenue: 44982, cogs: 10458, slabs500: 18, slabsKg: 18,
+  }
+  const older: OrderDay = { ...recent, date: addDays(TODAY, -30), payment: 'prepaid', orders: 12 }
+  const other: OrderDay = { ...recent, storeId: 'kaiven', sku: 'KV-DHS', orders: 40 }
+  const unknown: OrderDay = { ...recent, payment: 'unknown', orders: 100 }
+
+  it('uses the SKU or store when it has enough known payments in 30 days', () => {
+    const at = createMetrics({ ...MOCK, orders: [recent, { ...recent, sku: 'OLD-1', payment: 'prepaid' }, other] })
+    expect(at.codShare('kaiven', 'KV-DHS')).toEqual({ value: 1, basis: 'sku', n: 40, window: '30d' })
+    expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 0.5, basis: 'store', n: 36, window: '30d' })
+  })
+
+  it('uses all store rows with known payment when recent orders are sparse', () => {
+    const at = createMetrics({ ...MOCK, orders: [recent, older, unknown, other] })
+    expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 18 / 30, basis: 'store', n: 30, window: 'lifetime' })
+  })
+
+  it('uses all VXP rows with known payment for a new store', () => {
+    const at = createMetrics({ ...MOCK, orders: [recent, older, unknown, other] })
+    expect(at.codShare('selnova', 'SN-PDRN')).toEqual({ value: 58 / 70, basis: 'vxp', n: 70, window: 'lifetime' })
+  })
+
+  it('uses the sheet when the snapshot has too few known payments', () => {
+    for (const orders of [[], [recent, unknown]]) {
+      const at = createMetrics({ ...MOCK, orders })
+      expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 0.7, basis: 'sheet', n: 0, window: null })
     }
   })
 })
@@ -109,7 +167,7 @@ describe('campaigns', () => {
 
   it('flag spend with zero orders as a loss once it passes one breakeven CPA', () => {
     const beCpa = skuEconomics('kaiven', 'KV-DHS')!.breakevenCpa
-    const test = { id: 'kv-test', storeId: 'kaiven' as const, sku: 'KV-DHS', name: 'Zero-sale test' }
+    const test: Campaign = { id: 'kv-test', storeId: 'kaiven', sku: 'KV-DHS', name: 'Zero-sale test', status: 'ACTIVE' }
     const day = (spend: number) => ({
       date: addDays(TODAY, -1), storeId: 'kaiven' as const, campaignId: test.id, sku: 'KV-DHS',
       spend, impressions: 1000, clicks: 10, metaPurchases: 0, attributedOrders: 0,
@@ -327,7 +385,7 @@ describe('orders missing a cost', () => {
 })
 
 describe('sources not wired yet', () => {
-  const bare = createMetrics({ ...MOCK, cash: null, gst: null, fixedCostsMonthly: null })
+  const bare = createMetrics({ ...MOCK, cash: null, gst: null, ownerShareMonth: null })
 
   it('return null instead of figures', () => {
     expect(bare.cash()).toBeNull()
@@ -339,6 +397,22 @@ describe('sources not wired yet', () => {
     const low = createMetrics({ ...MOCK, cash: { ...MOCK.cash!, bank: { amount: 0, enteredAt: '' }, settlements: [], vfulfillWallet: 0, codDue: 1 } })
     expect(low.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(true)
     expect(bare.calls(resolvePeriod('7d')).some((c) => c.id === 'cash')).toBe(false)
+  })
+})
+
+describe('Home figures from Money', () => {
+  it('shows the GSTR-3B cash payable as owed', () => {
+    expect(m.gst()).toEqual({ ...MOCK.gst, owed: MOCK.gst!.cash })
+  })
+
+  it('shows monthly P&L net and share directly, even without a fixed-cost run rate', () => {
+    const at = createMetrics({ ...MOCK, fixedCostsRunRate: null, ownerShareMonth: { month: '2026-11', net: -25042, share: -12521 } })
+    expect(at.ownerShare()).toEqual({ net: -25042, share: -12521 })
+  })
+
+  it('returns null when the P&L has a net but no share', () => {
+    const at = createMetrics({ ...MOCK, ownerShareMonth: { month: '2026-11', net: 500, share: null } })
+    expect(at.ownerShare()).toBeNull()
   })
 })
 
@@ -421,6 +495,23 @@ describe('breakeven names and borrowed rates', () => {
     const basis = (['cod', 'prepaid'] as const).map((pay) => orphaned.deliveryRate('kaiven', 'KV-DHS', pay).basis)
     expect(basis.some((x) => x === 'vxp' || x === 'sheet')).toBe(true) // Kaiven is too young to have its own rates
     expect(orphaned.borrowedRates(['kaiven'], week).map((x) => x.id)).toEqual(['kaiven'])
+    expect(orphaned.rateSources(['kaiven'], week)[0].source).toMatch(/^(vxp|sheet)$/)
+    expect(orphaned.rateSources(['kaiven'])).toEqual([])
+  })
+
+  it('reports the weakest source across payment types and keeps own lifetime rates out of borrowedRates', () => {
+    const closed: ResolvedDay = { closedOn: TODAY, storeId: 'oorvia', sku: 'OMS-1M', payment: 'cod', delivered: 30, rto: 0 }
+    const kaiven: ResolvedDay = { ...closed, storeId: 'kaiven', sku: 'KV-DHS' }
+    const resolved: ResolvedDay[] = [
+      closed, { ...closed, closedOn: addDays(TODAY, -30), payment: 'prepaid' }, kaiven, { ...kaiven, payment: 'prepaid' },
+    ]
+    const at = createMetrics({ ...MOCK, resolved })
+    expect(at.rateSources()).toEqual([
+      { store: STORES[0], source: 'own-lifetime' }, { store: STORES[1], source: 'own-30d' }, { store: STORES[2], source: 'vxp' },
+    ])
+    expect(at.borrowedRates()).toEqual([STORES[2]])
+    const noPrepaid = createMetrics({ ...MOCK, resolved: resolved.filter((r) => r.payment === 'cod') })
+    expect(noPrepaid.rateSources(['selnova'])).toEqual([{ store: STORES[2], source: 'sheet' }])
   })
 })
 
@@ -435,6 +526,7 @@ describe('VXP breakeven (decided 2026-11-21: store breakevens weighted by revenu
     const pool = costed.reduce((t, s) => t + (s.revenue / s.economics!.avgPricePaid) * s.economics!.breakevenCpa, 0)
     const b = pf.total.breakeven!
     expect(b.fixedCosts).toBeGreaterThan(0)
+    expect(pf.total.fixedCosts).toBe(b.fixedCosts)
     expect(b.breakevenRoas).toBeCloseTo(revenue / (pool - b.fixedCosts), 6)
   })
 
@@ -457,6 +549,178 @@ describe('VXP breakeven (decided 2026-11-21: store breakevens weighted by revenu
     const huge = createMetrics({ ...MOCK, fixedCostsRunRate: 100_000_000 })
     expect(huge.portfolio(week).total.breakeven!.breakevenRoas).toBe(Infinity)
     expect(huge.portfolio(week).total.zone).toBe('below')
+  })
+})
+
+describe('VXP portfolio net profit', () => {
+  const daily = MOCK.fixedCostsRunRate! * 12 / 365
+  const dayFraction = (NOW_HOUR + NOW_MINUTE / 60) / 24
+
+  it('subtracts fixed costs from current and previous contribution', () => {
+    const { stores, total } = m.portfolio(resolvePeriod('7d'))
+    expect(total.contribution).toBe(stores.reduce((sum, s) => sum + s.contribution, 0))
+    expect(total.prevContribution).toBe(stores.reduce((sum, s) => sum + s.prev.contribution, 0))
+    expect(total.fixedOnRecord).toBe(true)
+    expect(total.fixedCosts).toBeCloseTo(daily * (6 + dayFraction), 6)
+    expect(total.prevFixedCosts).toBeCloseTo(daily * 7, 6)
+    expect(total.net).toBe(total.contribution - total.fixedCosts)
+    expect(total.prevNet).toBe(total.prevContribution - total.prevFixedCosts)
+  })
+
+  it('prorates fixed costs through the same time today and yesterday', () => {
+    const { total } = m.portfolio(resolvePeriod('today'))
+    expect(total.fixedCosts).toBeCloseTo(daily * dayFraction, 6)
+    expect(total.prevFixedCosts).toBe(total.fixedCosts)
+    expect(total.prevNet).toBe(total.prevContribution - total.prevFixedCosts)
+  })
+
+  it('still counts fixed costs without any costed sales in the period', () => {
+    const at = createMetrics({ ...MOCK, orders: [] })
+    const { total } = at.portfolio(resolvePeriod('7d'))
+    expect(total.breakeven).toBeNull()
+    expect(total.fixedCosts).toBeGreaterThan(0)
+    expect(total.net).toBe(-total.spend - total.fixedCosts)
+  })
+
+  it('deducts zero when no fixed costs are on record', () => {
+    const at = createMetrics({ ...MOCK, fixedCostsRunRate: null })
+    const { total } = at.portfolio(resolvePeriod('7d'))
+    expect(total).toMatchObject({ fixedOnRecord: false, fixedCosts: 0, prevFixedCosts: 0, net: total.contribution, prevNet: total.prevContribution })
+  })
+})
+
+describe('ads stopped calls', () => {
+  const id = 'kaiven'
+  const stopped = `${id}-ads-stopped`
+  const campaign: Campaign = { id: 'kv1', storeId: id, sku: 'KV-DHS', name: 'Scalp – Broad', status: 'ACTIVE' }
+  const spend = (daysAgo: number, amount: number, campaignId = campaign.id): CampaignDay => ({
+    date: addDays(TODAY, -daysAgo), storeId: id, campaignId, sku: campaign.sku,
+    spend: amount, impressions: 1000, clicks: 10, metaPurchases: 0, attributedOrders: 0,
+  })
+  /** `metaAge`: Kaiven's own Meta sync age; null = never synced. Other stores stay as MOCK has them. */
+  const calls = (campaignDays: CampaignDay[], campaigns = [campaign], metaAge: number | null = 4, others: Partial<Record<string, number>> = {}) => {
+    const byStore = { ...MOCK.sync.metaMinutesAgoByStore, ...others } as Record<string, number | undefined>
+    if (metaAge === null) delete byStore[id]; else byStore[id] = metaAge
+    return createMetrics({ ...MOCK, orders: [], cash: null, campaignDays, campaigns, sync: { ...MOCK.sync, metaMinutesAgoByStore: byStore } }).calls(resolvePeriod('7d'), [id])
+  }
+  const drop = [spend(4, 5354), spend(3, 5354), spend(2, 5354), spend(1, 28)]
+
+  it('ignores a spend drop while Meta has not synced since IST midnight (yesterday incomplete) or is failing', () => {
+    const sinceMidnight = MOCK.nowHour * 60 + MOCK.nowMinute
+    expect(calls(drop, [campaign], sinceMidnight + 1).some((c) => c.id === stopped)).toBe(false)
+    expect(calls(drop, [campaign], null).some((c) => c.id === stopped)).toBe(false)
+    expect(calls(drop, [campaign], sinceMidnight).some((c) => c.id === stopped)).toBe(true)
+  })
+
+  it('is not muted by another store whose Meta sync is stale', () => {
+    expect(calls(drop, [campaign], 4, { selnova: 5000 }).some((c) => c.id === stopped)).toBe(true)
+  })
+
+  it('stays quiet once the store has spend synced for today (ads resumed or a replacement campaign)', () => {
+    expect(calls([...drop, spend(0, 300, 'new')]).some((c) => c.id === stopped)).toBe(false)
+    expect(calls([spend(3, 100), spend(1, 100), spend(0, 50, 'new')], [{ ...campaign, status: 'PAUSED' }]).some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it("still warns when today's only spend is a paused campaign's trickle", () => {
+    const paused = [{ ...campaign, status: 'PAUSED' }]
+    expect(calls([...drop, spend(0, 10)], paused).find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹5,354/day before · all campaigns paused')
+    expect(calls([spend(3, 100), spend(1, 100), spend(0, 10)], paused).some((c) => c.id === stopped)).toBe(true)
+  })
+
+  it.each(['IN_PROCESS', 'WITH_ISSUES'])('does not read %s as paused', (status) => {
+    expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status }]).some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it('reads CAMPAIGN_PAUSED as paused even while Meta is stale', () => {
+    expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status: 'CAMPAIGN_PAUSED' }], null).find((c) => c.id === stopped)?.detail).toContain('all campaigns paused')
+  })
+
+  it('warns on the spend drop and keeps the store loss call', () => {
+    const out = calls([spend(4, 5354), spend(3, 5354), spend(2, 5354), spend(1, 28)])
+    expect(out.find((c) => c.id === stopped)).toEqual({
+      id: stopped, tone: 'warn', storeId: id, title: 'Kaiven ads stopped', detail: '₹28 yesterday vs ₹5,354/day before',
+    })
+    expect(out.some((c) => c.id === `${id}-below` || c.id === `${id}-loss`)).toBe(true)
+  })
+
+  it.each([
+    ['normal spend with today at zero', [spend(4, 600), spend(3, 600), spend(2, 600), spend(1, 600)]],
+    ['a baseline under ₹500/day', [spend(4, 1499), spend(1, 0)]],
+    ['yesterday at exactly 10% of a ₹500/day baseline', [spend(4, 1500), spend(1, 50)]],
+  ])('does not warn on %s', (_, rows) => {
+    expect(calls(rows).some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it('averages over the three complete days and includes the status when both rules fire', () => {
+    const out = calls([spend(2, 5354), spend(1, 28)], [{ ...campaign, status: 'PAUSED' }])
+    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹1,785/day before · all campaigns paused')
+  })
+
+  it('warns when every campaign that spent in the last seven complete days is paused', () => {
+    const out = calls([spend(8, 1000, 'idle'), spend(7, 120), spend(1, 80)], [
+      { ...campaign, status: 'PAUSED' }, { ...campaign, id: 'idle', status: 'ARCHIVED' },
+    ])
+    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹80 yesterday · ₹200 over 7 days · all campaigns paused')
+  })
+
+  it('does not claim all paused while an ACTIVE campaign exists that has not spent yet (a replacement)', () => {
+    const out = calls([spend(7, 120), spend(1, 80)], [{ ...campaign, status: 'PAUSED' }, { ...campaign, id: 'new' }])
+    expect(out.some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it('ignores a spend drop the Meta sync could not verify against the account total', () => {
+    const at = createMetrics({
+      ...MOCK, orders: [], cash: null, campaignDays: drop, campaigns: [campaign],
+      sync: { ...MOCK.sync, metaYesterdayVerified: { ...MOCK.sync.metaYesterdayVerified, kaiven: false } },
+    })
+    expect(at.calls(resolvePeriod('7d'), [id]).some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it.each(['ACTIVE', null])('does not warn when a spending campaign has status %s', (status) => {
+    const out = calls([spend(2, 80), spend(1, 100, 'other')], [{ ...campaign, status: 'PAUSED' }, { ...campaign, id: 'other', status }])
+    expect(out.some((c) => c.id === stopped)).toBe(false)
+  })
+
+  it('requires spend in the last seven complete days even when campaigns are paused', () => {
+    const out = calls([spend(8, 1000), spend(0, 1000)], [{ ...campaign, status: 'PAUSED' }])
+    expect(out.some((c) => c.id === stopped)).toBe(false)
+  })
+})
+
+describe('vFulfill staleness calls', () => {
+  const stale = (vfulfillImportDaysAgo: number | null, vfulfillDataDaysAgo: number | null) => {
+    const shipmentsThrough = vfulfillDataDaysAgo === null ? null : addDays(TODAY, -vfulfillDataDaysAgo)
+    const at = createMetrics({ ...MOCK, sync: { ...MOCK.sync, vfulfillImportDaysAgo, vfulfillDataDaysAgo, shipmentsThrough } })
+    return at.calls(resolvePeriod('7d'), []).find((c) => c.id === 'vf-stale')
+  }
+
+  it.each([1, null])('uses old shipment data with import age %s', (importAge) => {
+    expect(stale(importAge, 5)).toMatchObject({
+      tone: 'warn', title: 'vFulfill shipments data is 5 days old',
+      detail: 'Newest closed shipment 13 Nov · delivery rates and Resolved figures may be out of date',
+    })
+  })
+
+  it.each([2, 5, null])('uses the import age when the shipment data age is %s', (dataAge) => {
+    expect(stale(5, dataAge)?.title).toBe('vFulfill import is 5 days old')
+  })
+
+  it('says never imported only when both ages are missing and otherwise warns after three days', () => {
+    expect(stale(null, null)?.title).toBe('vFulfill never imported')
+    expect(stale(3, null)).toBeUndefined()
+    expect(stale(null, 3)).toBeUndefined()
+  })
+
+  it('names stores left out of the last import, even while the ages look fresh', () => {
+    const at = (vfulfillMissingStores: StoreId[]) =>
+      createMetrics({ ...MOCK, sync: { ...MOCK.sync, vfulfillImportDaysAgo: 0, vfulfillDataDaysAgo: 1, vfulfillMissingStores } })
+        .calls(resolvePeriod('7d'), []).find((c) => c.id === 'vf-stale')
+    expect(at(['kaiven'])).toMatchObject({
+      tone: 'warn', title: 'Kaiven not in the last vFulfill import',
+      detail: "Tick every store in vFulfill's shipments export · its delivery rates and Resolved figures are out of date",
+    })
+    expect(at(['kaiven', 'selnova'])?.title).toBe('Kaiven and Selnova not in the last vFulfill import')
+    expect(at([])).toBeUndefined()
   })
 })
 

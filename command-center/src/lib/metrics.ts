@@ -41,22 +41,31 @@ export const MIN_SAMPLE = 30
 const SHEET_RATES = { deliveryRate: 0.9, codShare: 0.7 }
 
 export type RateBasis = 'sku' | 'store' | 'vxp' | 'sheet'
-export type Rate = { value: number; basis: RateBasis; n: number }
+export type Rate = {
+  value: number; basis: RateBasis; n: number
+  /** Null for the sheet. Lifetime covers all closed shipments for delivery rates and all snapshot orders (70 days) for COD share. */
+  window: RateWindow | null
+}
 
 export type Closed = { delivered: number; rto: number }
 /** One row of the delivery-rate table: a product (or the store total, sku null), per window and payment type. */
 export type DeliveryRow = { sku: string | null; name: string; cells: Record<RateWindow, Record<PaymentType | 'all', Closed>> }
 
-type Keyed = { storeId: StoreId; sku: string | null }
-/** A product is (store, SKU): the same SKU in two stores never shares a rate at the SKU level. */
-const levels = (storeId: StoreId, sku: string): [RateBasis, (r: Keyed) => boolean][] => [
-  ['sku', (r) => r.storeId === storeId && r.sku === sku],
-  ['store', (r) => r.storeId === storeId],
-  ['vxp', () => true],
-]
-
-/** Windows over shipment close dates. The profit estimate uses 30 days. */
+/** Windows over shipment close dates or order dates. The profit estimate starts with 30 days. */
 export type RateWindow = '7d' | '30d' | 'lifetime'
+
+type Keyed = { storeId: StoreId; sku: string | null }
+/** Use the requested window for the SKU and store first, then fall back to lifetime history. */
+function rateLevels(storeId: StoreId, sku: string, window: RateWindow) {
+  const own = (r: Keyed) => r.storeId === storeId
+  const levels: [RateBasis, RateWindow, (r: Keyed) => boolean][] = [
+    ['sku', window, (r) => own(r) && r.sku === sku],
+    ['store', window, own],
+  ]
+  if (window !== 'lifetime') levels.push(['store', 'lifetime', own])
+  levels.push(['vxp', 'lifetime', () => true])
+  return levels
+}
 
 export type SkuEconomics = Breakeven & { codShare: Rate; rates: Record<PaymentType, Rate> }
 
@@ -130,7 +139,10 @@ export type VxpBreakeven = Pick<Breakeven, 'breakevenRoas' | 'breakevenCpa' | 't
 export type Portfolio = {
   stores: StoreStats[]
   total: Totals & {
-    contribution: number; prevContribution: number; prevRevenue: number; prevSpend: number; roas: number | null
+    /** Before fixed costs. */
+    contribution: number
+    prevContribution: number; prevRevenue: number; prevSpend: number; roas: number | null
+    fixedCosts: number; net: number; prevFixedCosts: number; prevNet: number; fixedOnRecord: boolean
     /** Null when no costed store has revenue in the period. */
     breakeven: VxpBreakeven | null
     zone: RoasZone | null
@@ -156,6 +168,17 @@ export type Call = {
   title: string
   detail: string
 }
+
+/** Complete days before yesterday used to establish normal spend. */
+const ADS_BASELINE_DAYS = 3
+/** Minimum average spend per baseline day, in rupees. */
+const ADS_MIN_DAILY_SPEND = 500
+/** A drop fires below this share of baseline spend. */
+const ADS_STOP_SPEND_SHARE = 0.1
+/** Complete days of spend used to check campaign statuses. */
+const ADS_STATUS_DAYS = 7
+/** Meta effective_status values that mean a campaign is not delivering by choice. IN_PROCESS / WITH_ISSUES are not "paused". */
+const STOPPED_STATUSES = new Set(['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'ARCHIVED', 'DELETED'])
 
 // ── Formatting (Indian digit grouping) ───────────────────────────────────────
 const inrFmt = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 })
@@ -218,17 +241,16 @@ export function createMetrics(d: Data) {
 
   /**
    * Delivered ÷ (delivered + RTO) for one product and payment type, over shipments
-   * that closed in the window. Falls back product → store → VXP within that window alone.
+   * that closed in the window, with lifetime history as a fallback.
    */
   function deliveryRate(storeId: StoreId, sku: string, payment: PaymentType, window: RateWindow = '30d'): Rate {
-    const inWindow = d.resolved.filter((r) => r.payment === payment && r.closedOn >= windowStart[window])
-    for (const [basis, match] of levels(storeId, sku)) {
-      const rs = inWindow.filter(match)
+    for (const [basis, w, match] of rateLevels(storeId, sku, window)) {
+      const rs = d.resolved.filter((r) => r.payment === payment && r.closedOn >= windowStart[w] && match(r))
       const delivered = rs.reduce((s, r) => s + r.delivered, 0)
       const n = delivered + rs.reduce((s, r) => s + r.rto, 0)
-      if (n >= MIN_SAMPLE) return { value: delivered / n, basis, n }
+      if (n >= MIN_SAMPLE) return { value: delivered / n, basis, n, window: w }
     }
-    return { value: SHEET_RATES.deliveryRate, basis: 'sheet', n: 0 }
+    return { value: SHEET_RATES.deliveryRate, basis: 'sheet', n: 0, window: null }
   }
 
   /**
@@ -261,15 +283,14 @@ export function createMetrics(d: Data) {
     ]
   }
 
-  /** COD share of orders placed, trailing 30 days. Falls back product → store → VXP. */
+  /** COD share of orders placed, starting with 30 days and falling back to all orders in the 70-day snapshot. */
   function codShare(storeId: StoreId, sku: string): Rate {
-    const recent = d.orders.filter((r) => r.date >= addDays(TODAY, -29) && r.date <= TODAY)
-    for (const [basis, match] of levels(storeId, sku)) {
-      const rs = recent.filter((r) => r.payment !== 'unknown' && match(r))
+    for (const [basis, w, match] of rateLevels(storeId, sku, '30d')) {
+      const rs = d.orders.filter((r) => r.payment !== 'unknown' && (w === 'lifetime' || (r.date >= windowStart[w] && r.date <= TODAY)) && match(r))
       const n = rs.reduce((s, r) => s + r.orders, 0)
-      if (n >= MIN_SAMPLE) return { value: rs.filter((r) => r.payment === 'cod').reduce((s, r) => s + r.orders, 0) / n, basis, n }
+      if (n >= MIN_SAMPLE) return { value: rs.filter((r) => r.payment === 'cod').reduce((s, r) => s + r.orders, 0) / n, basis, n, window: w }
     }
-    return { value: SHEET_RATES.codShare, basis: 'sheet', n: 0 }
+    return { value: SHEET_RATES.codShare, basis: 'sheet', n: 0, window: null }
   }
 
   const assumptionsFor = (storeId: StoreId): Assumptions => ({ ...SHEET_ASSUMPTIONS, gatewayPct: storeById(storeId).gatewayPct })
@@ -348,20 +369,30 @@ export function createMetrics(d: Data) {
     return r.orders * (share * perOrderAs('cod') + (1 - share) * perOrderAs('prepaid'))
   }
 
-  /** Stores whose profit estimate borrows delivery rates from VXP or the sheet. */
-  function borrowedRates(storeIds: StoreId[] = d.stores.map((s) => s.id), period?: Period): Store[] {
-    const borrows = (id: StoreId, sku: string) =>
-      (['cod', 'prepaid'] as const).some((pay) => {
-        const basis = deliveryRate(id, sku, pay).basis
-        return basis === 'vxp' || basis === 'sheet'
-      })
+  /** The weakest delivery-rate source per store with SKUs to check. */
+  function rateSources(storeIds: StoreId[] = d.stores.map((s) => s.id), period?: Period) {
+    const sources = ['own-30d', 'own-lifetime', 'vxp', 'sheet'] as const
     // Rates are checked directly, so products without a cost and SKUs with no product (orders still use their rates) count too.
-    return storeIds.filter((id) => {
+    return storeIds.flatMap((id) => {
       const skus = period
         ? [...relevantProducts(id, period).map((p) => p.sku), ...unknownSkusIn(id, period.from, period.to)]
         : d.products.filter((p) => p.storeId === id).map((p) => p.sku)
-      return skus.some((sku) => borrows(id, sku))
-    }).map(storeById)
+      if (skus.length === 0) return []
+      let weakest = 0
+      for (const sku of skus) {
+        for (const pay of ['cod', 'prepaid'] as const) {
+          const { basis, window } = deliveryRate(id, sku, pay)
+          const source = basis === 'vxp' || basis === 'sheet' ? basis : window === 'lifetime' ? 'own-lifetime' : 'own-30d'
+          weakest = Math.max(weakest, sources.indexOf(source))
+        }
+      }
+      return [{ store: storeById(id), source: sources[weakest] }]
+    })
+  }
+
+  /** Stores whose profit estimate borrows delivery rates from VXP or the sheet. */
+  function borrowedRates(storeIds?: StoreId[], period?: Period): Store[] {
+    return rateSources(storeIds, period).filter(({ source }) => source === 'vxp' || source === 'sheet').map(({ store }) => store)
   }
 
   // ── Aggregation ────────────────────────────────────────────────────────────
@@ -424,13 +455,19 @@ export function createMetrics(d: Data) {
     const stores = storeIds.map((id) => storeStats(id, p)).sort((a, b) => b.contribution - a.contribution)
     const total = stores.reduce((t, s) => add(t, s), zero())
     const roas = ratio(total.revenue, total.spend)
-    const breakeven = vxpBreakeven(stores, p)
+    const contribution = stores.reduce((s, x) => s + x.contribution, 0)
+    const prevContribution = stores.reduce((s, x) => s + x.prev.contribution, 0)
+    const fixedCosts = fixedCostsIn(p.from, p.to, TODAY)
+    const prevFixedCosts = fixedCostsIn(p.prevFrom, p.prevTo, p.id === 'today' ? p.prevTo : null)
+    const fixedOnRecord = d.fixedCostsRunRate !== null
+    const breakeven = vxpBreakeven(stores, fixedCosts)
     return {
       stores,
       total: {
         ...total,
-        contribution: stores.reduce((s, x) => s + x.contribution, 0),
-        prevContribution: stores.reduce((s, x) => s + x.prev.contribution, 0),
+        contribution, prevContribution, fixedCosts, prevFixedCosts, fixedOnRecord,
+        net: contribution - fixedCosts,
+        prevNet: prevContribution - prevFixedCosts,
         prevRevenue: stores.reduce((s, x) => s + x.prev.revenue, 0),
         prevSpend: stores.reduce((s, x) => s + x.prev.spend, 0),
         roas, breakeven,
@@ -440,21 +477,20 @@ export function createMetrics(d: Data) {
     }
   }
 
-  /** Fixed costs falling in the period: the monthly run rate per day, today counted only as far as it has run. */
-  function fixedCostsIn(p: Period): number {
+  /** Fixed costs falling in the range, with the partial day counted only up to the current time. */
+  function fixedCostsIn(from: string, to: string, partialDay: string | null): number {
     if (!d.fixedCostsRunRate) return 0
     let days = 0
-    for (let day = p.from; day <= p.to; day = addDays(day, 1)) days += day === TODAY ? (d.nowHour + d.nowMinute / 60) / 24 : 1
+    for (let day = from; day <= to; day = addDays(day, 1)) days += day === partialDay ? (d.nowHour + d.nowMinute / 60) / 24 : 1
     return ((d.fixedCostsRunRate * 12) / 365) * days
   }
 
-  function vxpBreakeven(stores: StoreStats[], p: Period): VxpBreakeven | null {
+  function vxpBreakeven(stores: StoreStats[], fixedCosts: number): VxpBreakeven | null {
     const costed = stores.filter((s) => s.economics !== null && s.revenue > 0)
     const revenue = costed.reduce((t, s) => t + s.revenue, 0)
     if (revenue === 0) return null
     // A store's revenue ÷ its breakeven ROAS, written via its CPA so a store losing money before ads subtracts instead of counting 0.
     const beforeAds = costed.reduce((t, s) => t + (s.revenue / s.economics!.avgPricePaid) * s.economics!.breakevenCpa, 0)
-    const fixedCosts = fixedCostsIn(p)
     const { breakevenRoas, breakevenCpa, targetRoas } = fromCpa(revenue, beforeAds - fixedCosts)
     return {
       breakevenRoas, breakevenCpa, targetRoas, fixedCosts,
@@ -504,13 +540,47 @@ export function createMetrics(d: Data) {
   /** "Needs your call": facts only, at most three, worst first. Empty is a valid answer. */
   function calls(p: Period, storeIds: StoreId[] = d.stores.map((s) => s.id)): Call[] {
     const out: Call[] = []
+    const yesterday = addDays(TODAY, -1)
+    const weekStart = addDays(TODAY, -ADS_STATUS_DAYS)
+    const baselineStart = addDays(yesterday, -ADS_BASELINE_DAYS)
     for (const id of storeIds) {
       const store = storeById(id)
       const eco = storeEconomics(id)
-      const last3 = sliceIn([id], addDays(TODAY, -3), addDays(TODAY, -1))
+      const week = d.campaignDays.filter((r) => r.storeId === id && r.date >= weekStart && r.date <= yesterday)
+      const weekSpend = week.reduce((s, r) => s + r.spend, 0)
+      const yesterdaySpend = week.filter((r) => r.date === yesterday).reduce((s, r) => s + r.spend, 0)
+      const baselineSpend = week.filter((r) => r.date >= baselineStart && r.date < yesterday).reduce((s, r) => s + r.spend, 0)
+      const dailySpend = baselineSpend / ADS_BASELINE_DAYS
+      // Yesterday's spend is only complete once this store's Meta sync has run since IST midnight (the cron runs at 06:00):
+      // before that, or when its sync is failing, a low "yesterday" is missing data, not stopped ads.
+      const metaAge = d.sync.metaMinutesAgoByStore[id]
+      // ...and only when that sync matched yesterday's campaign spend to the account total (a partial answer is not a stop).
+      const metaHasYesterday = metaAge !== undefined && metaAge <= d.nowHour * 60 + d.nowMinute && d.sync.metaYesterdayVerified[id] === true
+      const isStopped = (campaignId: string) => {
+        const status = d.campaigns.find((c) => c.storeId === id && c.id === campaignId)?.status
+        return status != null && STOPPED_STATUSES.has(status)
+      }
+      // Spend synced for today from a campaign that is not paused means ads are running again (a replacement campaign,
+      // or a resume). A paused campaign's spend does not count: it can still bill a trickle (Kaiven: ₹28 after its pause).
+      const spendingToday = d.campaignDays.some((r) => r.storeId === id && r.date === TODAY && r.spend > 0 && !isStopped(r.campaignId))
+      const spendDropped = metaHasYesterday && dailySpend >= ADS_MIN_DAILY_SPEND && yesterdaySpend < dailySpend * ADS_STOP_SPEND_SHARE
+      const spendingCampaigns = new Set(week.filter((r) => r.spend > 0).map((r) => r.campaignId))
+      // A live campaign that has not spent yet (a replacement just launched) means not everything is paused.
+      const anyActive = d.campaigns.some((c) => c.storeId === id && c.status === 'ACTIVE')
+      const allPaused = weekSpend > 0 && !anyActive && [...spendingCampaigns].every(isStopped)
+      const adsStopped = !spendingToday && (spendDropped || allPaused)
+      if (adsStopped) {
+        out.push({
+          id: `${id}-ads-stopped`, tone: 'warn', storeId: id,
+          title: `${store.name} ads stopped`,
+          detail: `${inr(yesterdaySpend)} yesterday ${spendDropped ? `vs ${inr(dailySpend)}/day before` : `· ${inr(weekSpend)} over 7 days`}${allPaused ? ' · all campaigns paused' : ''}`,
+        })
+      }
+      const last3Start = addDays(TODAY, -3)
+      const last3 = sliceIn([id], last3Start, yesterday)
       // Combined, not day by day: at 2–3 orders a day a single day's ROAS is mostly noise.
       const t = totalsOf(last3)
-      const daysWithSpend = new Set(d.campaignDays.filter((r) => r.storeId === id && r.date >= addDays(TODAY, -3) && r.date <= addDays(TODAY, -1)).map((r) => r.date)).size
+      const daysWithSpend = new Set(week.filter((r) => r.date >= last3Start).map((r) => r.date)).size
       if (eco && daysWithSpend === 3 && t.spend > 0 && t.revenue / t.spend < eco.breakevenRoas) {
         out.push({
           id: `${id}-below`, tone: 'bad', storeId: id,
@@ -549,12 +619,24 @@ export function createMetrics(d: Data) {
         })
       }
     }
-    const vf = d.sync.vfulfillImportDaysAgo
-    if (vf === null || vf > 3) {
+    const { vfulfillImportDaysAgo: importAge, vfulfillDataDaysAgo: dataAge, shipmentsThrough, vfulfillMissingStores: missing } = d.sync
+    const dataOlder = dataAge !== null && (importAge === null || dataAge > importAge)
+    const vf = dataOlder ? dataAge : importAge
+    if (missing.length > 0) {
+      // A store left unticked in vFulfill's export: named whatever the age, since the next import repeats it.
+      const names = missing.map((id) => d.stores.find((s) => s.id === id)?.name ?? id)
       out.push({
         id: 'vf-stale', tone: 'warn',
-        title: vf === null ? 'vFulfill never imported' : `vFulfill import is ${vf} days old`,
-        detail: 'Delivery rates may be out of date',
+        title: `${names.join(' and ')} not in the last vFulfill import`,
+        detail: `Tick every store in vFulfill's shipments export · ${missing.length > 1 ? 'their' : 'its'} delivery rates and Resolved figures are out of date`,
+      })
+    } else if (vf === null || vf > 3) {
+      out.push({
+        id: 'vf-stale', tone: 'warn',
+        title: vf === null ? 'vFulfill never imported' : `vFulfill ${dataOlder ? 'shipments data' : 'import'} is ${vf} days old`,
+        detail: dataOlder
+          ? `${shipmentsThrough ? `Newest closed shipment ${fmtDay(shipmentsThrough)} · ` : ''}delivery rates and Resolved figures may be out of date`
+          : 'Delivery rates may be out of date',
       })
     }
     const c = cash()
@@ -583,17 +665,13 @@ export function createMetrics(d: Data) {
 
   function gst() {
     if (!d.gst) return null
-    return { ...d.gst, owed: d.gst.outputTax - d.gst.inputCredit }
+    return { ...d.gst, owed: d.gst.cash }
   }
 
-  /** Month-to-date net (contribution − prorated fixed costs) and Vedaant's 50%. Null until fixed costs are wired. */
+  /** Monthly P&L net and owner share, as shown on Money. */
   function ownerShare() {
-    if (d.fixedCostsMonthly === null) return null
-    const month = portfolio(resolvePeriod('month'))
-    const day = Number(TODAY.slice(8))
-    const daysInMonth = new Date(Date.UTC(Number(TODAY.slice(0, 4)), Number(TODAY.slice(5, 7)), 0)).getUTCDate()
-    const net = month.total.contribution - d.fixedCostsMonthly * (day / daysInMonth)
-    return { net, share: net * 0.5 }
+    const month = d.ownerShareMonth
+    return month === null || month.share === null ? null : { net: month.net, share: month.share }
   }
 
   const sync = () => d.sync
@@ -635,7 +713,7 @@ export function createMetrics(d: Data) {
   const minutesAgo = (iso: string) => Math.max(0, Math.round((d.now.getTime() - Date.parse(iso)) / 60000))
 
   return {
-    resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, storeStats, portfolio,
+    resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, rateSources, storeStats, portfolio,
     series, calls, cash, gst, ownerShare, sync, campaigns, recentOrders, resolvedCounts, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
     /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */

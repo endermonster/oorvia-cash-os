@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { istNow } from './dates'
 import {
   currentCogs, mapCampaign, mapCash, mapCampaignDay, mapCampaignHour, mapOrderDay, mapOrderHour, mapProduct, mapRecentOrder, mapResolvedDay, mapStore,
-  mapSync, metaStoresAmong, sortStores,
+  mapSync, metaStoresAmong, shipmentCutoffs, sortStores,
 } from './load'
 import type { Product } from './types'
 
@@ -99,17 +99,21 @@ describe('campaign rows', () => {
 })
 
 describe('mapCampaign', () => {
-  it('resolves the SKU from the landing handle within the same store', () => {
-    expect(mapCampaign({ campaign_id: 'C1', store_id: 'kaiven', name: 'Broad', landing_handle: 'deoxyribose-scalp-serum' }, [product])).toEqual({
-      id: 'C1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Broad',
+  it('resolves the SKU from the landing handle within the same store and keeps the Meta status', () => {
+    expect(mapCampaign({ campaign_id: 'C1', store_id: 'kaiven', name: 'Broad', landing_handle: 'deoxyribose-scalp-serum', status: 'PAUSED' }, [product])).toEqual({
+      id: 'C1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Broad', status: 'PAUSED',
     })
   })
 
   it('gives a null SKU when the handle is unknown, missing, or belongs to another store', () => {
-    const base = { campaign_id: 'C1', store_id: 'kaiven', name: 'Broad' }
+    const base = { campaign_id: 'C1', store_id: 'kaiven', name: 'Broad', status: null }
     expect(mapCampaign({ ...base, landing_handle: 'nope' }, [product]).sku).toBeNull()
     expect(mapCampaign({ ...base, landing_handle: null }, [product]).sku).toBeNull()
     expect(mapCampaign({ ...base, store_id: 'selnova', landing_handle: 'deoxyribose-scalp-serum' }, [product]).sku).toBeNull()
+  })
+
+  it('keeps a missing Meta status null', () => {
+    expect(mapCampaign({ campaign_id: 'C1', store_id: 'kaiven', name: 'Broad', landing_handle: null, status: null }, [product]).status).toBeNull()
   })
 })
 
@@ -141,7 +145,9 @@ describe('mapSync', () => {
       run('shopify_webhook', '2026-11-18T09:58:00Z', 'selnova'),
       run('vf_shipments', '2026-11-14T09:00:00Z'), run('vf_shipments', '2026-11-14T09:00:00Z', 'selnova'),
     ], stores, now)
-    expect(s).toEqual({ metaMinutesAgo: 4, metaNotConnected: [], shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4 })
+    expect(s).toEqual({
+      metaMinutesAgo: 4, metaMinutesAgoByStore: { kaiven: 4, selnova: 3 }, metaYesterdayVerified: { kaiven: false, selnova: false }, metaNotConnected: [], shopifyMinutesAgo: 2, vfulfillImportDaysAgo: 4, shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [],
+    })
   })
 
   it('counts either shopify_webhook or shopify_backfill as Shopify freshness', () => {
@@ -157,7 +163,10 @@ describe('mapSync', () => {
       run('shopify_products', '2026-11-18T09:59:00Z'), run('shopify_products', '2026-11-18T09:59:00Z', 'selnova'),
       run('vf_transactions', '2026-11-18T09:59:00Z'), run('vf_transactions', '2026-11-18T09:59:00Z', 'selnova'),
     ], stores, now)
-    expect(s).toEqual({ metaMinutesAgo: null, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+    expect(s).toEqual({
+      metaMinutesAgo: null, metaMinutesAgoByStore: {}, metaYesterdayVerified: {}, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null,
+      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [],
+    })
   })
 
   it('one stale store makes the whole source stale', () => {
@@ -174,6 +183,36 @@ describe('mapSync', () => {
   it('a run with no store counts for every store', () => {
     const s = mapSync([run('vf_shipments', '2026-11-16T09:00:00Z', null)], stores, now)
     expect(s.vfulfillImportDaysAgo).toBe(2)
+  })
+
+  it('ages shipments data independently of the import run', () => {
+    const s = mapSync([run('vf_shipments', '2026-11-18T09:00:00Z', null)], stores, now, stores, '2026-11-14')
+    expect(s).toMatchObject({ vfulfillImportDaysAgo: 0, shipmentsThrough: '2026-11-14', vfulfillDataDaysAgo: 4 })
+  })
+
+  it.each([
+    ['2026-11-18T18:29:59Z', '2026-11-18', 0],
+    ['2026-11-18T18:30:00Z', '2026-11-18', 1],
+    ['2026-11-18T18:30:00Z', '2026-11-19', 0],
+    ['2026-11-18T18:30:00Z', '2026-11-20', 0],
+  ])('uses IST calendar days and clamps future dates (%s, %s)', (timestamp, shipmentsThrough, age) => {
+    expect(mapSync([], stores, new Date(timestamp), stores, shipmentsThrough)).toMatchObject({ shipmentsThrough, vfulfillDataDaysAgo: age })
+  })
+
+  it('ages a store left out of the newest import from its own last import, when that is worse', () => {
+    const s = mapSync([], stores, now, stores, '2026-11-17', [{ storeId: 'kaiven', seenAt: '2026-11-10T06:00:00Z' }])
+    expect(s).toMatchObject({ shipmentsThrough: '2026-11-17', vfulfillDataDaysAgo: 8, vfulfillMissingStores: ['kaiven'] })
+    expect(mapSync([], stores, now, stores, '2026-11-01', [{ storeId: 'kaiven', seenAt: '2026-11-10T06:00:00Z' }]).vfulfillDataDaysAgo).toBe(17)
+  })
+
+  it("reads yesterday_verified from each store's latest ok Meta run; old or unreadable detail is unverified", () => {
+    const s = mapSync([
+      { ...run('meta', '2026-11-18T09:00:00Z'), detail: JSON.stringify({ yesterday_verified: false }) },
+      { ...run('meta', '2026-11-18T09:50:00Z'), detail: JSON.stringify({ yesterday_verified: true }) },
+      { ...run('meta', '2026-11-18T09:55:00Z', 'kaiven', false), detail: JSON.stringify({ yesterday_verified: false }) },
+      { ...run('meta', '2026-11-18T09:50:00Z', 'selnova'), detail: 'not json' },
+    ], stores, now)
+    expect(s.metaYesterdayVerified).toEqual({ kaiven: true, selnova: false })
   })
 
   it('ignores failed runs', () => {
@@ -204,7 +243,20 @@ describe('mapSync', () => {
   })
 
   it('reports null for every source when nothing ever ran', () => {
-    expect(mapSync([], stores, now)).toEqual({ metaMinutesAgo: null, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null })
+    expect(mapSync([], stores, now)).toEqual({
+      metaMinutesAgo: null, metaMinutesAgoByStore: {}, metaYesterdayVerified: {}, metaNotConnected: ['kaiven', 'selnova'], shopifyMinutesAgo: null, vfulfillImportDaysAgo: null,
+      shipmentsThrough: null, vfulfillDataDaysAgo: null, vfulfillMissingStores: [],
+    })
+  })
+})
+
+describe('shipmentCutoffs', () => {
+  it("is the earlier of the newest closed shipment and the store's own last import (IST day); no rows = absent", () => {
+    expect(shipmentCutoffs({
+      through: '2026-11-20',
+      seenByStore: { oorvia: '2026-11-21T05:00:00Z', kaiven: '2026-11-10T18:45:00Z' }, // kaiven: 11 Nov 00:15 IST
+    })).toEqual({ oorvia: '2026-11-20', kaiven: '2026-11-11' })
+    expect(shipmentCutoffs({ through: null, seenByStore: { oorvia: '2026-11-21T05:00:00Z' } })).toEqual({})
   })
 })
 

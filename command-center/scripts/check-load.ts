@@ -11,7 +11,7 @@ async function main() {
   console.log('source', d.source, '| today', d.today, '| nowHour', d.nowHour)
   console.log(counts)
   console.log('stores:', d.stores.map((s) => s.name).join(', '))
-  console.log('cash/gst/fixedCostsMonthly:', d.cash, d.gst, d.fixedCostsMonthly)
+  console.log('cash/gst/ownerShareMonth:', d.cash, d.gst, d.ownerShareMonth)
   console.log('sync:', d.sync)
 
   const m = createMetrics(d)

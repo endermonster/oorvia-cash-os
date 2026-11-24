@@ -1,5 +1,26 @@
 # Backend fixes from the site critique (2026-11-22)
 
+## Status 2026-11-22: backend done for 1, 2, 3 (vFulfill part), 4, 5 — front end must wire
+
+The backend now exposes the fields below. Nothing on screen changes until a component reads them (the user chose
+"backend only + handoff"). Not done yet: the Shopify heartbeat (3, parked: the user wants a free trigger) and the
+"Also seen" list.
+
+| # | Read this | Instead of / to show |
+|---|---|---|
+| 1 | `portfolio(p).total.net`, `.prevNet`, `.fixedCosts` (always set, 0 when none), `.prevFixedCosts`, `.fixedOnRecord` | Headline VXP profit = `net`. Label "before ₹X fixed costs" now reads `total.fixedCosts`, not `total.breakeven.fixedCosts`. `contribution` is unchanged (before fixed costs). |
+| 2 | `Rate.window` (`'7d' \| '30d' \| 'lifetime' \| null`) on `deliveryRate()` / `codShare()`; `m.rateSources(storeIds?, period?)` → `{ store, source: 'own-30d' \| 'own-lifetime' \| 'vxp' \| 'sheet' }[]` | Fallback is now SKU → store (30D) → store all-time → VXP all-time → sheet. `StoreView.basisNote` must say the window (a `store` basis can now be all-time while the label says "· 30D"). Home's "on VXP delivery rates", the store view's note and the Ads footnote should all come from `rateSources`. For COD share, "all-time" = the 70 days the snapshot loads. |
+| 3 | `d.sync.vfulfillDataDaysAgo`, `d.sync.shipmentsThrough` (newest closed shipment, YYYY-MM-DD) | vFulfill chip (`TopBar.tsx`) and `GstCard`'s warning should age from the worse of `vfulfillImportDaysAgo` and `vfulfillDataDaysAgo`. Needs-your-call already does. |
+| 3 | `OrderView.noShipmentData` (status stays `not_shipped`) | Orders: show "No shipment data" instead of "Not shipped" when true. Per store (2026-11-24): a store with no shipment rows (Kaiven, Selnova today) flags every unshipped order. |
+| 3 | `d.sync.vfulfillMissingStores` (2026-11-24) | Stores left unticked in vFulfill's export. `vfulfillDataDaysAgo` already counts them; Needs your call names them (`vf-stale`). The /settings upload report also warns ("no kaiven shipments in this file…"). TopBar's vFulfill chip could name them. |
+| 3 | `d.sync.vfulfillDataDaysAgo` | Money `CashCard.tsx:26` "Every delivered COD order is remitted": only say it when the shipments data is fresh; otherwise say the data runs to `shipmentsThrough`. |
+| 4 | `calls()` now emits `${id}-ads-stopped` (tone `warn`) | No wiring needed; it shows in Needs your call. The spend-drop rule needs `d.sync.metaYesterdayVerified[store]` (the Meta run matched yesterday's campaign spend to the account total); "all paused" needs no ACTIVE campaign. Home's hero sentence ("Kaiven is paying for itself") should not lead when that call is present. |
+| 5 | `getHomeData()` (src/lib/data.ts) | `src/app/page.tsx`: swap `getData()` for `getHomeData()`. Then `m.gst()` (= Money's GST headline, `owed` = GSTR-3B cash) and `m.ownerShare()` (= Money's P&L "Your 50% share" for this month) are filled and `BottomLine` renders them. Footer source label for the share should say "monthly P&L", not "profit model". |
+
+Fixed costs, two methods ("Also seen"): kept both on purpose. Period profit (7D/30D/Month on Home) spreads fixed costs as
+a run rate; the monthly P&L books them when billed. Home's "Your share" now comes from the P&L, so it matches Money.
+Label the Home net "fixed costs at run rate".
+
 For the backend agent. These came from a full-site critique of command.vxpventures.com
 (`.impeccable/critique/2026-11-22T09-09-40Z__command-vxpventures-com.md`). The front end was fixed separately; these
 are logic, data and wiring, which Vedaant assigned to you. Values are as seen live on 2026-11-22. Most important first.

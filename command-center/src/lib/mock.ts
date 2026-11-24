@@ -109,12 +109,12 @@ function plan(storeId: StoreId, date: string, rnd: () => number): { spend: numbe
 
 /** Every campaign lands on one product page. */
 export const CAMPAIGNS: Campaign[] = [
-  { id: 'kv1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Broad' },
-  { id: 'kv2', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Hair fall 25–40' },
-  { id: 'kv3', storeId: 'kaiven', sku: 'KV-DHS', name: 'DHS – Creative test' },
-  { id: 'sn1', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Broad' },
-  { id: 'sn2', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Glass skin 22–35' },
-  { id: 'ov1', storeId: 'oorvia', sku: 'OMS-1M', name: 'MI – Broad (paused 10 Nov)' },
+  { id: 'kv1', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Broad', status: 'ACTIVE' },
+  { id: 'kv2', storeId: 'kaiven', sku: 'KV-DHS', name: 'Scalp – Hair fall 25–40', status: 'ACTIVE' },
+  { id: 'kv3', storeId: 'kaiven', sku: 'KV-DHS', name: 'DHS – Creative test', status: 'ACTIVE' },
+  { id: 'sn1', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Broad', status: 'ACTIVE' },
+  { id: 'sn2', storeId: 'selnova', sku: 'SN-PDRN', name: 'PDRN – Glass skin 22–35', status: 'ACTIVE' },
+  { id: 'ov1', storeId: 'oorvia', sku: 'OMS-1M', name: 'MI – Broad (paused 10 Nov)', status: 'PAUSED' },
 ]
 /** Mock only: each campaign's share of its product's spend, and how its CPA compares with the product's. */
 const CAMPAIGN_GEN: Record<string, { spendShare: number; cpaFactor: number }> = {
@@ -321,12 +321,15 @@ export const CASH: CashPosition = {
   ],
 }
 
-export const GST: GstPosition = { month: '2026-11', outputTax: 16940, inputCredit: 5660, dueDate: '2026-12-20' }
+export const GST: GstPosition = { month: '2026-11', cash: 11280, dueDate: '2026-12-20', partial: true }
 
 /** Monthly fixed costs (Shopify plans, apps, Claude, etc.). Mock, near April's real ₹14,210. */
 export const FIXED_COSTS_MONTHLY = 14200
 
-export const SYNC: SyncStatus = { metaMinutesAgo: 4, metaNotConnected: [], shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4 }
+/** This month's VXP net from the P&L, and the 50% share. Mock. */
+export const OWNER_SHARE_MONTH = { month: '2026-11', net: 41800, share: 20900 }
+
+export const SYNC: SyncStatus = { metaMinutesAgo: 4, metaMinutesAgoByStore: { oorvia: 4, kaiven: 4, selnova: 4 }, metaYesterdayVerified: { oorvia: true, kaiven: true, selnova: true }, metaNotConnected: [], shopifyMinutesAgo: 1, vfulfillImportDaysAgo: 4, shipmentsThrough: '2026-11-15', vfulfillDataDaysAgo: 3, vfulfillMissingStores: [] }
 
 /**
  * The mock as one Data object. Built from the same array instances the named exports
@@ -339,5 +342,5 @@ export const MOCK: Data = {
   campaigns: CAMPAIGNS, campaignDays: CAMPAIGN_DAYS,
   campaignHours: CAMPAIGN_HOURS, campaignHoursYesterday: CAMPAIGN_HOURS_YESTERDAY,
   resolved: RESOLVED, recentOrders: RECENT_ORDERS,
-  cash: CASH, gst: GST, fixedCostsMonthly: FIXED_COSTS_MONTHLY, fixedCostsRunRate: FIXED_COSTS_MONTHLY, sync: SYNC,
+  cash: CASH, gst: GST, ownerShareMonth: OWNER_SHARE_MONTH, fixedCostsRunRate: FIXED_COSTS_MONTHLY, sync: SYNC,
 }

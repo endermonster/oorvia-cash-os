@@ -1,4 +1,5 @@
 import 'server-only'
+import { readShipmentCoverage, shipmentCutoffs } from './load'
 import { buildOrders, monthRangeIst, type ChargeRow, type OrderPayment, type OrderRow, type OrderView, type ShipmentRow } from './orders'
 import { selectAll } from './paged'
 import { supabase } from './supabase'
@@ -21,13 +22,16 @@ function chunks<T>(xs: T[]): T[][] {
 export async function loadOrdersMonth(month: string, storeIds: string[]): Promise<OrderView[]> {
   const sb = supabase()
   const { from, to } = monthRangeIst(month)
-  const orders = await selectAll<{
-    store_id: string; order_name: string; placed_at: string; payment: OrderPayment; gateways: string[] | null; total_paise: Num
-    primary_sku: string | null; city: string | null; state: string | null; cancelled_at: string | null
-  }>(() => sb.from('cc_orders')
-    .select('store_id, order_name, placed_at, payment, gateways, total_paise, primary_sku, city, state, cancelled_at')
-    .eq('is_test', false).in('store_id', storeIds).gte('placed_at', from).lt('placed_at', to)
-    .order('store_id').order('order_name'))
+  const [orders, coverage] = await Promise.all([
+    selectAll<{
+      store_id: string; order_name: string; placed_at: string; payment: OrderPayment; gateways: string[] | null; total_paise: Num
+      primary_sku: string | null; city: string | null; state: string | null; cancelled_at: string | null
+    }>(() => sb.from('cc_orders')
+      .select('store_id, order_name, placed_at, payment, gateways, total_paise, primary_sku, city, state, cancelled_at')
+      .eq('is_test', false).in('store_id', storeIds).gte('placed_at', from).lt('placed_at', to)
+      .order('store_id').order('order_name')),
+    readShipmentCoverage(sb, storeIds),
+  ])
 
   const rows: OrderRow[] = orders.map((o) => ({
     storeId: o.store_id, orderName: o.order_name, placedAt: o.placed_at, payment: o.payment, gateways: o.gateways ?? [],
@@ -55,5 +59,5 @@ export async function loadOrdersMonth(month: string, storeIds: string[]): Promis
       .map((c) => ({ storeId: c.store_id, orderName: c.order_name, head: c.head, nature: c.nature, totalPaise: Number(c.total_paise) })))
   }
 
-  return buildOrders(rows, shipments, charges)
+  return buildOrders(rows, shipments, charges, shipmentCutoffs(coverage))
 }

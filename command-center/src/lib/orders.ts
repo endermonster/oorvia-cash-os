@@ -43,6 +43,8 @@ export type OrderView = OrderRow & {
   /** Placed date, IST. */
   date: string
   status: OrderStatus
+  /** An order without a shipment row placed after its store's shipments data runs to, or the store has none. */
+  noShipmentData: boolean
   /** vFulfill's own words ("Returned", "Lost", "In Transit"). */
   statusRaw: string | null
   closedOn: string | null
@@ -58,8 +60,11 @@ export function orderStatus(cancelledAt: string | null, ship: ShipmentRow | unde
   return cancelledAt ? 'cancelled' : 'not_shipped'
 }
 
-/** Orders joined to their shipment and RTO charges, newest first. */
-export function buildOrders(orders: OrderRow[], shipments: ShipmentRow[], charges: ChargeRow[]): OrderView[] {
+/**
+ * Orders joined to their shipment and RTO charges, newest first. `cutoffs`: per store, the IST day its shipments data
+ * runs to (`shipmentCutoffs` in ./load); a store missing there has no shipments data.
+ */
+export function buildOrders(orders: OrderRow[], shipments: ShipmentRow[], charges: ChargeRow[], cutoffs: Partial<Record<string, string>> = {}): OrderView[] {
   const ships = new Map(shipments.map((s) => [key(s.storeId, s.orderName), s]))
   const rto = new Map<string, number>()
   for (const c of charges) {
@@ -71,8 +76,10 @@ export function buildOrders(orders: OrderRow[], shipments: ShipmentRow[], charge
     .map((o) => {
       const ship = ships.get(key(o.storeId, o.orderName))
       const status = orderStatus(o.cancelledAt, ship)
+      const date = istDate(o.placedAt)
       return {
-        ...o, date: istDate(o.placedAt), status, statusRaw: ship?.statusRaw ?? null, closedOn: ship?.closedOn ?? null,
+        ...o, date, status, statusRaw: ship?.statusRaw ?? null, closedOn: ship?.closedOn ?? null,
+        noShipmentData: status === 'not_shipped' && (cutoffs[o.storeId] === undefined || date > cutoffs[o.storeId]!),
         rtoChargesPaise: status === 'rto' ? (rto.get(key(o.storeId, o.orderName)) ?? 0) : 0,
       }
     })

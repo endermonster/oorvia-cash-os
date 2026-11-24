@@ -9,7 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { csvRecords } from '../csv'
 import { selectAll } from '../paged'
 import { withRun } from '../sync-run'
-import { mapShipments, shipmentsComplete, wouldReopen, type ShipmentRow, type ShipmentStatus } from './shipments'
+import { mapShipments, shipmentsComplete, storesMissingFromFile, SHIP_LAG_DAYS, wouldReopen, type ShipmentRow, type ShipmentStatus } from './shipments'
 import { balanceOf, exactOf, mapTransactions, transactionsComplete, type TxnRow } from './transactions'
 
 type Store = { id: string; order_prefix: string }
@@ -32,9 +32,10 @@ async function shipments(sb: SupabaseClient, csv: string, stores: Store[], dryRu
   const stored = new Map((await selectAll<{ store_id: string; order_name: string; status: ShipmentStatus }>(
     () => sb.from('cc_shipments').select('store_id, order_name, status').order('store_id').order('order_name'),
   )).map((r) => [key(r), r.status]))
-  const orders = new Set((await selectAll<{ store_id: string; order_name: string }>(
-    () => sb.from('cc_orders').select('store_id, order_name').order('store_id').order('order_name'),
-  )).map(key))
+  const orderRows = await selectAll<{ store_id: string; order_name: string; placed_at: string; cancelled_at: string | null; is_test: boolean }>(
+    () => sb.from('cc_orders').select('store_id, order_name, placed_at, cancelled_at, is_test').order('store_id').order('order_name'),
+  )
+  const orders = new Set(orderRows.map(key))
 
   const reopen = new Set(wouldReopen(rows, stored).map(key))
   const toWrite: ShipmentRow[] = rows.filter((r) => !reopen.has(key(r)))
@@ -54,6 +55,9 @@ async function shipments(sb: SupabaseClient, csv: string, stores: Store[], dryRu
 
   if (report.rows === 0) reported.push('the shipments file has no rows, only the header: export again with a wider date range in vFulfill')
   if (report.noStore.length) reported.push(`no store for order name: ${list(report.noStore)}`)
+  for (const m of storesMissingFromFile(rows, stores.map((st) => st.id), orderRows, new Date())) {
+    reported.push(`no ${m.storeId} shipments in this file, though it has ${m.orders} order(s) older than ${SHIP_LAG_DAYS} days in the file's range: tick every store in vFulfill's export (if you did, vFulfill has shipped none of them)`)
+  }
   for (const [s, n] of Object.entries(report.unknownStatus)) reported.push(`unknown Shipment Status ${JSON.stringify(s)} x${n} (skipped)`)
   if (report.duplicates.length) reported.push(`listed twice (last row kept): ${list(report.duplicates)}`)
   if (report.deliveredNoDate.length) reported.push(`Delivered with no Closed On (kept open): ${list(report.deliveredNoDate)}`)

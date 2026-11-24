@@ -33,8 +33,10 @@ export type Data = {
   recentOrders: RecentOrder[]
   /** Null until the cash sources are wired. */
   cash: CashPosition | null
+  /** Null unless loaded (Home only: src/lib/home-load.ts). */
   gst: GstPosition | null
-  fixedCostsMonthly: number | null
+  /** This month's VXP net profit and the owner's share, ₹, from the monthly P&L (as Money shows it). Null unless loaded (Home only); `share` null when stores' shares differ. */
+  ownerShareMonth: { month: string; net: number; share: number | null } | null
   /** ₹ per month, ex-GST: recurring fixed costs running today, every store and shared (pnl.monthlyRunRate). Drives VXP's breakeven only. Null when none are on record. */
   fixedCostsRunRate: number | null
   sync: SyncStatus
@@ -71,4 +73,18 @@ export async function getData(): Promise<Data> {
   }
   const { loadData } = await import('./load')
   return loadData()
+}
+
+export async function getHomeData(): Promise<Data> {
+  await connection()
+  await signedIn()
+  if (process.env.DATA_SOURCE !== 'supabase') {
+    const { MOCK } = await import('./mock')
+    return MOCK
+  }
+  const [{ loadData }, { loadHomeExtras }, { istNow }] = await Promise.all([import('./load'), import('./home-load'), import('./dates')])
+  // Share one request time so the reads agree even at IST midnight.
+  const now = new Date()
+  const [data, extras] = await Promise.all([loadData(now), loadHomeExtras(istNow(now).today)])
+  return { ...data, ...extras }
 }
