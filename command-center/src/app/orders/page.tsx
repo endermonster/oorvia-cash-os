@@ -1,5 +1,6 @@
 import { Suspense } from 'react'
 import { MonthPill, OrderStatsRow, OrdersPanel, OrdersVerdict, RatesTable, type MonthNav, type OrderFilters } from '@/components/OrdersParts'
+import { vfState } from '@/components/bits'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
 import { getChrome } from '@/lib/data'
@@ -19,6 +20,8 @@ export default function Page({ searchParams }: PageProps<'/orders'>) {
 type Raw = Record<string, string | string[] | undefined>
 const one = (p: Raw, k: string) => (typeof p[k] === 'string' ? (p[k] as string) : '')
 const STATUSES = Object.keys(STATUS_LABEL) as OrderStatus[]
+const FILTERS: NonNullable<OrderFilter['status']>[] = [...STATUSES, 'no_data']
+const FILTER_LABEL: Record<NonNullable<OrderFilter['status']>, string> = { ...STATUS_LABEL, no_data: 'No shipment data' }
 const PAYMENTS: { id: OrderPayment; label: string }[] = [{ id: 'cod', label: 'COD' }, { id: 'prepaid', label: 'Prepaid' }, { id: 'unknown', label: 'Unknown' }]
 const monthLabel = (m: string) => new Date(`${m}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 
@@ -30,7 +33,7 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
   const asked = one(params, 'month')
   const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(asked) && asked <= current ? asked : current
   const filter: OrderFilter = {
-    status: STATUSES.includes(one(params, 'status') as OrderStatus) ? (one(params, 'status') as OrderStatus) : null,
+    status: FILTERS.find((s) => s === one(params, 'status')) ?? null,
     payment: PAYMENTS.some((p) => p.id === one(params, 'pay')) ? (one(params, 'pay') as OrderPayment) : null,
     q: one(params, 'q').slice(0, 40),
   }
@@ -58,7 +61,7 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
   }
   const shown = rows ? filterOrders(rows, filter) : []
   const filtered = filter.status !== null || filter.payment !== null || filter.q !== ''
-  const ageDays = d.sync.vfulfillImportDaysAgo
+  const vf = vfState(d.sync, storeName, 2)
   // Switching store keeps the month and filters (the top bar's links to /orders carry them).
   const keep: Record<string, string> = {}
   if (month !== current) keep.month = month
@@ -79,7 +82,8 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
   if (filter.status) hidden.status = filter.status
   if (filter.payment) hidden.pay = filter.payment
   const filters: OrderFilters = {
-    status: [{ href: link({ status: null }), label: 'All', on: filter.status === null }, ...STATUSES.map((s) => ({ href: link({ status: s }), label: STATUS_LABEL[s], on: filter.status === s }))],
+    // "No shipment data" only when some order this month reads it (or it is the filter in use).
+    status: [{ href: link({ status: null }), label: 'All', on: filter.status === null }, ...FILTERS.filter((s) => s !== 'no_data' || filter.status === s || rows?.some((o) => o.noShipmentData)).map((s) => ({ href: link({ status: s }), label: FILTER_LABEL[s], on: filter.status === s }))],
     payment: [{ href: link({ pay: null }), label: 'All', on: filter.payment === null }, ...PAYMENTS.map((p) => ({ href: link({ pay: p.id }), label: p.label, on: filter.payment === p.id }))],
     hidden,
     q: filter.q,
@@ -103,10 +107,10 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
         ) : (
           <>
             <OrdersVerdict
-              s={orderStats(rows)} nav={nav} ageDays={ageDays} monthName={monthLabel(month)} short={monthShort(month)}
+              s={orderStats(rows)} nav={nav} vf={vf} monthName={monthLabel(month)} short={monthShort(month)}
               context={`Orders · ${monthLabel(month)} · ${view.store === 'all' ? 'All VXP' : storeName(view.store)}`}
             />
-            <OrderStatsRow s={orderStats(rows)} />
+            <OrderStatsRow s={orderStats(rows)} noData={rows.filter((o) => o.noShipmentData).length} />
             <OrdersPanel rows={shown} total={rows.length} filters={filters} storeName={storeName} />
             <div className="space-y-3">
               {view.store === 'all' ? (
@@ -117,9 +121,8 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
                 note="Same measure, by ship-to state. Small counts swing: read the n under each rate." />
             </div>
             <p className="max-w-[80ch] px-1 text-xs text-ink-3">
-              Orders placed in {monthLabel(month)}. Delivery status comes from the vFulfill shipments export
-              {ageDays === null ? ', which has never been imported' : `, last imported ${ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}`}:
-              an order shipped since then shows as not shipped.
+              Orders placed in {monthLabel(month)}. Delivery status comes from the vFulfill shipments export; the data {vf.phrase}.
+              An order vFulfill should have shipped by now but the data doesn&apos;t show reads &ldquo;No shipment data&rdquo;.
             </p>
           </>
         )}

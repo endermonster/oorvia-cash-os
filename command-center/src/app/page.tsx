@@ -3,7 +3,7 @@ import { HomeView } from '@/components/Home'
 import { StoreView } from '@/components/StoreView'
 import { TopBar } from '@/components/TopBar'
 import { Skeleton } from '@/components/Skeleton'
-import { getData } from '@/lib/data'
+import { getData, getHomeData } from '@/lib/data'
 import { createMetrics } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
 
@@ -16,9 +16,11 @@ export default function Page({ searchParams }: PageProps<'/'>) {
 }
 
 async function Dashboard({ searchParams }: { searchParams: PageProps<'/'>['searchParams'] }) {
-  const d = await getData()
+  const params = await searchParams
+  // GST and the monthly P&L feed only the All VXP footer: a store view skips those reads.
+  const d = typeof params.store === 'string' && params.store !== 'all' ? await getData() : await getHomeData()
   const m = createMetrics(d)
-  const view = readView(await searchParams, d.stores)
+  const view = readView(params, d.stores)
   const period = m.resolvePeriod(view.period)
   return (
     <>

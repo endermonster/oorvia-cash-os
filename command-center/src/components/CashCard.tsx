@@ -2,6 +2,7 @@ import type { Metrics } from '@/lib/metrics'
 import { inr } from '@/lib/metrics'
 import { storeCash } from '@/lib/store-cash'
 import type { StoreId } from '@/lib/types'
+import type { VfState } from './bits'
 
 type Cash = NonNullable<ReturnType<Metrics['cash']>>
 type Row = { label: string; value: React.ReactNode; note: string }
@@ -20,10 +21,14 @@ function settlementNote(s: NonNullable<Cash['settlements']>): string {
   return `Estimate: ${orders} prepaid ${orders === 1 ? 'order' : 'orders'} from Shopify not settled yet (T+2 working days), after gateway fee + GST. ${parts}`
 }
 
-const codRow = (amount: number, orders: number): Row => ({
+// Stale shipments data undercounts deliveries, so the caveat goes with any balance, and "every … remitted" is said only when fresh.
+const codRow = (amount: number, orders: number, vf?: VfState): Row => ({
   label: 'COD due from vFulfill',
   value: inr(amount),
-  note: orders > 0 ? `${orders} delivered COD ${orders === 1 ? 'order' : 'orders'} not remitted yet` : 'Every delivered COD order is remitted',
+  note: [
+    orders > 0 ? `${orders} delivered COD ${orders === 1 ? 'order' : 'orders'} not remitted yet` : vf?.stale ? null : 'Every delivered COD order is remitted',
+    vf?.stale ? `the shipments data ${vf.phrase}: deliveries since are not counted` : null,
+  ].filter(Boolean).join(' · ').replace(/^./, (c) => c.toUpperCase()),
 })
 
 const settlementRow = (s: Cash['settlements'], total: number): Row => ({
@@ -54,7 +59,7 @@ const HERO = 'mt-3 px-3 text-[2.1rem] font-extrabold leading-none tracking-[-0.0
  * A part not connected yet says so instead of counting as ₹0. With `store`, only that store's own money: its COD due
  * and settlements. Bank and the vFulfill wallet serve every store, so they stay in All VXP.
  */
-export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; name: string } }) {
+export function CashCard({ c, store, vf }: { c: Cash | null; store?: { id: StoreId; name: string }; vf?: VfState }) {
   if (!c) {
     return (
       <section aria-labelledby="cash-h" className={PANEL}>
@@ -75,7 +80,7 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
           Bank{s.shared.bank ? ` (${inr(s.shared.bank.amount)})` : ''} and the vFulfill wallet ({rupees(s.shared.vfulfillWallet)}) serve all
           stores, so they count in All VXP only.
         </p>
-        <Rows rows={[codRow(s.codDue, s.codDueOrders), settlementRow(s.settlements, s.settlementsTotal)]} />
+        <Rows rows={[codRow(s.codDue, s.codDueOrders, vf), settlementRow(s.settlements, s.settlementsTotal)]} />
         <div className="pb-2" />
       </section>
     )
@@ -91,7 +96,7 @@ export function CashCard({ c, store }: { c: Cash | null; store?: { id: StoreId; 
       value: rupees(c.vfulfillWallet),
       note: c.vfulfillAsOf ? `As of the last transaction imported, ${day(c.vfulfillAsOf)}` : 'No vFulfill transactions imported',
     },
-    codRow(c.codDue, c.codDueOrders),
+    codRow(c.codDue, c.codDueOrders, vf),
     settlementRow(c.settlements, c.settlementsTotal),
   ]
   return (

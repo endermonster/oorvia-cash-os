@@ -1,5 +1,6 @@
 import { ArrowDown } from 'lucide-react'
 import { Suspense } from 'react'
+import { vfState } from '@/components/bits'
 import { CashCard } from '@/components/CashCard'
 import { CapitalCard, ForecastCard, GstCard } from '@/components/MoneyParts'
 import { PnlTable } from '@/components/PnlTable'
@@ -57,6 +58,7 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
   }
   const store = view.store === 'all' ? null : view.store
   const storeName = store ? (d.stores.find((s) => s.id === store)?.name ?? store) : 'All VXP'
+  const vf = vfState(d.sync, (id) => d.stores.find((s) => s.id === id)?.name ?? id, 3)
   const storeFirst = store ? d.stores.find((s) => s.id === store)?.liveSince.slice(0, 7) || undefined : undefined
   const hasCapital = d.source === 'supabase' && capital !== null
   const forecast = pnl && baselines ? computeForecast(pnl, baselines, store, currentMonth, storeFirst) : null
@@ -71,10 +73,10 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
         ) : null}
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:grid-rows-[auto_1fr]">
           <div className="min-w-0 lg:col-start-1 lg:row-start-1">
-            <CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} />
+            <CashCard c={m.cash()} store={store ? { id: store, name: storeName } : undefined} vf={vf} />
           </div>
           <div className={`min-w-0 lg:col-start-2 lg:row-start-1 ${hasCapital ? 'lg:row-span-2' : ''}`}>
-            <GstCard g={gst} today={today} vfDaysAgo={d.sync.vfulfillImportDaysAgo} />
+            <GstCard g={gst} today={today} vf={vf} />
           </div>
           {hasCapital ? <div className="min-w-0 lg:col-start-1 lg:row-start-2"><CapitalCard c={capital} /></div> : null}
           <div className="min-w-0 lg:col-span-2">

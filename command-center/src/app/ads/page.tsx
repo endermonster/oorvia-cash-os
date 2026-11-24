@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { AdsStatsRow, AdsVerdict, CampaignsTable, DailyTable, StoreAdsTable } from '@/components/AdsParts'
+import { rateSourceNote } from '@/components/bits'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
 import { campaignStats, dailyAds, monthDays, sortCampaigns, SORTS, spendWeightedBreakeven, storeAds, type SortKey, type StoreAds } from '@/lib/ads'
@@ -97,6 +98,8 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
   // Stores losing money this period, from the same profit estimate Home uses; a past month has no such estimate.
   const losing: StoreId[] = pastMonth ? [] : m.portfolio(period, storeIds).stores.filter((s) => s.contribution < 0).map((s) => s.store.id)
   const short = view.period === 'month' ? shortMonth(shown) : period.short
+  // A past month's breakevens rest on that month's products, which today's rate sources don't describe.
+  const rates = pastMonth ? null : rateSourceNote(m.rateSources(storeIds, period))
   const months = (
     <nav aria-label="Month" className="glass-pill ml-auto inline-flex p-[3px] text-sm">
       <Link href={link({ period: 'month', month: prevMonth })} aria-label={`Previous month, ${monthLabel(prevMonth)}`} className={`${monthSegment} hover:text-ink`}>‹ <MonthName month={prevMonth} /></Link>
@@ -127,7 +130,8 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
             <footer aria-label="How these are counted" className="max-w-[80ch] px-1 text-xs text-ink-3">
               Spend from Meta, orders from Shopify. A campaign&apos;s orders and ROAS count only orders carrying its campaign ID,
               so they read low by the untracked share; the store ROAS counts every order. Breakeven uses today&apos;s costs and
-              the last 30 days&apos; delivery rates, on Meta&apos;s scale (incl. GST){pastMonth ? <>; a store&apos;s is weighted over {monthLabel(pastMonth)}&apos;s products by their ad spend</> : null}.
+              delivery rates, on Meta&apos;s scale (incl. GST){pastMonth ? <>; a store&apos;s is weighted over {monthLabel(pastMonth)}&apos;s products by their ad spend</> : null}.
+              {rates && <> {rates}.</>}
             </footer>
           </>
         )}

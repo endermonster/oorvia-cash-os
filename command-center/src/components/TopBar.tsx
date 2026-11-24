@@ -3,7 +3,7 @@ import { AlertTriangle, Database, House, Infinity as MetaMark, Megaphone, Packag
 import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
-import { StoreDot } from './bits'
+import { StoreDot, vfState } from './bits'
 import { SyncButton } from './SyncButton'
 
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
@@ -26,9 +26,9 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
   const mins = (n: number) => (n < 60 ? `${n} min ago` : n < 1440 ? `${Math.floor(n / 60)} h ago` : `${days(Math.floor(n / 1440))} ago`)
   const shopify = s.shopifyMinutesAgo === null ? 'never synced' : s.shopifyMinutesAgo <= 15 ? 'live' : mins(s.shopifyMinutesAgo)
   const meta = s.metaMinutesAgo === null ? (unconnected.length ? 'not connected' : 'never synced') : mins(s.metaMinutesAgo)
-  const vfDays = s.vfulfillImportDaysAgo
-  const vfStale = vfDays === null || vfDays > VF_STALE_DAYS
-  const vf = vfDays === null ? 'never imported' : vfDays === 0 ? 'today' : `${days(vfDays)} old`
+  const vfs = vfState(s, (id) => d.stores.find((x) => x.id === id)?.name ?? id, VF_STALE_DAYS)
+  const vfStale = vfs.stale
+  const vf = vfs.short
 
   return (
     <header className={`${pageFrame} pt-1.5`}>
@@ -92,7 +92,7 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
             <MetaMark className="size-3.5 text-revenue" aria-hidden />
             <span className="font-medium text-ink">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
           </span>
-          <span className={`${freshnessChip} ${vfStale ? 'gap-x-1.5 text-warn max-sm:order-first' : 'gap-x-2'}`} title="vFulfill arrives by CSV import">
+          <span className={`${freshnessChip} ${vfStale ? 'gap-x-1.5 text-warn max-sm:order-first' : 'gap-x-2'}`} title={`vFulfill arrives by CSV import: the shipments data ${vfs.phrase}`}>
             {vfStale ? <AlertTriangle className="size-3.5" aria-hidden /> : <span aria-hidden className="size-2 rounded-full bg-good" />}
             <span className={`font-medium ${vfStale ? '' : 'text-ink'}`}>vFulfill</span><span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
             {vfStale && <span className="sr-only">(stale)</span>}

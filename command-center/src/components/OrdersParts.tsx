@@ -4,7 +4,7 @@ import { inr, pct } from '@/lib/metrics'
 import { rateOf, STATUS_LABEL, type OrderStats, type OrderView, type Outcome, type RateRow } from '@/lib/orders'
 import { gatewayOf } from '@/lib/settlements'
 import type { StoreId } from '@/lib/types'
-import { StoreDot } from './bits'
+import { StoreDot, type VfState } from './bits'
 
 const rs = (paise: number) => inr(paise / 100)
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
@@ -37,10 +37,9 @@ export function MonthPill({ nav }: { nav: MonthNav }) {
 }
 
 /** The verdict first: are orders coming back, and is the delivery data fresh enough to trust. */
-export function OrdersVerdict({ s, context, monthName, short, nav, ageDays }: {
-  s: OrderStats; context: string; monthName: string; short: string; nav: MonthNav; ageDays: number | null
+export function OrdersVerdict({ s, context, monthName, short, nav, vf }: {
+  s: OrderStats; context: string; monthName: string; short: string; nav: MonthNav; vf: VfState
 }) {
-  const stale = ageDays === null || ageDays > 2
   const verdict = s.rtoRate === null
     ? `Nothing resolved yet for ${monthName}.`
     : s.rto === 0
@@ -54,9 +53,9 @@ export function OrdersVerdict({ s, context, monthName, short, nav, ageDays }: {
       </div>
       <div className="min-w-0 lg:self-center">
         <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict}</h1>
-        {stale
-          ? <p className="mt-1 flex max-w-[75ch] items-start gap-1.5 text-[0.8125rem] text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />vFulfill shipments last imported {ageDays === null ? 'never' : `${ageDays} days ago`}: orders shipped since show as not shipped.</p>
-          : <p className="mt-1 text-xs text-ink-3">vFulfill imported {ageDays === 0 ? 'today' : `${ageDays} day${ageDays === 1 ? '' : 's'} ago`}</p>}
+        {vf.stale
+          ? <p className="mt-1 flex max-w-[75ch] items-start gap-1.5 text-[0.8125rem] text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />The vFulfill shipments data {vf.phrase}: orders shipped since may read No shipment data.</p>
+          : <p className="mt-1 text-xs text-ink-3">The vFulfill shipments data {vf.phrase}</p>}
       </div>
       <div className="border-line lg:border-l lg:pl-8">
         <p className="label">Delivered · {short} · vFulfill</p>
@@ -85,11 +84,12 @@ function Stat({ label, value, note, className = '' }: { label: string; value: Re
 }
 
 /** Orders, in transit, RTO cost. RTO cost is a cost, not a signed result: no red. */
-export function OrderStatsRow({ s }: { s: OrderStats }) {
+/** `noData`: of the not-shipped orders, those the shipments data should cover but doesn't (rows read "No shipment data"). */
+export function OrderStatsRow({ s, noData = 0 }: { s: OrderStats; noData?: number }) {
   return (
     <section aria-label="Month at a glance" className="glass grid grid-cols-2 gap-x-2 p-2 md:grid-cols-3 md:divide-x md:divide-line">
       <Stat label="Orders" value={s.orders} note={s.cancelled > 0 ? `+ ${s.cancelled} cancelled before shipping` : 'None cancelled before shipping'} />
-      <Stat label="In transit" value={s.inTransit} note={`${s.notShipped} not shipped`} />
+      <Stat label="In transit" value={s.inTransit} note={[s.notShipped > noData ? `${s.notShipped - noData} not shipped` : null, noData > 0 ? `${noData} no shipment data` : null].filter(Boolean).join(' · ') || '0 not shipped'} />
       <Stat
         label="RTO cost" value={<span className="text-ink">{rs(s.rtoChargesPaise)}</span>} className="col-span-2 md:col-span-1"
         note={s.rto > 0 ? `vFulfill charges, GST incl. Plus ${rs(s.rtoValuePaise)} of orders never paid` : 'No RTOs this month'}
@@ -173,7 +173,10 @@ export function OrdersPanel({ rows, total, filters, storeName }: { rows: OrderVi
 
 function OrderRow({ o, store }: { o: OrderView; store: string }) {
   const place = [o.city, o.state].filter(Boolean).join(', ')
-  const raw = o.statusRaw && o.statusRaw.toLowerCase() !== STATUS_LABEL[o.status].toLowerCase() ? o.statusRaw : null
+  // Not shipped, or only missing from the shipments data: the backend tells them apart (noShipmentData).
+  const label = o.noShipmentData ? 'No shipment data' : STATUS_LABEL[o.status]
+  const toneCls = o.noShipmentData ? 'text-warn' : STATUS_TONE[o.status]
+  const raw = o.statusRaw && o.statusRaw.toLowerCase() !== label.toLowerCase() ? o.statusRaw : null
   const gateway = o.payment === 'prepaid' && o.gateways.length > 0 ? (gatewayOf(o.gateways) ?? o.gateways.join(', ')) : null
   return (
     <div role="row" className={`${ROW} px-3 py-2.5 text-sm`}>
@@ -188,7 +191,7 @@ function OrderRow({ o, store }: { o: OrderView; store: string }) {
       </span>
       <span role="cell" className="text-right font-semibold text-ink [grid-area:value]">{rs(o.totalPaise)}</span>
       <span role="cell" className="hidden min-w-0 [grid-area:status] @min-[50rem]:block">
-        <span className={`font-semibold ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span>
+        <span className={`font-semibold ${toneCls}`}>{label}</span>
         {raw ? <span className="text-ink-3"> ({raw})</span> : null}
         {o.closedOn && o.status !== 'in_transit' ? <span className="block text-xs text-ink-3">{day(o.closedOn)}{o.status === 'rto' ? ` · ${rs(o.rtoChargesPaise)} charged` : ''}</span>
           : o.status === 'rto' ? <span className="block text-xs text-ink-3">{rs(o.rtoChargesPaise)} charged</span> : null}
@@ -200,7 +203,7 @@ function OrderRow({ o, store }: { o: OrderView; store: string }) {
         <details className="group">
           <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 text-xs text-ink-3 [&::-webkit-details-marker]:hidden">
             <span className="min-w-0 flex-1 truncate">
-              <span className={`font-semibold ${STATUS_TONE[o.status]}`}>{STATUS_LABEL[o.status]}</span> · {PAY_WORD[o.payment]} · {day(o.date)}{o.city ? ` · ${o.city}` : ''}
+              <span className={`font-semibold ${toneCls}`}>{label}</span> · {PAY_WORD[o.payment]} · {day(o.date)}{o.city ? ` · ${o.city}` : ''}
             </span>
             <span aria-hidden className="flex size-4 shrink-0 items-center justify-center"><ChevronRight className="size-4 transition-transform group-open:[transform:rotate(90deg)]" /></span>
           </summary>
@@ -209,7 +212,7 @@ function OrderRow({ o, store }: { o: OrderView; store: string }) {
             <Pair k="Payment" v={gateway ? `${PAY_WORD[o.payment]} · ${gateway}` : PAY_WORD[o.payment]} />
             <Pair k="Product" v={o.sku ?? 'None'} />
             <Pair k="Ship to" v={place || 'Not known'} />
-            <Pair k="Status" v={raw ? `${STATUS_LABEL[o.status]} (${raw})` : STATUS_LABEL[o.status]} />
+            <Pair k="Status" v={raw ? `${label} (${raw})` : label} />
             {o.closedOn && o.status !== 'in_transit' ? <Pair k={o.status === 'rto' ? 'Closed' : 'Delivered'} v={day(o.closedOn)} /> : null}
             {o.status === 'rto' ? <Pair k="RTO charged" v={rs(o.rtoChargesPaise)} /> : null}
           </dl>

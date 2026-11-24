@@ -197,15 +197,15 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
             {all.length > 1 && <h3 className="mb-3 font-semibold text-ink">{p.name}</h3>}
             <dl className="grid gap-4 sm:grid-cols-3">
               <div>
-                <dt className="label">COD share · 30D</dt>
+                <dt className="label">COD share{windowTag(share, true)}</dt>
                 <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(share.value)}</dd>
-                <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders')}</dd>
+                <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders', true)}</dd>
               </div>
               {(['cod', 'prepaid'] as const).map((pay) => {
                 const rate = m.deliveryRate(p.storeId, p.sku, pay)
                 return (
                   <div key={pay}>
-                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'} · 30D</dt>
+                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'}{windowTag(rate)}</dt>
                     <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(rate.value, 1)}</dd>
                     <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, store.name, 'closed orders')}</dd>
                   </div>
@@ -273,12 +273,19 @@ function DeliveryCell({ c }: { c: DeliveryRow['cells']['lifetime'] }) {
   )
 }
 
+/** The window a rate covers, for its label: the fallback can reach all-time history, so "30D" is not a given. */
+function windowTag(r: Rate, snapshot = false) {
+  return r.window === null ? '' : r.window === 'lifetime' ? (snapshot ? ' · 70D' : ' · All-time') : ` · ${r.window.toUpperCase()}`
+}
+
 /** Where a rate came from, in plain words. */
-function basisNote(r: Rate, storeName: string, unit: string) {
+/** `snapshot`: COD share, whose longest window is the 70 days of orders loaded, not all history. */
+function basisNote(r: Rate, storeName: string, unit: string, snapshot = false) {
+  const all = r.window === 'lifetime' ? (snapshot ? ' 70-day' : ' all-time') : ''
   switch (r.basis) {
-    case 'sku': return `${r.n} ${unit}`
-    case 'store': return `${storeName} average · ${r.n} ${unit}`
-    case 'vxp': return `VXP average · ${storeName} has under ${MIN_SAMPLE} ${unit} yet`
+    case 'sku': return `${r.n} ${unit}${all}`
+    case 'store': return `${storeName}${all} average · ${r.n} ${unit}`
+    case 'vxp': return `VXP${all} average · ${storeName} has under ${MIN_SAMPLE} ${unit} yet`
     default: return 'Pricing sheet default · no history yet'
   }
 }

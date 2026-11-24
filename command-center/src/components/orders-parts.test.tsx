@@ -43,7 +43,7 @@ const stats: OrderStats = { orders: 100, cancelled: 0, delivered: 10, rto: 0, in
 
 describe('Orders verdict', () => {
   it('says the delivery percentage is a share of resolved orders', () => {
-    const v = renderToStaticMarkup(<OrdersVerdict s={{ ...stats, rto: 2, rtoRate: 0.2, rtoShareOfAll: 0.02 }} context="c" monthName="October" short="Oct" nav={nav} ageDays={0} />)
+    const v = renderToStaticMarkup(<OrdersVerdict s={{ ...stats, rto: 2, rtoRate: 0.2, rtoShareOfAll: 0.02 }} context="c" monthName="October" short="Oct" nav={nav} vf={{ stale: false, short: 'today', phrase: 'was last imported today' }} />)
     expect(v).toContain('80% of resolved delivered')
     expect(v).toContain('of all orders')
   })

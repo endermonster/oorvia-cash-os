@@ -3,6 +3,7 @@ import type { capitalSummary } from '@/lib/capital'
 import type { Forecast } from '@/lib/forecast'
 import type { GstMonth, GstResult } from '@/lib/gst'
 import { inr } from '@/lib/metrics'
+import type { VfState } from './bits'
 import { ForecastChart } from './ForecastChart'
 
 /** To the paisa: the portal asks for exact figures. */
@@ -77,7 +78,7 @@ function MonthBlock({ m, today }: { m: GstMonth; today: string }) {
  * GST for the one GSTIN: every month not filed yet (after the latest credit balance entered on Settings) and the
  * month in progress. Same figures whichever store is picked: GST is never split by store.
  */
-export function GstCard({ g, today, vfDaysAgo }: { g: GstResult | null; today: string; vfDaysAgo: number | null }) {
+export function GstCard({ g, today, vf }: { g: GstResult | null; today: string; vf: VfState }) {
   if (!g) {
     return (
       <section aria-labelledby="gst-h" className="glass rise px-5 py-4">
@@ -111,8 +112,8 @@ export function GstCard({ g, today, vfDaysAgo }: { g: GstResult | null; today: s
           {unfiled.length > 0 ? (
             <p className="flex items-start gap-2 text-warn"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>{unfiled.length} past {unfiled.length === 1 ? 'month' : 'months'} not marked filed</span></p>
           ) : null}
-          {vfDaysAgo === null || vfDaysAgo > 3 ? (
-            <p className="flex items-start gap-2 text-warn"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>Output tax counts delivered orders from the vFulfill shipments export, last imported {vfDaysAgo === null ? 'never' : `${vfDaysAgo} days ago`}: orders delivered since are missing.</span></p>
+          {vf.stale ? (
+            <p className="flex items-start gap-2 text-warn"><span className={ICON}><AlertTriangle className="size-4" aria-hidden /></span><span>Output tax counts delivered orders from the vFulfill shipments export, which {vf.phrase}: orders delivered since are missing.</span></p>
           ) : null}
         </div>
       </div>

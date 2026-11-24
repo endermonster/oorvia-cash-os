@@ -16,7 +16,7 @@ const month: GstMonth = {
 /** The GSTR-3B chip(s): the card renders it in the header and in the month block. */
 function chips(today: string, gstr3bDue: string, gstr1Due = '2030-01-11') {
   const g: GstResult = { seed: null, months: [{ ...month, gstr1Due, gstr3bDue }] }
-  const html = renderToStaticMarkup(<GstCard g={g} today={today} vfDaysAgo={0} />).replace(/<!-- -->/g, '')
+  const html = renderToStaticMarkup(<GstCard g={g} today={today} vf={{ stale: false, short: 'today', phrase: 'was last imported today' }} />).replace(/<!-- -->/g, '')
   return (html.match(/<span class="inline-flex[^"]*">.*?<\/span><\/span>/g) ?? []).filter((c) => c.includes('3B'))
 }
 

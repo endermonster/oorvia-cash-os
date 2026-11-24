@@ -1,10 +1,10 @@
 import Link from 'next/link'
 import { AlertTriangle, ChevronRight, CircleCheck, FileText, PieChart, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
-import { fmtX, inr, MIN_SAMPLE, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
+import { fmtX, inr, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import type { StoreId } from '@/lib/types'
-import { Delta, Signed, StoreDot, tone } from './bits'
+import { Delta, rateSourceNote, Signed, StoreDot, tone } from './bits'
 import { LiveMap } from './LiveMap'
 import { RevenueChart } from './RevenueChart'
 import { RoasTrack } from './RoasTrack'
@@ -14,32 +14,37 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   const pf = m.portfolio(period)
   const ids = m.stores.map((s) => s.id)
   const resolved = m.resolvedCounts(ids, period)
-  const borrowed = m.borrowedRates(undefined, period).map((s) => s.name)
+  const sources = m.rateSources(undefined, period)
+  // Said only when some store's estimate rests on something weaker than its own last 30 days.
+  const rateNote = sources.some((s) => s.source !== 'own-30d') ? rateSourceNote(sources) : null
+  const calls = m.calls(period)
+  // Uncapped: calls() shows three, and a stop must lead the verdict even when it is not among them.
+  const stopped = m.adsStopped()
   const missing = missingCosts(pf.stores)
   const orders = m.recentOrders(ids, 60)
   const series = m.series(ids, period)
   const end = series.at(-1)
-  const fixedIn = pf.total.breakeven?.fixedOnRecord ? pf.total.breakeven.fixedCosts : 0
+  const { net, prevNet, fixedCosts } = pf.total
 
   return (
     <main className={`${pageFrame} space-y-3 pb-6 pt-3`}>
       {/* The verdict leads; the numbers behind it sit to its right. */}
       <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
         <div className="min-w-0 lg:self-center">
-          <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(pf.stores, m.metaNotConnected)}</h1>
+          <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(pf.stores, m.metaNotConnected, stopped)}</h1>
           {missing && <p className="mt-1 max-w-[75ch] text-[0.8125rem] text-warn">{missing}</p>}
         </div>
         <div className="border-line lg:border-l lg:pl-8">
           <p className="label">Projected profit · {period.short} · All stores</p>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className={`whitespace-nowrap text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(pf.total.contribution)}`}>{pf.total.contribution > 0 ? '+' : ''}<Signed value={pf.total.contribution} /></p>
-            {pf.total.prevContribution > 0
-              ? <Delta now={pf.total.contribution} prev={pf.total.prevContribution} suffix={`vs ${period.prevLabel}`} />
-              : <span className="text-sm text-ink-3">vs {inr(pf.total.prevContribution)} {period.prevLabel}</span>}
+            <p className={`whitespace-nowrap text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(net)}`}>{net > 0 ? '+' : ''}<Signed value={net} /></p>
+            {prevNet > 0
+              ? <Delta now={net} prev={prevNet} suffix={`vs ${period.prevLabel}`} />
+              : <span className="text-sm text-ink-3">vs {inr(prevNet)} {period.prevLabel}</span>}
           </div>
           {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
-          {fixedIn > 0 && <p className="mt-1 w-0 min-w-full text-xs text-ink-2">Before {inr(fixedIn)} fixed costs</p>}
-          {borrowed.length > 0 && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {borrowed.join(', ')} on VXP delivery rates until {MIN_SAMPLE} resolve</p>}
+          {fixedCosts > 0 && <p className="mt-1 w-0 min-w-full text-xs text-ink-2">After {inr(fixedCosts)} fixed costs at run rate</p>}
+          {rateNote && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {rateNote}</p>}
         </div>
         <div className="border-line lg:border-l lg:pl-8">
           <p className="label">Resolved · {period.short} · vFulfill</p>
@@ -53,7 +58,7 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3">
           <Stores stores={pf.stores} total={pf.total} view={view} period={period} notConnected={m.metaNotConnected} />
-          <Calls calls={m.calls(period)} view={view} />
+          <Calls calls={calls} view={view} />
           <section aria-labelledby="pace-h" className="glass flex flex-col px-5 pb-3 pt-4 lg:flex-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
               <h2 id="pace-h" className="text-lg font-bold">Cumulative revenue vs spend <span className="block text-sm font-medium text-ink-3 sm:ml-2 sm:inline">{period.short} · Shopify + Meta</span></h2>
@@ -99,8 +104,8 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
   const head = 'label whitespace-nowrap leading-tight'
   const moneyHead = `${head} text-right`
   const src = (s: string) => <span className="block text-[0.6875rem] font-normal normal-case tracking-normal text-ink-3">{period.short} · {s}</span>
-  // The total's profit is the stores' sum; fixed costs only enter its breakeven, so the figure says so.
-  const fixed = total.breakeven?.fixedOnRecord ? total.breakeven.fixedCosts : 0
+  // The total is the stores' sum less fixed costs at run rate, so it says so: the rows above add up to more.
+  const fixed = total.fixedCosts
   return (
     <section aria-labelledby="stores-h" className="glass rise p-2 [--delay:80ms]">
       <h2 id="stores-h" className="sr-only">Stores</h2>
@@ -142,8 +147,8 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
             <Cell area="rev" label="Booked revenue" value={inr(total.revenue)} />
             <span role="cell" className="text-right tabular-nums [grid-area:profit]">
               <span className="text-xs text-ink-3 @min-[50rem]:hidden">Profit (est.) </span>
-              <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(total.contribution)}`}>{total.contribution > 0 ? '+' : ''}<Signed value={total.contribution} /></span>
-              {fixed > 0 && <span className="text-xs text-ink-3">before {inr(fixed)} fixed</span>}
+              <span className={`block whitespace-nowrap text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold ${tone(total.net)}`}>{total.net > 0 ? '+' : ''}<Signed value={total.net} /></span>
+              {fixed > 0 && <span className="text-xs text-ink-3">after {inr(fixed)} fixed</span>}
             </span>
             <span role="cell" aria-hidden className="[grid-area:call]" />
           </div>
@@ -280,7 +285,7 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
         <span className="min-w-0 flex-1">
           {g ? <>
             <span className="block"><span className="font-semibold">GST {month(g.month)}</span> <span className="whitespace-nowrap font-bold tabular-nums">{inr(g.owed)}</span></span>
-            <span className="block text-sm text-ink-2">due {day(g.dueDate)}</span>
+            <span className="block text-sm text-ink-2">{g.partial ? 'so far · ' : ''}due {day(g.dueDate)}</span>
           </> : <><span className="block font-semibold">GST</span>{moneyLink('GST')}</>}
         </span>
         {g && meta(`Period: ${month(g.month)}`, 'Source: GST ledger')}
@@ -290,7 +295,7 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
         <span className="min-w-0 flex-1">
           {share ? <><span className="font-semibold">Your share (50%) this month</span> <span className={`whitespace-nowrap font-bold tabular-nums ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <><span className="block font-semibold">Your share</span>{moneyLink('Your share')}</>}
         </span>
-        {share && meta('Period: this month', 'Source: profit model')}
+        {share && meta('Period: this month', 'Source: monthly P&L')}
       </div>
     </section>
   )
@@ -311,8 +316,18 @@ export function missingCosts(stores: StoreStats[]): string | null {
   return `Profit is overstated: ${parts.join(', ')} with a line that has no cost on record.`
 }
 
-/** One plain sentence about which stores are paying for their ads. A store with uncosted orders only "looks" like it is. */
-export function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boolean): string {
+/**
+ * One plain sentence about which stores are paying for their ads. A store with uncosted orders only "looks" like it is.
+ * A store whose ads Meta stopped (`stopped`, from its ads-stopped call) leads instead: past profit is not the news.
+ */
+export function verdict(stores: StoreStats[], notConnected: (id: StoreId) => boolean, stopped: StoreId[] = []): string {
+  const halted = stores.filter((s) => stopped.includes(s.store.id))
+  if (halted.length > 0) {
+    const names = halted.map((s) => s.store.name)
+    const who = names.length === 1 ? `${names[0]}’s` : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}’s`
+    const rest = stores.filter((s) => !halted.includes(s) && s.spend > 0)
+    return `${who} ads stopped.${rest.length > 0 ? ` ${verdict(rest, notConnected)}` : ''}`
+  }
   const withAds = stores.filter((s) => s.spend > 0)
   if (withAds.length === 0) return stores.some((s) => notConnected(s.store.id)) ? 'No ad data: Meta is not connected for some stores.' : 'No ads ran in this period.'
   const unsure = withAds.filter((s) => s.contribution >= 0 && s.ordersMissingCogs > 0)

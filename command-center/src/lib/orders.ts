@@ -86,12 +86,16 @@ export function buildOrders(orders: OrderRow[], shipments: ShipmentRow[], charge
     .sort((a, b) => Date.parse(b.placedAt) - Date.parse(a.placedAt) || a.orderName.localeCompare(b.orderName))
 }
 
-export type OrderFilter = { status: OrderStatus | null; payment: OrderPayment | null; q: string }
+/** `no_data`: not shipped as far as the data goes, but the shipments data does not reach the order (`noShipmentData`). */
+export type OrderFilter = { status: OrderStatus | 'no_data' | null; payment: OrderPayment | null; q: string }
+
+const statusMatch = (o: OrderView, s: OrderFilter['status']) =>
+  !s || (s === 'no_data' ? o.noShipmentData : o.status === s && !(s === 'not_shipped' && o.noShipmentData))
 
 export function filterOrders(rows: OrderView[], f: OrderFilter): OrderView[] {
   const q = f.q.trim().toLowerCase()
   return rows.filter((o) =>
-    (!f.status || o.status === f.status) && (!f.payment || o.payment === f.payment) && (!q || o.orderName.toLowerCase().includes(q)))
+    statusMatch(o, f.status) && (!f.payment || o.payment === f.payment) && (!q || o.orderName.toLowerCase().includes(q)))
 }
 
 export type OrderStats = {
