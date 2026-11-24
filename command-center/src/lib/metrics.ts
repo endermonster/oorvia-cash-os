@@ -702,7 +702,7 @@ export function createMetrics(d: Data) {
     // A stale read is dropped rather than shown as current: the check has stopped, and the balance may have changed.
     const funds = freshFunds()
       .filter((a) => storeIds.includes(a.storeId) && a.watched && a.level !== 'ok')
-      .sort((x, y) => (x.level === y.level ? (x.runwayDays ?? 0) - (y.runwayDays ?? 0) : x.level === 'out' ? -1 : 1))
+      .sort((x, y) => (x.level === y.level ? (x.remaining ?? 0) - (y.remaining ?? 0) : x.level === 'out' ? -1 : 1))
     for (const a of funds) {
       const id = `${a.storeId}-funds-${a.level}`
       if (out.some((c) => c.id === id)) continue

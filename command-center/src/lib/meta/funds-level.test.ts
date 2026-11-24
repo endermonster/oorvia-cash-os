@@ -11,8 +11,10 @@ describe('ad account funds', () => {
     expect(mapFundsRow(row())).toMatchObject({ remaining: 6000, dailySpend: 1000, runwayDays: 6, level: 'ok', watched: true })
   })
 
-  it('is low under 3 days of runway and out at ₹0 left (Oorvia-1, 2026-11-24: cap = spent)', () => {
-    expect(mapFundsRow(row({ amount_spent_paise: 800_000 }))).toMatchObject({ remaining: 2000, runwayDays: 2, level: 'low' })
+  it('is low under ₹1,000 left whatever the runway, and out at ₹0 left (Oorvia-1, 2026-11-24: cap = spent)', () => {
+    expect(mapFundsRow(row({ amount_spent_paise: 900_100 }))).toMatchObject({ remaining: 999, level: 'low' })
+    expect(mapFundsRow(row({ amount_spent_paise: 900_000 }))).toMatchObject({ remaining: 1000, level: 'ok' })
+    expect(mapFundsRow(row({ amount_spent_paise: 800_000 }))).toMatchObject({ remaining: 2000, runwayDays: 2, level: 'ok' })
     expect(mapFundsRow(row({ spend_cap_paise: 37_791_363, amount_spent_paise: 37_791_363 }))).toMatchObject({ remaining: 0, level: 'out' })
   })
 
@@ -24,12 +26,13 @@ describe('ad account funds', () => {
       .toEqual({ title: 'Kaiven ad account in its grace period', body: 'Ads still run, but Meta stops them if billing is not settled. Settle it in Billing soon.' })
   })
 
-  it('never alerts on an account with no cap (Oorvia-2) or no spend', () => {
+  it('never alerts on an account with no cap (Oorvia-2); watches an ACTIVE campaign even before it spends', () => {
     expect(mapFundsRow(row({ spend_cap_paise: 0, amount_spent_paise: 0 }))).toMatchObject({ remaining: null, runwayDays: null, level: 'ok' })
-    expect(mapFundsRow(row({ daily_spend_paise: 0, amount_spent_paise: 999_000 }))).toMatchObject({ level: 'ok', watched: false })
+    expect(mapFundsRow(row({ daily_spend_paise: 0, amount_spent_paise: 999_000 }))).toMatchObject({ remaining: 10, runwayDays: null, level: 'low', watched: true })
+    expect(mapFundsRow(row({ daily_spend_paise: 0, amount_spent_paise: 999_000, active_campaigns: false }))).toMatchObject({ level: 'low', watched: false })
   })
 
-  it('watches only accounts that spent in the last 7 days with an ACTIVE campaign; a billing problem needs only the spend', () => {
+  it('watches accounts with an ACTIVE campaign; a billing problem without one needs recent spend', () => {
     const r = { accountStatus: 1, remaining: 100, dailySpend: 1000, todaySpend: 0, active: false }
     expect(fundsWatched(r)).toBe(false)
     expect(fundsWatched({ ...r, accountStatus: 3 })).toBe(true)
@@ -52,6 +55,7 @@ describe('ad account funds', () => {
     const a = { name: 'Oorvia-1', prepay: true, accountStatus: 1, remaining: 2424.16, runwayDays: 1.6 }
     expect(fundsMessage(a, 'low')).toEqual({ title: 'Oorvia-1 low on funds', body: '₹2,424 left, about 1 day at current spend. Add funds.' })
     expect(fundsMessage({ ...a, runwayDays: 0.4 }, 'low').body).toBe('₹2,424 left, less than a day at current spend. Add funds.')
+    expect(fundsMessage({ ...a, remaining: 999.75, runwayDays: null }, 'low').body).toBe('₹999 left. Add funds.')
     expect(fundsMessage({ ...a, remaining: 0 }, 'out')).toEqual({ title: 'Oorvia-1 out of funds', body: '₹0 left: Meta has stopped its ads. Add funds.' })
     expect(fundsMessage({ ...a, accountStatus: 3 }, 'out').title).toBe('Oorvia-1 ad account unsettled')
     expect(fundsMessage({ ...a, runwayDays: 12.5 }, 'ok')).toEqual({ title: 'Oorvia-1 funds OK', body: '₹2,424 left, about 12 days at current spend.' })

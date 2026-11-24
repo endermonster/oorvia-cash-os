@@ -209,9 +209,9 @@ export type AdAccountFunds = {
   runwayDays: number | null
   /** The account has at least one ACTIVE campaign (Meta effective_status). */
   active: boolean
-  /** out: ₹0 left or an account_status that stops delivery; low: under FUNDS_LOW_DAYS (3) of runway, or billing pending settlement / grace period (ads still run); ok otherwise. */
+  /** out: ₹0 left or an account_status that stops delivery; low: under FUNDS_LOW_RUPEES (₹1,000) left, or billing pending settlement / grace period (ads still run); ok otherwise. */
   level: 'ok' | 'low' | 'out'
-  /** The level is a call: the account spent in the last 7 days or today, and has an ACTIVE campaign (a billing problem needs only the spend). */
+  /** The level is a call: the account has an ACTIVE campaign (a billing problem without one needs spend in the last 7 days or today). */
   watched: boolean
   /** ISO time of the read. */
   checkedAt: string

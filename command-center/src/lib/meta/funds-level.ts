@@ -8,8 +8,8 @@
  */
 import type { AdAccountFunds, StoreId } from '../types'
 
-/** Runway under this many days at the 7-day average spend is "low". */
-export const FUNDS_LOW_DAYS = 3
+/** Under this many ₹ left is "low" (Vedaant, 2026-11-24: "less than 1k left", not days of runway). */
+export const FUNDS_LOW_RUPEES = 1000
 
 /** A read older than this is not shown: the check runs every 2 hours, so three missed runs means it has stopped. */
 export const FUNDS_STALE_HOURS = 6
@@ -37,19 +37,18 @@ export function fundsLevel(r: Omit<Read, 'todaySpend'>): FundsLevel {
   if (r.remaining !== null && r.remaining <= 0) return 'out'
   if (r.accountStatus !== 1 && !STILL_RUNNING.has(r.accountStatus)) return 'out'
   if (STILL_RUNNING.has(r.accountStatus)) return 'low'
-  const days = runwayDays(r)
-  return days !== null && days < FUNDS_LOW_DAYS ? 'low' : 'ok'
+  return r.remaining !== null && r.remaining < FUNDS_LOW_RUPEES ? 'low' : 'ok'
 }
 
 export const runwayDays = (r: Pick<Read, 'remaining' | 'dailySpend'>): number | null =>
   r.remaining === null || r.dailySpend <= 0 ? null : Math.max(0, r.remaining) / r.dailySpend
 
 /**
- * The level is worth a call: the account spent in the last 7 days or today, and it has an ACTIVE campaign. With every
- * campaign paused he stopped the ads himself, so low funds is not a decision yet. A billing problem needs only the spend.
- * Today's spend counts so an account that resumes after a quiet week and runs dry the same day is not missed.
+ * The level is worth a call: the account has an ACTIVE campaign (Vedaant, 2026-11-24: "if campaign is active"), spent or
+ * not. With every campaign paused he stopped the ads himself, so low funds is not a decision yet. A billing problem with
+ * no ACTIVE campaign still counts when the account spent in the last 7 days or today.
  */
-export const fundsWatched = (r: Read): boolean => (r.dailySpend > 0 || r.todaySpend > 0) && (r.active || r.accountStatus !== 1)
+export const fundsWatched = (r: Read): boolean => r.active || (r.accountStatus !== 1 && (r.dailySpend > 0 || r.todaySpend > 0))
 
 export function mapFundsRow(r: FundsRow): AdAccountFunds {
   const cap = Number(r.spend_cap_paise)
@@ -66,7 +65,8 @@ export function mapFundsRow(r: FundsRow): AdAccountFunds {
   }
 }
 
-const rupees = (n: number) => `₹${Math.max(0, Math.round(n)).toLocaleString('en-IN')}`
+// Rounded down, never up: ₹999.75 must not read "₹1,000 left" under a ₹1,000 cutoff.
+const rupees = (n: number) => `₹${Math.max(0, Math.floor(n)).toLocaleString('en-IN')}`
 const runwayText = (days: number) => (days < 1 ? 'less than a day' : `about ${Math.floor(days)} day${Math.floor(days) === 1 ? '' : 's'}`)
 
 /** The push and the call, in the same words. `level` ok is the "back to OK" message after a top-up. */
