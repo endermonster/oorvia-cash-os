@@ -37,7 +37,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
     { k: 'rev', label: src('Revenue', 'Shopify'), value: inr(s.revenue), sub: <Delta now={s.revenue} prev={s.prev.revenue} suffix={`vs ${period.prevLabel}`} /> },
     { k: 'spend', label: src('Spend', 'Meta'), value: inr(s.spend), sub: <Delta now={s.spend} prev={s.prev.spend} neutral suffix={`vs ${period.prevLabel}`} /> },
     { k: 'orders', label: src('Orders', 'Shopify'), value: String(s.orders), sub: codShareLabel(s) ? <span className="text-sm text-ink-2">{codShareLabel(s)}</span> : null },
-    { k: 'cpa', label: src('CPA', 'Meta'), value: s.cpa ? inr(s.cpa) : '—', sub: <span className="text-sm text-ink-3">{e === null ? 'Breakeven needs a product cost' : breaksEven(e) ? `breakeven ${inr(e.breakevenCpa)} per\u00a0order` : `loses ${inr(-e.breakevenCpa)} per\u00a0order before ads`}</span> },
+    { k: 'cpa', label: src('CPA', 'Meta'), value: s.cpa ? inr(s.cpa) : '—', sub: <span className="text-sm text-ink-3">{e === null ? 'Breakeven needs a product cost' : breaksEven(e) ? `breakeven ${inr(e.breakevenCpa)} per\u00a0order` : `loses ${inr(-e.breakevenCpa)} per\u00a0order before ads${e.worstCase ? ' at the worst-case mix' : ''}`}</span> },
     { k: 'cpm', label: src('CPM', 'Meta'), value: s.cpm ? inr(s.cpm) : '—', sub: s.cpm && s.prev.cpm ? <Delta now={s.cpm} prev={s.prev.cpm} goodWhenUp={false} suffix={`vs ${period.prevLabel}`} /> : null },
     { k: 'ctr', label: src('CTR', 'Meta'), value: s.ctr ? pct(s.ctr, 1) : '—', sub: <span className="text-sm text-ink-3">{s.clicks.toLocaleString('en-IN')} link clicks</span> },
   ]
@@ -190,32 +190,38 @@ function OrdersStrip({ s, period, m, orders }: { s: StoreStats; period: Period; 
           {dots.length > shown.length && <span className="ml-2 self-center text-sm text-ink-3">+{dots.length - shown.length} more</span>}
         </div>
       )}
-      {m.relevantProducts(store.id, period).map((p, _, all) => {
-        const share = m.codShare(p.storeId, p.sku)
-        return (
-          <div key={p.sku} className="mt-4 border-t border-line pt-4">
-            {all.length > 1 && <h3 className="mb-3 font-semibold text-ink">{p.name}</h3>}
-            <dl className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <dt className="label">COD share{windowTag(share, true)}</dt>
-                <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(share.value)}</dd>
-                <dd className="mt-1 text-sm text-ink-3">{basisNote(share, store.name, 'orders', true)}</dd>
-              </div>
-              {(['cod', 'prepaid'] as const).map((pay) => {
-                const rate = m.deliveryRate(p.storeId, p.sku, pay)
-                return (
-                  <div key={pay}>
-                    <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'}{windowTag(rate)}</dt>
-                    <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(rate.value, 1)}</dd>
-                    <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, store.name, 'closed orders')}</dd>
-                  </div>
-                )
-              })}
-            </dl>
-          </div>
-        )
-      })}
+      {(() => {
+        // COD share is per product (its own COD orders ÷ its orders), so each product shows its own, beside its delivery rates.
+        const products = m.relevantProducts(store.id, period)
+        return products.map((p) => <ProductRates key={p.sku} p={p} m={m} storeName={store.name} title={products.length > 1 ? p.name : undefined} />)
+      })()}
     </section>
+  )
+}
+
+function ProductRates({ p, m, storeName, title }: { p: { storeId: StoreId; sku: string }; m: Metrics; storeName: string; title?: string }) {
+  const share = m.codShare(p.storeId, p.sku)
+  return (
+    <div className="mt-4 border-t border-line pt-4">
+      {title && <h3 className="mb-3 font-semibold text-ink">{title}</h3>}
+      <dl className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <dt className="label">COD share{windowTag(share, true)}</dt>
+          <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{share.value === null ? '—' : pct(share.value)}</dd>
+          <dd className="mt-1 text-sm text-ink-3">{share.n > 0 ? basisNote(share, storeName, 'orders', true) : share.orders > 0 ? 'No known payment type yet' : 'No orders in 70 days'}</dd>
+        </div>
+        {(['cod', 'prepaid'] as const).map((pay) => {
+          const rate = m.deliveryRate(p.storeId, p.sku, pay)
+          return (
+            <div key={pay}>
+              <dt className="label">Delivered · {pay === 'cod' ? 'COD' : 'Prepaid'}{windowTag(rate)}</dt>
+              <dd className="mt-1 text-[1.3rem] font-bold leading-tight">{pct(rate.value, 1)}</dd>
+              <dd className="mt-1 text-sm text-ink-3">{basisNote(rate, storeName, 'closed orders')}</dd>
+            </div>
+          )
+        })}
+      </dl>
+    </div>
   )
 }
 
@@ -274,17 +280,17 @@ function DeliveryCell({ c }: { c: DeliveryRow['cells']['lifetime'] }) {
 }
 
 /** The window a rate covers, for its label: the fallback can reach all-time history, so "30D" is not a given. */
-function windowTag(r: Rate, snapshot = false) {
+function windowTag(r: Pick<Rate, 'window'>, snapshot = false) {
   return r.window === null ? '' : r.window === 'lifetime' ? (snapshot ? ' · 70D' : ' · All-time') : ` · ${r.window.toUpperCase()}`
 }
 
 /** Where a rate came from, in plain words. */
 /** `snapshot`: COD share, whose longest window is the 70 days of orders loaded, not all history. */
-function basisNote(r: Rate, storeName: string, unit: string, snapshot = false) {
+function basisNote(r: Pick<Rate, 'basis' | 'n' | 'window'>, storeName: string, unit: string, snapshot = false) {
   const all = r.window === 'lifetime' ? (snapshot ? ' 70-day' : ' all-time') : ''
   switch (r.basis) {
     case 'sku': return `${r.n} ${unit}${all}`
-    case 'store': return `${storeName}${all} average · ${r.n} ${unit}`
+    case 'store': return r.n === 0 ? `No ${unit} yet` : `${storeName}${all} average · ${r.n} ${unit}`
     case 'vxp': return `VXP${all} average · ${storeName} has under ${MIN_SAMPLE} ${unit} yet`
     default: return 'Pricing sheet default · no history yet'
   }

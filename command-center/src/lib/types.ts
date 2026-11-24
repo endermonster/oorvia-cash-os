@@ -185,4 +185,34 @@ export type SyncStatus = {
    * Null = not checked.
    */
   vfulfillOpenShipments: number | null
+  /** Funds per allowlisted Meta ad account, from the 2-hourly funds check (cc_ad_account_funds). Empty until it has run. */
+  adAccountFunds: AdAccountFunds[]
+}
+
+/** One Meta ad account's funds as last read (src/lib/meta/funds.ts). */
+export type AdAccountFunds = {
+  storeId: StoreId
+  accountId: string
+  /** The allowlist name: Kaiven, Oorvia-1, Oorvia-2, Selnova1. */
+  name: string
+  /** Prepaid (funds are added) vs card-funded (a spending limit you set is raised or reset). */
+  prepay: boolean
+  /** Meta account_status: 1 active, 2 disabled, 3 unsettled, 7 pending risk review, 8 pending settlement, 9 in grace period, 100 pending closure, 101 closed. */
+  accountStatus: number
+  /** ₹ left before Meta stops delivery: spend_cap − amount_spent. Null when the account has no cap (Oorvia-2, card-funded). */
+  remaining: number | null
+  /** Average daily spend over the last 7 complete days (IST), ₹. */
+  dailySpend: number
+  /** Spend so far today (IST), ₹. Evidence the account is live, not part of the runway average. */
+  todaySpend: number
+  /** remaining ÷ dailySpend. Null without a cap or without spend. */
+  runwayDays: number | null
+  /** The account has at least one ACTIVE campaign (Meta effective_status). */
+  active: boolean
+  /** out: ₹0 left or an account_status that stops delivery; low: under FUNDS_LOW_DAYS (3) of runway, or billing pending settlement / grace period (ads still run); ok otherwise. */
+  level: 'ok' | 'low' | 'out'
+  /** The level is a call: the account spent in the last 7 days or today, and has an ACTIVE campaign (a billing problem needs only the spend). */
+  watched: boolean
+  /** ISO time of the read. */
+  checkedAt: string
 }

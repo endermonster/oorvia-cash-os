@@ -83,11 +83,12 @@ are logic, data and wiring, which Vedaant assigned to you. Values are as seen li
   share **−₹12,521**.
 - **Fix:** load both into the Home data. `HomeView` already renders them when present (`Home.tsx` `BottomLine`).
 
-## Follow-up (not built)
-- **Out of funds / unsettled ad account → `-ads-stopped` call.** 2026-11-24: Oorvia's "OMS-1M | BCT | 18-11-26" ran out of
-  funds; Meta stopped delivery while the campaign stayed ACTIVE (spend ₹5,588 → ₹3,983 → ₹0.25 → ₹0). A Meta-side stop,
-  so it is a call, but campaign `effective_status` does not show it and the spend-drop path needs a verified yesterday.
-  Needs the ad account's status / funding state (e.g. `account_status`, `disable_reason`, balance) from the Meta sync.
+## 6. Ad account funds and COD share (2026-11-24, built)
+| Read this | What it is |
+|---|---|
+| `d.sync.adAccountFunds[]`: `{ storeId, accountId, name, prepay, accountStatus, remaining (₹ \| null), dailySpend, todaySpend, runwayDays (\| null), active, level ('ok' \| 'low' \| 'out'), watched, checkedAt }` | One row per allowlisted ad account, from the 2-hourly funds check (`/api/cron/meta-funds`, table `cc_ad_account_funds`). `remaining` = spend cap − amount spent; null = no cap (Oorvia-2). |
+| `calls()` → `${storeId}-funds-out` (bad), `${storeId}-funds-low` (warn) | Fires only for `watched` accounts with a read under 6 hours old: spent in the last 7 days or today, and has an ACTIVE campaign (a billing status ≠ 1 needs only the spend). The words match the ntfy push (`fundsMessage` in `src/lib/meta/funds-level.ts`). A card-funded account (`prepay` false) says "near/hit its spending limit … Raise the limit in Billing" instead of "Add funds". Replaces the old "out of funds" follow-up. A store whose watched account is out, with no other account holding an ACTIVE campaign, is also in `m.adsStopped()`, so the Home verdict leads with "ads stopped". |
+| `m.codShare(storeId, sku)` → `{ value: number \| null, basis: 'sku', n, window: '30d' \| 'lifetime' \| null, orders }` | Always the product's own COD ÷ known-payment orders (Vedaant: every product has its own share): 30 days, else the 70-day snapshot. No sheet default, no store or VXP borrowing, no minimum sample. StoreView shows it per product, beside that product's delivery rates. When there are no known-payment orders, `value` is null and `n` is 0: StoreView shows "—" and "No orders in 70 days", or "No known payment type yet" when `orders` > 0. Breakeven then uses the worse of all-COD and all-prepaid and carries `worstCase: true` (also on the store blend), and `noBreakevenText` says "at the worst-case COD/prepaid mix". |
 
 ## Also seen (lower priority)
 - **Fixed costs, two methods:** Home spreads the quarterly vFulfill fee as a run rate (₹14,062 for November), while the

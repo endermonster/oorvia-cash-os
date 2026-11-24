@@ -7,12 +7,13 @@
 import type { Chrome, Data } from './data'
 import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
+import { mapFundsRow, type FundsRow } from './meta/funds-level'
 import { selectAll } from './paged'
 import { monthlyRunRate, type FixedCost } from './pnl'
 import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
 import { coverageChecks, SHIP_LAG_DAYS } from './vfulfill/shipments'
 import type {
-  Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
+  AdAccountFunds, Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
 } from './types'
 
@@ -132,7 +133,7 @@ const META_SOURCES = ['meta']
 export function mapSync(
   runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds, shipmentsThrough: string | null = null,
   missingStores: { storeId: string; seenAt: string }[] = [], overdueOrders: number | null = null, openShipments: number | null = null,
-): SyncStatus {
+): Omit<SyncStatus, 'adAccountFunds'> {
   // `skipUnseen`: a store with no ok run ever is left out instead of making the whole source "never" (Meta only).
   const unseen: string[] = []
   const oldestLatest = (sources: string[], ids: string[], skipUnseen = false): number | null => {
@@ -375,8 +376,18 @@ async function readSync(sb: Client, storeIds: string[], metaStoreIds: string[], 
   const missing = coverage.then((c) => readMissingStores(sb, c.seenByStore))
   const overdue = coverage.then((c) => readOverdueOrders(sb, c, now))
   const open = coverage.then((c) => readOpenShipments(sb, c, now))
-  const [{ through }, missingStores, overdueOrders, openShipments, ...runs] = await Promise.all([coverage, missing, overdue, open, ...runQueries])
-  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores, overdueOrders, openShipments)
+  const funds = readAdAccountFunds(sb, metaStoreIds)
+  const [{ through }, missingStores, overdueOrders, openShipments, adAccountFunds, ...runs] = await Promise.all([coverage, missing, overdue, open, funds, ...runQueries])
+  return { ...mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores, overdueOrders, openShipments), adAccountFunds }
+}
+
+/** The funds check's last read of each ad account of these stores (empty before its first run). */
+async function readAdAccountFunds(sb: Client, storeIds: string[]): Promise<AdAccountFunds[]> {
+  if (storeIds.length === 0) return []
+  const rows = await selectAll<FundsRow>(() => sb.from('cc_ad_account_funds')
+    .select('account_id, store_id, name, account_status, is_prepay, spend_cap_paise, amount_spent_paise, daily_spend_paise, today_spend_paise, active_campaigns, checked_at')
+    .in('store_id', storeIds).order('account_id'))
+  return rows.map(mapFundsRow)
 }
 
 /** The newest orders only, for the live map: two small reads, no history. */

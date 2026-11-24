@@ -41,6 +41,11 @@ describe('a product that loses money before ads', () => {
     expect(noBreakevenText(b)).toBe('No ROAS breaks even: loses ₹0 per order before ads')
   })
 
+  it('says when no ROAS breaking even is only the worst-case payment mix', () => {
+    expect(noBreakevenText({ ...fromCpa(1000, -120), worstCase: true }))
+      .toBe('No ROAS breaks even at the worst-case COD/prepaid mix: loses ₹120 per order before ads (no known payment mix yet)')
+  })
+
   it('a profitable product is unchanged', () => {
     const b = fromCpa(1000, 400)
     expect(breaksEven(b)).toBe(true)

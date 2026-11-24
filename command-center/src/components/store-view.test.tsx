@@ -32,6 +32,18 @@ describe('StoreView', () => {
     expect(html.indexOf('<details')).toBeLessThan(html.indexOf('SKU CC3'))
   })
 
+  it('shows each product its own COD share, beside its delivery rates', () => {
+    const m = createMetrics(MOCK)
+    const period = m.resolvePeriod(view.period)
+    const html = (n: number) => {
+      const [one] = m.relevantProducts('oorvia', period)
+      const products = [one, { ...one, sku: 'OMS-2M', name: 'Second product' }]
+      const relevantProducts: typeof m.relevantProducts = () => products.slice(0, n)
+      return renderToStaticMarkup(<StoreView id="oorvia" view={view} period={period} m={{ ...m, relevantProducts }} orders={[]} />)
+    }
+    for (const n of [0, 1, 2]) expect(html(n).match(/>COD share/g) ?? []).toHaveLength(n)
+  })
+
   it('keeps breakeven and target visible when no ads ran', () => {
     const html = render({ roas: null, zone: null, spend: 0 })
     expect(html).toMatch(/Breakeven [\d.]+× · target [\d.]+×/)

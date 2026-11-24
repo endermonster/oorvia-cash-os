@@ -98,6 +98,8 @@ export type Breakeven = {
   /** Breakeven ex-GST + 1.5, put back on Meta's scale. */
   targetRoas: number
   targetRoasExGst: number
+  /** No known COD/prepaid mix yet: taken at the worse of all-COD and all-prepaid, so it is an assumption, not a result. */
+  worstCase?: boolean
 }
 
 export const TARGET_BUFFER_EX_GST = 1.5
@@ -175,9 +177,12 @@ export function blendedBreakeven(
 /** False when the product loses money before ads, so no ROAS can break even. */
 export const breaksEven = (b: Pick<Breakeven, 'breakevenRoas'>) => Number.isFinite(b.breakevenRoas)
 
-/** "No ROAS breaks even: loses ₹X per order before ads", for screens that would show a breakeven. */
-export const noBreakevenText = (b: Pick<Breakeven, 'breakevenCpa'>) =>
-  `No ROAS breaks even: loses ₹${Math.max(0, Math.round(-b.breakevenCpa)).toLocaleString('en-IN')} per order before ads`
+/**
+ * "No ROAS breaks even: loses ₹X per order before ads", for screens that would show a breakeven. At the worst-case mix it
+ * says so: the other payment type may still break even.
+ */
+export const noBreakevenText = (b: Pick<Breakeven, 'breakevenCpa' | 'worstCase'>) =>
+  `No ROAS breaks even${b.worstCase ? ' at the worst-case COD/prepaid mix' : ''}: loses ₹${Math.max(0, Math.round(-b.breakevenCpa)).toLocaleString('en-IN')} per order before ads${b.worstCase ? ' (no known payment mix yet)' : ''}`
 
 export type RoasZone = 'below' | 'covering' | 'profit'
 

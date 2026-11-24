@@ -12,7 +12,9 @@ describe('orders whose payment type was never recorded', () => {
   const withUnknown = createMetrics({ ...MOCK, orders: [...MOCK.orders, unknown] })
 
   it('do not move the COD share: it is taken over known payments only', () => {
-    expect(withUnknown.codShare('oorvia', base.sku)).toEqual(plain.codShare('oorvia', base.sku))
+    const { orders, ...share } = withUnknown.codShare('oorvia', unknown.sku)
+    expect(share).toEqual({ ...plain.codShare('oorvia', unknown.sku), orders: undefined })
+    expect(orders).toBe(plain.codShare('oorvia', unknown.sku).orders + unknown.orders)
   })
 
   it('are counted as orders, but neither as COD nor as prepaid', () => {
@@ -28,7 +30,7 @@ describe('orders whose payment type was never recorded', () => {
   it('expect profit at the product own COD/prepaid mix, between the two known cases', () => {
     const cod = withUnknown.profitBeforeAds(row('cod'))
     const prepaid = withUnknown.profitBeforeAds(row('prepaid'))
-    const share = withUnknown.codShare('oorvia', base.sku).value
+    const share = withUnknown.codShare('oorvia', unknown.sku).value!
     expect(withUnknown.profitBeforeAds(unknown)).toBeCloseTo(share * cod + (1 - share) * prepaid, 6)
   })
 })

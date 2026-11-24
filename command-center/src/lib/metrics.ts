@@ -6,6 +6,7 @@ import {
   blendedBreakeven, breakeven, breaksEven, fromCpa, noBreakevenText, roasZone, SHEET_ASSUMPTIONS, type Assumptions, type Breakeven, type RoasZone,
 } from './calculator'
 import { addDays } from './dates'
+import { fundsFresh, fundsMessage } from './meta/funds-level'
 import type { Data } from './data'
 import type { CampaignDay, OrderDay, PaymentType, ResolvedDay, Store, StoreId } from './types'
 
@@ -38,7 +39,7 @@ const fmtDay = (d: string) =>
 /** Below this many orders a rate is too noisy; borrow the next level up. */
 export const MIN_SAMPLE = 30
 /** Pricing Master sheet defaults, used only when no store has enough history. */
-const SHEET_RATES = { deliveryRate: 0.9, codShare: 0.7 }
+const SHEET_RATES = { deliveryRate: 0.9 }
 
 export type RateBasis = 'sku' | 'store' | 'vxp' | 'sheet'
 export type Rate = {
@@ -67,7 +68,11 @@ function rateLevels(storeId: StoreId, sku: string, window: RateWindow) {
   return levels
 }
 
-export type SkuEconomics = Breakeven & { codShare: Rate; rates: Record<PaymentType, Rate> }
+/** COD share: the store's own count only, so `basis` is always 'store'; value null (n 0) when it has no orders yet. */
+/** `orders`: the product's orders in the window, unknown payment types included (all 70 days when `n` is 0). */
+export type ShareRate = Omit<Rate, 'value'> & { value: number | null; orders: number }
+
+export type SkuEconomics = Breakeven & { codShare: ShareRate; rates: Record<PaymentType, Rate> }
 
 type OrderRow = Omit<OrderDay, 'date'>
 type SpendRow = Omit<CampaignDay, 'date'>
@@ -288,14 +293,21 @@ export function createMetrics(d: Data) {
     ]
   }
 
-  /** COD share of orders placed, starting with 30 days and falling back to all orders in the 70-day snapshot. */
-  function codShare(storeId: StoreId, sku: string): Rate {
-    for (const [basis, w, match] of rateLevels(storeId, sku, '30d')) {
-      const rs = d.orders.filter((r) => r.payment !== 'unknown' && (w === 'lifetime' || (r.date >= windowStart[w] && r.date <= TODAY)) && match(r))
-      const n = rs.reduce((s, r) => s + r.orders, 0)
-      if (n >= MIN_SAMPLE) return { value: rs.filter((r) => r.payment === 'cod').reduce((s, r) => s + r.orders, 0) / n, basis, n, window: w }
+  /**
+   * COD share: always the product's own COD orders ÷ its orders with a known payment type (Vedaant, 2026-11-24): every
+   * product (store, SKU) has its own share. No sheet default, no store or VXP borrowing, no minimum sample. The last 30
+   * days when the product has any, else every order in the 70-day snapshot. No known-payment orders yet: value null, n 0.
+   */
+  function codShare(storeId: StoreId, sku: string): ShareRate {
+    const count = (rs: typeof d.orders) => rs.reduce((s, r) => s + r.orders, 0)
+    const own = d.orders.filter((r) => r.storeId === storeId && r.sku === sku)
+    for (const w of ['30d', 'lifetime'] as const) {
+      const all = own.filter((r) => w === 'lifetime' || (r.date >= windowStart[w] && r.date <= TODAY))
+      const rs = all.filter((r) => r.payment !== 'unknown')
+      const n = count(rs)
+      if (n > 0) return { value: count(rs.filter((r) => r.payment === 'cod')) / n, basis: 'sku', n, window: w, orders: count(all) }
     }
-    return { value: SHEET_RATES.codShare, basis: 'sheet', n: 0, window: null }
+    return { value: null, basis: 'sku', n: 0, window: null, orders: count(own) }
   }
 
   const assumptionsFor = (storeId: StoreId): Assumptions => ({ ...SHEET_ASSUMPTIONS, gatewayPct: storeById(storeId).gatewayPct })
@@ -312,10 +324,11 @@ export function createMetrics(d: Data) {
     if (p.cogs === null) { ecoCache.set(key, null); return null } // no cost on record: never guess one
     const rates = { cod: deliveryRate(storeId, sku, 'cod'), prepaid: deliveryRate(storeId, sku, 'prepaid') }
     const share = codShare(storeId, sku)
-    const eco = {
-      ...blendedBreakeven({ ...p, cogs: p.cogs }, share.value, { cod: rates.cod.value, prepaid: rates.prepaid.value }, assumptionsFor(storeId)),
-      codShare: share, rates,
-    }
+    const cogs = p.cogs
+    const at = (s: number) => blendedBreakeven({ ...p, cogs }, s, { cod: rates.cod.value, prepaid: rates.prepaid.value }, assumptionsFor(storeId))
+    // No orders yet, so no share: break even under the worse of all-COD and all-prepaid rather than assume a mix.
+    const worse = (a: Breakeven, b: Breakeven) => (a.breakevenRoas >= b.breakevenRoas ? a : b)
+    const eco = { ...(share.value !== null ? at(share.value) : { ...worse(at(1), at(0)), worstCase: true }), codShare: share, rates }
     ecoCache.set(key, eco)
     return eco
   }
@@ -337,6 +350,8 @@ export function createMetrics(d: Data) {
     const poolSize = pool.filter(Boolean).length
     const share = (i: number) => (wSum > 0 ? w[i] / wSum : pool[i] ? 1 / poolSize : 0)
     const names = entries.filter((_, i) => share(i) > 0).map(([sku]) => productOf(storeId, sku).name)
+    // Any weighted product at the worst-case mix makes the blend an assumption too.
+    const worstCase = entries.some(([, e], i) => share(i) > 0 && e.worstCase === true)
     return {
       ...fromCpa(
         entries.reduce((s, [, e], i) => s + share(i) * e.avgPricePaid, 0),
@@ -344,6 +359,7 @@ export function createMetrics(d: Data) {
         assumptionsFor(storeId),
       ),
       weightedNames: names,
+      ...(worstCase ? { worstCase } : {}),
     }
   }
 
@@ -371,6 +387,8 @@ export function createMetrics(d: Data) {
     if (r.payment !== 'unknown') return r.orders * perOrderAs(r.payment)
     // Payment never recorded: expect the product's own COD/prepaid mix rather than pick one.
     const share = codShare(r.storeId, r.sku).value
+    // No order with a known payment yet: expect the worse of the two.
+    if (share === null) return r.orders * Math.min(perOrderAs('cod'), perOrderAs('prepaid'))
     return r.orders * (share * perOrderAs('cod') + (1 - share) * perOrderAs('prepaid'))
   }
 
@@ -583,9 +601,23 @@ export function createMetrics(d: Data) {
     return { stopped, userStopped, anyActive, yesterdaySpend, weekStart, week }
   }
 
-  /** Stores whose ads stopped (the `${id}-ads-stopped` rule), without the three-call cap of `calls()`. */
+  /** The funds check's reads that are recent enough to show (see FUNDS_STALE_HOURS). */
+  const freshFunds = () => d.sync.adAccountFunds.filter((a) => fundsFresh(a.checkedAt, d.now))
+
+  /**
+   * Meta stopped the store's ads for funds: a watched account is out, and no other account of the store could still be
+   * delivering (one that is not out with an ACTIVE campaign). Its campaigns can still read ACTIVE (Oorvia-1, 2026-11-24).
+   * Every account of the store needs a fresh read: a stale backup account may be the one still delivering.
+   */
+  function fundsStopped(id: StoreId): boolean {
+    const own = d.sync.adAccountFunds.filter((a) => a.storeId === id)
+    if (!own.every((a) => fundsFresh(a.checkedAt, d.now))) return false
+    return own.some((a) => a.watched && a.level === 'out') && !own.some((a) => a.level !== 'out' && a.active)
+  }
+
+  /** Stores whose ads stopped (the `${id}-ads-stopped` rule, or out of funds), without the three-call cap of `calls()`. */
   function adsStopped(storeIds: StoreId[] = d.stores.map((s) => s.id)): StoreId[] {
-    return storeIds.filter((id) => adsState(id).stopped !== null)
+    return storeIds.filter((id) => adsState(id).stopped !== null || fundsStopped(id))
   }
 
   /** "Needs your call": facts only, at most three, worst first. Empty is a valid answer. */
@@ -610,7 +642,7 @@ export function createMetrics(d: Data) {
       if (!userPausedAds && eco && daysWithSpend === 3 && t.spend > 0 && t.revenue / t.spend < eco.breakevenRoas) {
         out.push({
           id: `${id}-below`, tone: 'bad', storeId: id,
-          title: breaksEven(eco) ? `${store.name} below breakeven over the last 3 days` : `${store.name} loses money on every order, before ads`,
+          title: breaksEven(eco) ? `${store.name} below breakeven over the last 3 days` : `${store.name} ${eco.worstCase ? 'may lose' : 'loses'} money on every order, before ads`,
           detail: breaksEven(eco)
             ? `ROAS ${fmtX(t.revenue / t.spend)} vs ${fmtX(eco.breakevenRoas)} breakeven · ${t.orders} orders · ${inr(t.spend)} spent`
             : `${noBreakevenText(eco)} · ROAS ${fmtX(t.revenue / t.spend)} · ${inr(t.spend)} spent`,
@@ -666,13 +698,25 @@ export function createMetrics(d: Data) {
           : 'Delivery rates may be out of date',
       })
     }
+    // Ad account funds (the 2-hourly check): the same rule and words as the phone push. One per store and level, worst first.
+    // A stale read is dropped rather than shown as current: the check has stopped, and the balance may have changed.
+    const funds = freshFunds()
+      .filter((a) => storeIds.includes(a.storeId) && a.watched && a.level !== 'ok')
+      .sort((x, y) => (x.level === y.level ? (x.runwayDays ?? 0) - (y.runwayDays ?? 0) : x.level === 'out' ? -1 : 1))
+    for (const a of funds) {
+      const id = `${a.storeId}-funds-${a.level}`
+      if (out.some((c) => c.id === id)) continue
+      const { title, body } = fundsMessage(a, a.level)
+      out.push({ id, tone: a.level === 'out' ? 'bad' : 'warn', storeId: a.storeId, title, detail: body })
+    }
     const c = cash()
     // Without a bank balance the total is a fraction of the cash: no alarm on it.
     if (c && c.bank && c.coversDays !== null && c.coversDays < 10) {
       out.push({ id: 'cash', tone: 'bad', title: `Cash covers ${Math.floor(c.coversDays)} days of spend`, detail: `${inr(c.total)} across ${c.included.join(', ')}` })
     }
-    const rank = { bad: 0, warn: 1, good: 2 }
-    return out.sort((a, b) => rank[a.tone] - rank[b.tone]).slice(0, 3)
+    // Out of funds leads: Meta has stopped delivery now, which outranks what past spend returned.
+    const rank = (c: Call) => (c.id.endsWith('-funds-out') ? -1 : { bad: 0, warn: 1, good: 2 }[c.tone])
+    return out.sort((a, b) => rank(a) - rank(b)).slice(0, 3)
   }
 
   /**

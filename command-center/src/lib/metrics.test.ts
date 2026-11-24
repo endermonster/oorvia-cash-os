@@ -4,7 +4,7 @@ import {
   RESOLVED, STORES, TODAY,
 } from './mock'
 import { createMetrics, MIN_SAMPLE, type RateWindow } from './metrics'
-import type { Campaign, CampaignDay, OrderDay, ResolvedDay, StoreId } from './types'
+import type { AdAccountFunds, Campaign, CampaignDay, OrderDay, ResolvedDay, StoreId } from './types'
 
 const m = createMetrics(MOCK)
 const { campaigns, deliveryRate, profitBeforeAds, productOf, resolvePeriod, series, skuEconomics, storeStats } = m
@@ -75,27 +75,39 @@ describe('COD share windows (by order date)', () => {
   const other: OrderDay = { ...recent, storeId: 'kaiven', sku: 'KV-DHS', orders: 40 }
   const unknown: OrderDay = { ...recent, payment: 'unknown', orders: 100 }
 
-  it('uses the SKU or store when it has enough known payments in 30 days', () => {
-    const at = createMetrics({ ...MOCK, orders: [recent, { ...recent, sku: 'OLD-1', payment: 'prepaid' }, other] })
-    expect(at.codShare('kaiven', 'KV-DHS')).toEqual({ value: 1, basis: 'sku', n: 40, window: '30d' })
-    expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 0.5, basis: 'store', n: 36, window: '30d' })
+  it("is the product's own share over 30 days, whatever the sample size: another SKU or store never counts", () => {
+    const at = createMetrics({ ...MOCK, orders: [recent, { ...recent, payment: 'prepaid', orders: 2 }, { ...recent, sku: 'OLD-1', payment: 'prepaid', orders: 50 }, other] })
+    expect(at.codShare('kaiven', 'KV-DHS')).toMatchObject({ value: 1, basis: 'sku', n: 40, window: '30d' })
+    expect(at.codShare('oorvia', 'OMS-1M')).toMatchObject({ value: 18 / 20, basis: 'sku', n: 20, window: '30d' })
+    expect(at.codShare('oorvia', 'OLD-1')).toMatchObject({ value: 0, n: 50 })
   })
 
-  it('uses all store rows with known payment when recent orders are sparse', () => {
-    const at = createMetrics({ ...MOCK, orders: [recent, older, unknown, other] })
-    expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 18 / 30, basis: 'store', n: 30, window: 'lifetime' })
+  it('uses every snapshot order with a known payment when the product has none in 30 days', () => {
+    const at = createMetrics({ ...MOCK, orders: [older, { ...older, payment: 'cod', orders: 3 }, unknown, other] })
+    expect(at.codShare('oorvia', 'OMS-1M')).toMatchObject({ value: 3 / 15, basis: 'sku', n: 15, window: 'lifetime' })
   })
 
-  it('uses all VXP rows with known payment for a new store', () => {
-    const at = createMetrics({ ...MOCK, orders: [recent, older, unknown, other] })
-    expect(at.codShare('selnova', 'SN-PDRN')).toEqual({ value: 58 / 70, basis: 'vxp', n: 70, window: 'lifetime' })
-  })
-
-  it('uses the sheet when the snapshot has too few known payments', () => {
-    for (const orders of [[], [recent, unknown]]) {
+  it('never borrows another product, store or the sheet: no orders yet is a null share', () => {
+    for (const orders of [[], [unknown], [recent, other]]) {
       const at = createMetrics({ ...MOCK, orders })
-      expect(at.codShare('oorvia', 'OMS-1M')).toEqual({ value: 0.7, basis: 'sheet', n: 0, window: null })
+      expect(at.codShare('selnova', 'OMS-1M')).toEqual({ value: null, basis: 'sku', n: 0, window: null, orders: 0 })
     }
+    expect(createMetrics({ ...MOCK, orders: [recent] }).codShare('oorvia', 'OLD-1')).toMatchObject({ value: null, n: 0 })
+  })
+
+  it('counts the orders apart from the share, so unknown-only orders are not "no orders"', () => {
+    expect(createMetrics({ ...MOCK, orders: [unknown] }).codShare('oorvia', 'OMS-1M')).toEqual({ value: null, basis: 'sku', n: 0, window: null, orders: 100 })
+    expect(createMetrics({ ...MOCK, orders: [recent, unknown] }).codShare('oorvia', 'OMS-1M')).toMatchObject({ n: 18, orders: 118 })
+  })
+
+  it('breaks even under the worse of all-COD and all-prepaid when the store has no orders yet', () => {
+    const at = createMetrics({ ...MOCK, orders: [] })
+    const eco = at.skuEconomics('oorvia', 'OMS-1M')!
+    const all = (orders: OrderDay[]) => createMetrics({ ...MOCK, orders }).skuEconomics('oorvia', 'OMS-1M')!.breakevenRoas
+    expect(eco.codShare.value).toBeNull()
+    expect(eco.worstCase).toBe(true)
+    expect(createMetrics({ ...MOCK, orders: [recent] }).skuEconomics('oorvia', 'OMS-1M')!.worstCase).toBeUndefined()
+    expect(eco.breakevenRoas).toBe(Math.max(all([recent]), all([{ ...recent, payment: 'prepaid' }])))
   })
 })
 
@@ -690,6 +702,61 @@ describe('ads stopped calls', () => {
   it('requires spend in the last seven complete days even when Meta stopped the campaigns', () => {
     const out = calls([spend(8, 1000), spend(0, 1000)], [{ ...campaign, status: 'DISAPPROVED' }])
     expect(out.some((c) => c.id === stopped)).toBe(false)
+  })
+})
+
+describe('ad account funds calls', () => {
+  const hoursAgo = (h: number) => new Date(MOCK.now.getTime() - h * 3_600_000).toISOString()
+  const acct = (over: Partial<AdAccountFunds>): AdAccountFunds => ({
+    storeId: 'oorvia', accountId: '1', name: 'Oorvia-1', prepay: true, accountStatus: 1, remaining: 0, dailySpend: 4000, todaySpend: 0, runwayDays: 0,
+    active: true, level: 'out', watched: true, checkedAt: hoursAgo(1), ...over,
+  })
+  const ids = (adAccountFunds: AdAccountFunds[], storeIds?: StoreId[]) =>
+    createMetrics({ ...MOCK, orders: [], campaignDays: [], cash: null, sync: { ...MOCK.sync, vfulfillOverdueOrders: 0, vfulfillOpenShipments: 0, adAccountFunds } })
+      .calls(resolvePeriod('7d'), storeIds)
+
+  it('calls out funds (bad) and low funds (warn) in the push words, only for watched accounts', () => {
+    const out = ids([acct({}), acct({ storeId: 'kaiven', accountId: '2', name: 'Kaiven', level: 'low', remaining: 2424, runwayDays: 0.6 }), acct({ storeId: 'selnova', accountId: '3', name: 'Selnova1', watched: false })])
+    expect(out.find((c) => c.id === 'oorvia-funds-out')).toEqual({ id: 'oorvia-funds-out', tone: 'bad', storeId: 'oorvia', title: 'Oorvia-1 out of funds', detail: '₹0 left: Meta has stopped its ads. Add funds.' })
+    expect(out.find((c) => c.id === 'kaiven-funds-low')).toMatchObject({ tone: 'warn', title: 'Kaiven low on funds' })
+    expect(out.some((c) => c.id.startsWith('selnova-funds'))).toBe(false)
+  })
+
+  it('skips ok accounts and stores not asked for', () => {
+    expect(ids([acct({ level: 'ok' })]).some((c) => c.id.includes('funds'))).toBe(false)
+    expect(ids([acct({})], ['kaiven']).some((c) => c.id.includes('funds'))).toBe(false)
+  })
+
+  it('ranks out of funds ahead of the loss calls, so the three-call cap never cuts it', () => {
+    const at = (adAccountFunds: AdAccountFunds[]) => createMetrics({ ...MOCK, orders: [], cash: null, sync: { ...MOCK.sync, vfulfillOverdueOrders: 0, vfulfillOpenShipments: 0, adAccountFunds } })
+      .calls(resolvePeriod('7d'))
+    expect(at([]).map((c) => c.tone)).toEqual(['bad', 'bad'])
+    expect(at([acct({ storeId: 'selnova', accountId: '3', name: 'Selnova1' })]).map((c) => c.id)[0]).toBe('selnova-funds-out')
+  })
+
+  it('drops a read older than 6 hours: the check stopped, so the balance may have changed', () => {
+    const at = (h: number) => ids([acct({ checkedAt: hoursAgo(h) })]).some((c) => c.id === 'oorvia-funds-out')
+    expect(at(5.9)).toBe(true)
+    expect(at(6.1)).toBe(false)
+  })
+
+  describe('in adsStopped (the Home verdict)', () => {
+    const stopped = (adAccountFunds: AdAccountFunds[]) =>
+      createMetrics({ ...MOCK, sync: { ...MOCK.sync, adAccountFunds } }).adsStopped(['oorvia'])
+    const backup = acct({ accountId: '2', name: 'Oorvia-2', remaining: null, dailySpend: 0, level: 'ok', watched: false, active: false })
+
+    it('counts a store whose spending account is out of funds, its campaign still ACTIVE (Oorvia-1, 2026-11-24)', () => {
+      expect(stopped([acct({}), backup])).toEqual(['oorvia'])
+    })
+
+    it('not while another account of the store has an ACTIVE campaign, or the read is stale, unwatched or only low', () => {
+      expect(stopped([acct({}), { ...backup, active: true }])).toEqual([])
+      // The backup's read is stale: it may be the one still delivering.
+      expect(stopped([acct({}), { ...backup, checkedAt: hoursAgo(7) }])).toEqual([])
+      expect(stopped([acct({ checkedAt: hoursAgo(7) })])).toEqual([])
+      expect(stopped([acct({ watched: false })])).toEqual([])
+      expect(stopped([acct({ level: 'low' })])).toEqual([])
+    })
   })
 })
 
