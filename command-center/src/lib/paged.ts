@@ -20,10 +20,13 @@ type Query = { range(from: number, to: number): PageResult; setHeader?(name: str
  * same way (at worst a row is read twice), where parallel pages could each see a different table and skip one.
  * The first page also asks for the total (`Prefer: count=exact`), which saves the closing empty-page read: the read
  * ends on a short page once it has the counted rows. A full page, or no count, still reads on to an empty page.
+ * "Full" is measured against what the server actually serves per page: a first page shorter than `pageSize` that
+ * the count shows is not the whole table reveals a server cap, and later pages are judged against that.
  */
 export async function selectAll<T>(buildQuery: () => Query, { pageSize = PAGE_SIZE }: { pageSize?: number } = {}): Promise<T[]> {
   const rows: unknown[] = []
   let total: number | null = null
+  let step = pageSize // rows the server serves per page: pageSize, or a lower cap once the first page reveals one
   for (;;) {
     const from = rows.length // advance by rows actually received: a server cap below pageSize must not skip rows
     const q = buildQuery()
@@ -33,9 +36,10 @@ export async function selectAll<T>(buildQuery: () => Query, { pageSize = PAGE_SI
     if (from === 0 && typeof count === 'number') total = count
     // An empty page always ends the read: a server that caps below `pageSize` returns short pages mid-table.
     if (!data || data.length === 0) break
+    if (from === 0 && total !== null && data.length < total) step = Math.min(pageSize, data.length)
     rows.push(...data)
     // A short page is the end of the table once the counted rows are in. A full one may have rows after it.
-    if (total !== null && data.length < pageSize && rows.length >= total) break
+    if (total !== null && data.length < step && rows.length >= total) break
   }
   return rows as T[]
 }

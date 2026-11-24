@@ -84,6 +84,11 @@ describe('selectAll', () => {
       expect(f.calls).toEqual([[0, 999], [500, 1499], [1000, 1999]])
     })
 
+    it('reads rows added during the read when the server caps pages below the page size', async () => {
+      const f = fake(1000, { counts: true, cap: 500, grow: 7 })
+      expect(await selectAll<number>(f.build)).toEqual(all(1007))
+    })
+
     it('reads rows added at the end during the read', async () => {
       expect(await selectAll<number>(fake(2000, { counts: true, grow: 7 }).build)).toEqual(all(2007))
       expect(await selectAll<number>(fake(2500, { counts: true, grow: 7 }).build)).toEqual(all(2507))
