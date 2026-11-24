@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({ calls: [] as boolean[] }))
+const invalidate = vi.fn()
+// The dashboard cache exists only inside Next.
+vi.mock('@/lib/cached', () => ({ invalidateData: () => invalidate() }))
 vi.mock('@/lib/meta/funds', () => ({
   checkFunds: async ({ dryRun }: { dryRun: boolean }) => {
     h.calls.push(dryRun)

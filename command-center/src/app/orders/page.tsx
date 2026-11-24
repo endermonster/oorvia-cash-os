@@ -7,7 +7,7 @@ import { getChrome } from '@/lib/data'
 import { istNow } from '@/lib/dates'
 import { readView } from '@/lib/nav'
 import { deliveryRates, filterOrders, orderStats, shiftMonth, STATUS_LABEL, type OrderFilter, type OrderPayment, type OrderStatus, type OrderView } from '@/lib/orders'
-import { loadOrdersMonth } from '@/lib/orders-load'
+import { cachedOrdersMonth } from '@/lib/cached'
 
 export default function Page({ searchParams }: PageProps<'/orders'>) {
   return (
@@ -53,7 +53,7 @@ async function Orders({ searchParams }: { searchParams: PageProps<'/orders'>['se
   let error: string | null = null
   if (d.source === 'supabase') {
     try {
-      rows = await loadOrdersMonth(month, view.store === 'all' ? d.stores.map((s) => s.id) : [view.store])
+      rows = await cachedOrdersMonth(month, view.store === 'all' ? d.stores.map((s) => s.id) : [view.store])
     } catch (e) {
       console.error(`orders: ${e instanceof Error ? e.message : String(e)}`)
       error = 'Orders could not be loaded. Try again; if it keeps failing, check the server log.'

@@ -1,6 +1,7 @@
 import { clientSecret, isTransient, storeIdByDomain } from '@/lib/shopify/client'
 import { verifyShopifyHmac } from '@/lib/shopify/hmac'
 import { syncOrder } from '@/lib/shopify/sync'
+import { invalidateData } from '@/lib/cached'
 
 /** Shopify waits 5 s for a webhook answer. All Shopify calls share this budget, counted from arrival (requests and backoff waits)... */
 const SHOPIFY_BUDGET_MS = 3000
@@ -77,8 +78,11 @@ async function handle(request: Request, arrived: number): Promise<Response> {
     // The Shopify budget also counts from arrival, so a slow lookup above leaves less of it.
     await syncOrder(storeId, gid, { deadlineMs: Math.max(0, arrived + SHOPIFY_BUDGET_MS - Date.now()) })
   } catch (e) {
+    invalidateData() // a failed sync may still have written part of the order
+
     // Already recorded in cc_sync_runs. Retrying only helps for transient failures.
     return isTransient(e) ? new Response('Retry', { status: 500 }) : new Response('ok', { status: 200 })
   }
+  invalidateData()
   return new Response('ok', { status: 200 })
 }

@@ -12,9 +12,9 @@ import { createMetrics } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
 import { computeForecast, type Baseline } from '@/lib/forecast'
 import type { GstResult } from '@/lib/gst'
-import { loadCapital, loadGst } from '@/lib/gst-load'
+import { cachedBaselines, cachedCapital, cachedGst, cachedPnl } from '@/lib/cached'
+import type { loadCapital } from '@/lib/gst-load'
 import type { PnlResult } from '@/lib/pnl'
-import { loadBaselines, loadPnl } from '@/lib/pnl-load'
 
 export default function Page({ searchParams }: PageProps<'/money'>) {
   return (
@@ -49,10 +49,10 @@ async function Money({ searchParams }: { searchParams: PageProps<'/money'>['sear
   let baselines: Baseline[] | null = null
   if (d.source === 'supabase') {
     ;[pnl, gst, capital, baselines] = await Promise.all([
-      attempt('pnl', () => loadPnl(firstMonth, currentMonth, today)),
-      attempt('gst', () => loadGst(today)),
-      attempt('capital', () => loadCapital(today)),
-      attempt('baselines', () => loadBaselines()),
+      attempt('pnl', () => cachedPnl(firstMonth, currentMonth, today)),
+      attempt('gst', () => cachedGst(today)),
+      attempt('capital', () => cachedCapital(today)),
+      attempt('baselines', () => cachedBaselines()),
     ])
     if (!pnl) pnlError = 'The P&L could not be loaded. Try again; if it keeps failing, check the server log.'
   }

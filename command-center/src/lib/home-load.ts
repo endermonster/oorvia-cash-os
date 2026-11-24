@@ -1,9 +1,8 @@
 import 'server-only'
 import type { Data } from './data'
 import type { GstResult } from './gst'
-import { loadGst } from './gst-load'
+import { cachedGst, cachedPnl } from './cached'
 import type { PnlResult } from './pnl'
-import { loadPnl } from './pnl-load'
 import type { GstPosition } from './types'
 
 export function mapGstPosition(gst: GstResult): GstPosition | null {
@@ -30,8 +29,8 @@ async function attempt<T>(what: string, run: () => Promise<T>): Promise<T | null
 export async function loadHomeExtras(today: string): Promise<{ gst: GstPosition | null; ownerShareMonth: Data['ownerShareMonth'] }> {
   const month = today.slice(0, 7)
   const [gst, ownerShareMonth] = await Promise.all([
-    attempt('gst', async () => mapGstPosition(await loadGst(today))),
-    attempt('pnl', async () => mapOwnerShareMonth(await loadPnl(month, month, today), month)),
+    attempt('gst', async () => mapGstPosition(await cachedGst(today))),
+    attempt('pnl', async () => mapOwnerShareMonth(await cachedPnl(month, month, today), month)),
   ])
   return { gst, ownerShareMonth }
 }

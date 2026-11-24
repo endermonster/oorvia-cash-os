@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const lookup = vi.fn<(domain: string) => Promise<string | null>>()
 const sync = vi.fn<(storeId: string, gid: string, opts: { deadlineMs?: number }) => Promise<unknown>>()
 
+const invalidate = vi.fn()
+// The dashboard cache exists only inside Next.
+vi.mock('@/lib/cached', () => ({ invalidateData: () => invalidate() }))
 vi.mock('@/lib/shopify/client', () => ({
   storeIdByDomain: (d: string) => lookup(d),
   clientSecret: () => 'secret',
@@ -24,6 +27,7 @@ function webhook(body = JSON.stringify({ admin_graphql_api_id: 'gid://shopify/Or
 beforeEach(() => {
   lookup.mockReset().mockResolvedValue('kaiven')
   sync.mockReset().mockResolvedValue({})
+  invalidate.mockReset()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -33,6 +37,18 @@ describe('POST /api/webhooks/shopify', () => {
     expect(res.status).toBe(200)
     expect(sync).toHaveBeenCalledWith('kaiven', 'gid://shopify/Order/1', expect.objectContaining({ deadlineMs: expect.any(Number) }))
     expect(sync.mock.calls[0][2].deadlineMs).toBeLessThanOrEqual(3000)
+  })
+
+  it('drops the dashboard cache after a sync, also a failed one, and not for a rejected request', async () => {
+    await POST(webhook())
+    expect(invalidate).toHaveBeenCalledTimes(1)
+    sync.mockRejectedValueOnce(new Error('transient'))
+    await POST(webhook())
+    expect(invalidate).toHaveBeenCalledTimes(2)
+    const bad = webhook()
+    bad.headers.set('x-shopify-hmac-sha256', 'forged')
+    await POST(bad)
+    expect(invalidate).toHaveBeenCalledTimes(2)
   })
 
   it('answers 500 at 4 s when a cold-start store lookup hangs', async () => {

@@ -8,6 +8,11 @@ import { loadPnl } from './pnl-load'
 vi.mock('server-only', () => ({}))
 vi.mock('./gst-load', () => ({ loadGst: vi.fn() }))
 vi.mock('./pnl-load', () => ({ loadPnl: vi.fn() }))
+// The cache itself runs only inside Next: here the wrappers call the mocked loaders straight through.
+vi.mock('./cached', async () => {
+  const [g, p] = await Promise.all([import('./gst-load'), import('./pnl-load')])
+  return { cachedGst: (today: string) => g.loadGst(today), cachedPnl: (from: string, to: string, asOf?: string) => p.loadPnl(from, to, asOf) }
+})
 
 const today = '2026-11-22'
 const month = '2026-11'

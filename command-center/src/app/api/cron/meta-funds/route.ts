@@ -1,4 +1,5 @@
 import { bearerMatches } from '@/lib/auth/bearer'
+import { invalidateData } from '@/lib/cached'
 import { checkFunds } from '@/lib/meta/funds'
 
 /** The platform kills the function at this many seconds. */
@@ -21,5 +22,7 @@ export async function GET(request: Request) {
   } catch (e) {
     console.error(`meta funds: ${e instanceof Error ? e.message : String(e)}`)
     return Response.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 })
+  } finally {
+    if (!dryRun) invalidateData() // the top bar shows each ad account's funds; balances saved before a failure stay
   }
 }

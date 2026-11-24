@@ -171,3 +171,13 @@ a.glass-row:hover, .glass-row:has(a:hover) { background: linear-gradient(180deg,
   .rise { animation: rise 700ms cubic-bezier(0.16, 1, 0.3, 1) both; animation-delay: var(--delay, 0s); }
   @keyframes rise { from { opacity: 0.001; transform: translateY(8px); } }
 }
+
+/* Store and period switches (SwitchGroup): the content dims while the new view loads (with motion allowed, after a
+   beat so a fast switch does not flicker). Once you have switched, panels appear as they are: the rise-in is for the
+   first load only. */
+body:has([role="group"][data-pending]) main { opacity: 0.55; }
+@media (prefers-reduced-motion: no-preference) {
+  main { transition: opacity 150ms ease-out; }
+  body:has([role="group"][data-pending]) main { transition: opacity 200ms ease-out 120ms; }
+}
+html[data-navigated] .rise { animation: none; }

@@ -4,7 +4,8 @@
  * Every write /settings makes. NOT PUBLIC: proxy.ts gates the page, and each action checks the session itself
  * too (a Server Action is a POST endpoint anyone can call), so a matcher change cannot open them.
  */
-import { refresh } from 'next/cache'
+import { refresh, updateTag } from 'next/cache'
+import { DATA_TAG } from '@/lib/cached'
 import { allowedUser } from '@/lib/auth/server'
 import { istNow } from '@/lib/dates'
 import { selectAll } from '@/lib/paged'
@@ -35,6 +36,7 @@ async function write<T>(what: string, parsed: Parsed<T>, run: (v: T) => PromiseL
     console.error(`settings ${what}: ${error.message}`)
     return { ok: false, message: `Could not save the ${what}. Nothing changed; check the server log.` }
   }
+  updateTag(DATA_TAG) // the dashboard's cached reads: the next page shows this write
   refresh()
   return { ok: true, message: done(parsed.value) }
 }
@@ -188,7 +190,10 @@ export async function importVf(_: ActionState, f: FormData): Promise<ActionState
       shipments: ship ? await ship.text() : undefined,
       transactions: txn ? await txn.text() : undefined,
     }, dryRun)
-    if (!dryRun) refresh()
+    if (!dryRun) {
+      updateTag(DATA_TAG)
+      refresh()
+    }
     const what = [ship && 'shipments', txn && 'transactions'].filter(Boolean).join(' and ')
     return {
       ok: reported.length === 0,
@@ -196,6 +201,7 @@ export async function importVf(_: ActionState, f: FormData): Promise<ActionState
       lines: lines.map((l) => l.trim()).filter(Boolean), reported, keepInput: dryRun,
     }
   } catch (e) {
+    if (!dryRun) updateTag(DATA_TAG) // rows written before the failure stay
     console.error(`settings vFulfill import: ${e instanceof Error ? e.message : String(e)}`)
     return { ok: false, message: `Import failed: ${e instanceof Error ? e.message : 'unknown error'}. Rows already written stay; re-importing the same file is safe.` }
   }

@@ -59,8 +59,10 @@ export async function getChrome(): Promise<Chrome> {
     const { MOCK } = await import('./mock')
     return MOCK
   }
-  const { loadChrome } = await import('./load')
-  return loadChrome()
+  const { cachedChrome } = await import('./cached')
+  // The request's own clock: pages date their forms and months from it, and the cached snapshot can be up to 60 s
+  // old (yesterday, just after IST midnight). Its sync ages stay as of the snapshot.
+  return { ...(await cachedChrome()), now: new Date() }
 }
 
 export async function getData(): Promise<Data> {
@@ -71,8 +73,8 @@ export async function getData(): Promise<Data> {
     const { MOCK } = await import('./mock')
     return MOCK
   }
-  const { loadData } = await import('./load')
-  return loadData()
+  const [{ cachedData }, { istNow }] = await Promise.all([import('./cached'), import('./dates')])
+  return cachedData(istNow(new Date()).today)
 }
 
 export async function getHomeData(): Promise<Data> {
@@ -82,9 +84,9 @@ export async function getHomeData(): Promise<Data> {
     const { MOCK } = await import('./mock')
     return MOCK
   }
-  const [{ loadData }, { loadHomeExtras }, { istNow }] = await Promise.all([import('./load'), import('./home-load'), import('./dates')])
-  // Share one request time so the reads agree even at IST midnight.
-  const now = new Date()
-  const [data, extras] = await Promise.all([loadData(now), loadHomeExtras(istNow(now).today)])
+  const [{ cachedData }, { loadHomeExtras }, { istNow }] = await Promise.all([import('./cached'), import('./home-load'), import('./dates')])
+  // One IST day for both reads, so they agree even at midnight.
+  const today = istNow(new Date()).today
+  const [data, extras] = await Promise.all([cachedData(today), loadHomeExtras(today)])
   return { ...data, ...extras }
 }

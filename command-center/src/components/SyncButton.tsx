@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
+import { dropDashboardCache } from '@/app/actions'
 import { summarize, type Outcome } from '@/lib/sync-outcome'
 
 export function SyncButton() {
@@ -22,7 +23,10 @@ export function SyncButton() {
       const d = summarize(body)
       setError(res.ok ? d.alert : (d.alert ?? 'Sync failed'))
       setNote(d.note)
-      startRefresh(() => router.refresh()) // also on a partial failure: the stores that did sync have new numbers
+      // Also on a partial failure: the stores that did sync have new numbers. The cache goes first, or the refresh
+      // could read the figures from before the sync.
+      await dropDashboardCache().catch(() => {})
+      startRefresh(() => router.refresh())
     } catch {
       setError('Sync failed: could not reach the server')
     } finally {

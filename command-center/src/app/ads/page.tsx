@@ -5,7 +5,8 @@ import { rateSourceNote } from '@/components/bits'
 import { Skeleton } from '@/components/Skeleton'
 import { TopBar } from '@/components/TopBar'
 import { campaignStats, dailyAds, monthDays, sortCampaigns, SORTS, spendWeightedBreakeven, storeAds, type SortKey, type StoreAds } from '@/lib/ads'
-import { loadAds } from '@/lib/ads-load'
+import type { loadAds } from '@/lib/ads-load'
+import { cachedAds } from '@/lib/cached'
 import { getData } from '@/lib/data'
 import { createMetrics, type PeriodId } from '@/lib/metrics'
 import { readView } from '@/lib/nav'
@@ -72,7 +73,8 @@ async function Ads({ searchParams }: { searchParams: PageProps<'/ads'>['searchPa
   let error: string | null = null
   if (d.source === 'supabase') {
     try {
-      data = await loadAds(from, to, storeIds, d.products)
+      // Only the fields the read uses: the rest of each product would only split the cache key.
+      data = await cachedAds(from, to, storeIds, d.products.map((p) => ({ storeId: p.storeId, sku: p.sku, handle: p.handle })))
     } catch (e) {
       console.error(`ads: ${e instanceof Error ? e.message : String(e)}`)
       error = 'Ads could not be loaded. Try again; if it keeps failing, check the server log.'

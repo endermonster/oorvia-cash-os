@@ -1,10 +1,13 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createMetrics } from '@/lib/metrics'
 import { CASH, MOCK } from '@/lib/mock'
 import type { ViewState } from '@/lib/nav'
 import { codShareLabel, HomeView } from './Home'
 import { TopBar } from './TopBar'
+
+// The store and period switches navigate with the app router, which is not mounted in a static render.
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: () => {} }) }))
 
 describe('TopBar', () => {
   const view: ViewState = {

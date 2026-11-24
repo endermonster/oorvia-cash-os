@@ -5,6 +5,9 @@ const h = vi.hoisted(() => ({
   answers: {} as Record<string, object | Error>,
   signedIn: true,
 }))
+const invalidate = vi.fn()
+// The dashboard cache exists only inside Next.
+vi.mock('@/lib/cached', () => ({ invalidateData: () => invalidate() }))
 vi.mock('@/lib/auth/server', () => ({ allowedUser: async () => (h.signedIn ? { id: 'u1', email: 'owner@example.com' } : null) }))
 vi.mock('@/lib/meta/sync', () => ({
   syncMeta: async (store: string, opts: { deadlineAt?: number; requestTimeoutMs?: number }) => {

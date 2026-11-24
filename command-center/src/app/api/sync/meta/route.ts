@@ -1,4 +1,5 @@
 import { allowedUser } from '@/lib/auth/server'
+import { invalidateData } from '@/lib/cached'
 import { syncAllStores } from '@/lib/meta/run'
 
 /** The platform kills the function at this many seconds. */
@@ -12,5 +13,9 @@ export const maxDuration = 60
  */
 export async function POST() {
   if (!(await allowedUser())) return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  return syncAllStores()
+  try {
+    return await syncAllStores()
+  } finally {
+    invalidateData() // also after a partial failure: the stores that did sync have new numbers
+  }
 }

@@ -3,7 +3,8 @@ import { AlertTriangle, Database, House, Infinity as MetaMark, Megaphone, Packag
 import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
-import { StoreDot, vfState } from './bits'
+import { vfState } from './bits'
+import { SwitchGroup } from './SwitchGroup'
 import { SyncButton } from './SyncButton'
 
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
@@ -58,29 +59,15 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
             </Link>
           </nav>
 
-          {tabPath && <div role="group" aria-label="Store" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]">
-            {stores.map((st) => {
-              const on = view.store === st.id
-              return (
-                <Link key={st.id} href={href(tabPath, { ...view, store: st.id })} aria-current={on ? 'true' : undefined}
-                  className={`${seg} flex items-center gap-2 max-sm:min-h-9 ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
-                  {st.id !== 'all' && <StoreDot id={st.id} />}{st.name}
-                </Link>
-              )
-            })}
-          </div>}
+          {tabPath && <SwitchGroup label="Store" current={view.store}
+            items={stores.map((st) => ({ id: st.id, href: href(tabPath, { ...view, store: st.id }), label: st.name, dot: st.id === 'all' ? undefined : st.id }))}
+            className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]"
+            itemClass={`${seg} flex items-center gap-2 max-sm:min-h-9`} />}
 
-          {tabPath && (tab === 'home' || tab === 'ads') && <div role="group" aria-label="Period" className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto">
-            {PERIODS.map((p) => {
-              const on = view.period === p.id
-              return (
-                <Link key={p.id} href={href(tabPath, { ...view, period: p.id })} aria-current={on ? 'true' : undefined}
-                  className={`${seg} flex items-center max-sm:min-h-9 ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
-                  {p.label}
-                </Link>
-              )
-            })}
-          </div>}
+          {tabPath && (tab === 'home' || tab === 'ads') && <SwitchGroup label="Period" current={view.period}
+            items={PERIODS.map((p) => ({ id: p.id, href: href(tabPath, { ...view, period: p.id }), label: p.label }))}
+            className="glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto"
+            itemClass={`${seg} flex items-center max-sm:min-h-9`} />}
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">
