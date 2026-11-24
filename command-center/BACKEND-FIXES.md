@@ -15,6 +15,8 @@ The backend now exposes the fields below. Nothing on screen changes until a comp
 | 3 | `d.sync.vfulfillMissingStores` (2026-11-24) | Stores left unticked in vFulfill's export. `vfulfillDataDaysAgo` already counts them; Needs your call names them (`vf-stale`). The /settings upload report also warns ("no kaiven shipments in this file…"). TopBar's vFulfill chip could name them. |
 | 3 | `d.sync.vfulfillDataDaysAgo` | Money `CashCard.tsx:26` "Every delivered COD order is remitted": only say it when the shipments data is fresh; otherwise say the data runs to `shipmentsThrough`. |
 | 4 | `calls()` now emits `${id}-ads-stopped` (tone `warn`) | No wiring needed; it shows in Needs your call. The spend-drop rule needs `d.sync.metaYesterdayVerified[store]` (the Meta run matched yesterday's campaign spend to the account total); "all paused" needs no ACTIVE campaign. Home's hero sentence ("Kaiven is paying for itself") should not lead when that call is present. |
+| 4b | 2026-11-24, "Needs your call lists only decisions not yet made" | A user-set status (PAUSED, CAMPAIGN_PAUSED, ADSET_PAUSED, ARCHIVED, DELETED) is never a call: `-ads-stopped` fires only for Meta stops (DISAPPROVED, WITH_ISSUES, PENDING_BILLING_INFO) or a verified drop in campaigns still live. `-loss` / `-below` are skipped when every campaign that spent in the period is user-paused, none is ACTIVE and nothing spent yesterday; the loss still shows on the store row. Campaign-level status only: a pause at ad-set or ad level is not seen. |
+| 3b | `d.sync.vfulfillOverdueOrders` (2026-11-24) | Orders vFulfill should have shipped (stores with vFulfill history, real, uncancelled, placed after `shipmentsThrough` and > 3 days ago, no shipment row). 0 = data current: `vfulfillDataDaysAgo` is null and `vf-stale` stays quiet however old the newest shipment or import. Stores that have never shipped (Kaiven, Selnova today) are never flagged: no upload warning, orders keep "Not shipped". |
 | 5 | `getHomeData()` (src/lib/data.ts) | `src/app/page.tsx`: swap `getData()` for `getHomeData()`. Then `m.gst()` (= Money's GST headline, `owed` = GSTR-3B cash) and `m.ownerShare()` (= Money's P&L "Your 50% share" for this month) are filled and `BottomLine` renders them. Footer source label for the share should say "monthly P&L", not "profit model". |
 
 Fixed costs, two methods ("Also seen"): kept both on purpose. Period profit (7D/30D/Month on Home) spreads fixed costs as
@@ -71,6 +73,12 @@ are logic, data and wiring, which Vedaant assigned to you. Values are as seen li
 - **Problem:** Home shows "GST: On Money →" and "Your share: On Money →", while Money has GST **₹305** (Nov) and your 50%
   share **−₹12,521**.
 - **Fix:** load both into the Home data. `HomeView` already renders them when present (`Home.tsx` `BottomLine`).
+
+## Follow-up (not built)
+- **Out of funds / unsettled ad account → `-ads-stopped` call.** 2026-11-24: Oorvia's "OMS-1M | BCT | 18-11-26" ran out of
+  funds; Meta stopped delivery while the campaign stayed ACTIVE (spend ₹5,588 → ₹3,983 → ₹0.25 → ₹0). A Meta-side stop,
+  so it is a call, but campaign `effective_status` does not show it and the spend-drop path needs a verified yesterday.
+  Needs the ad account's status / funding state (e.g. `account_status`, `disable_reason`, balance) from the Meta sync.
 
 ## Also seen (lower priority)
 - **Fixed costs, two methods:** Home spreads the quarterly vFulfill fee as a run rate (₹14,062 for November), while the

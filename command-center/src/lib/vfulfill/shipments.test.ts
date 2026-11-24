@@ -94,6 +94,10 @@ describe('storesMissingFromFile', () => {
     ], now)).toEqual([{ storeId: 'kaiven', orders: 2 }])
   })
 
+  it('never names a store with no vFulfill history (not in historyStoreIds)', () => {
+    expect(storesMissingFromFile(rows, ['oorvia'], [o('kaiven', '2026-11-17T10:00:00+05:30')], now)).toEqual([])
+  })
+
   it('says nothing for a file with no closed shipment, or a store that is in the file', () => {
     expect(storesMissingFromFile([{ store_id: 'oorvia', closed_on: null }], stores, [o('kaiven', '2026-11-17T10:00:00+05:30')], now)).toEqual([])
     expect(storesMissingFromFile([...rows, { store_id: 'kaiven', closed_on: null }], stores, [o('kaiven', '2026-11-17T10:00:00+05:30')], now)).toEqual([])

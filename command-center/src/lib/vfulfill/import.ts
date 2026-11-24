@@ -55,7 +55,8 @@ async function shipments(sb: SupabaseClient, csv: string, stores: Store[], dryRu
 
   if (report.rows === 0) reported.push('the shipments file has no rows, only the header: export again with a wider date range in vFulfill')
   if (report.noStore.length) reported.push(`no store for order name: ${list(report.noStore)}`)
-  for (const m of storesMissingFromFile(rows, stores.map((st) => st.id), orderRows, new Date())) {
+  const history = [...new Set([...stored.keys()].map((k) => k.split('|')[0]))]
+  for (const m of storesMissingFromFile(rows, history, orderRows, new Date())) {
     reported.push(`no ${m.storeId} shipments in this file, though it has ${m.orders} order(s) older than ${SHIP_LAG_DAYS} days in the file's range: tick every store in vFulfill's export (if you did, vFulfill has shipped none of them)`)
   }
   for (const [s, n] of Object.entries(report.unknownStatus)) reported.push(`unknown Shipment Status ${JSON.stringify(s)} x${n} (skipped)`)

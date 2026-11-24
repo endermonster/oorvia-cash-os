@@ -128,16 +128,18 @@ type CoverageOrder = { store_id: string; placed_at: string; cancelled_at: string
  * Stores with no row in this file although they have real, uncancelled orders that should be in it: placed on or
  * after the file's earliest closed date and at least SHIP_LAG_DAYS before `now`. vFulfill exports only the stores
  * ticked in its export dialog, so this is usually a store left unticked. Empty for a file with no closed shipment.
+ * `historyStoreIds`: stores with at least one stored shipment. A store that has never shipped through vFulfill (no
+ * inventory there yet) is never named: its absence is expected.
  */
 export function storesMissingFromFile(
-  rows: Pick<ShipmentRow, 'store_id' | 'closed_on'>[], storeIds: string[], orders: CoverageOrder[], now: Date,
+  rows: Pick<ShipmentRow, 'store_id' | 'closed_on'>[], historyStoreIds: string[], orders: CoverageOrder[], now: Date,
 ): { storeId: string; orders: number }[] {
   const closed = rows.map((r) => r.closed_on).filter((d): d is string => d !== null).sort()
   if (closed.length === 0) return []
   const from = Date.parse(`${closed[0]}T00:00:00+05:30`)
   const to = now.getTime() - SHIP_LAG_DAYS * 864e5
   const inFile = new Set(rows.map((r) => r.store_id))
-  return storeIds.filter((id) => !inFile.has(id)).map((storeId) => ({
+  return historyStoreIds.filter((id) => !inFile.has(id)).map((storeId) => ({
     storeId,
     orders: orders.filter((o) => o.store_id === storeId && !o.is_test && o.cancelled_at === null
       && Date.parse(o.placed_at) >= from && Date.parse(o.placed_at) <= to).length,

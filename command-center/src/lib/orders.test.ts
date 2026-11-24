@@ -56,7 +56,7 @@ describe('buildOrders', () => {
   })
 
   it('matches shipments and charges by store as well as name (#1001 exists in two stores)', () => {
-    expect(rows.find((r) => r.storeId === 'kaiven')).toMatchObject({ status: 'not_shipped', noShipmentData: true, rtoChargesPaise: 0 })
+    expect(rows.find((r) => r.storeId === 'kaiven')).toMatchObject({ status: 'not_shipped', noShipmentData: false, rtoChargesPaise: 0 })
     expect(rows.find((r) => r.storeId === 'selnova')).toMatchObject({ status: 'rto', noShipmentData: false, rtoChargesPaise: 5_000 })
   })
 
@@ -82,13 +82,13 @@ describe('buildOrders', () => {
 })
 
 describe('buildOrders per-store shipments cutoff', () => {
-  it("uses each order's own store: a store with no shipments data flags even old orders", () => {
+  it("uses each order's own store; a store that has never shipped through vFulfill keeps Not shipped", () => {
     const views = buildOrders([
       order('#OV9', { placedAt: '2026-10-01T10:00:00+05:30' }),
       order('#KV9', { storeId: 'kaiven', placedAt: '2026-10-01T10:00:00+05:30' }),
       order('#SN9', { storeId: 'selnova', placedAt: '2026-10-08T10:00:00+05:30' }),
     ], [], [], { oorvia: '2026-10-20', selnova: '2026-10-05' })
-    expect(Object.fromEntries(views.map((v) => [v.orderName, v.noShipmentData]))).toEqual({ '#OV9': false, '#KV9': true, '#SN9': true })
+    expect(Object.fromEntries(views.map((v) => [v.orderName, v.noShipmentData]))).toEqual({ '#OV9': false, '#KV9': false, '#SN9': true })
   })
 })
 

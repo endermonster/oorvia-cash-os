@@ -172,4 +172,10 @@ export type SyncStatus = {
    * be in it. Only stores with vFulfill history; one with no shipment rows yet is never listed.
    */
   vfulfillMissingStores: StoreId[]
+  /**
+   * Orders vFulfill should have shipped by now that the shipments data does not show: from stores with vFulfill history,
+   * real and uncancelled, placed after `shipmentsThrough` and more than SHIP_LAG_DAYS ago, with no shipment row.
+   * 0 = the data is current even when `shipmentsThrough` is old (nothing new to ship). Null = not checked.
+   */
+  vfulfillOverdueOrders: number | null
 }

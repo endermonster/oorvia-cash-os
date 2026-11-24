@@ -618,21 +618,35 @@ describe('ads stopped calls', () => {
 
   it('stays quiet once the store has spend synced for today (ads resumed or a replacement campaign)', () => {
     expect(calls([...drop, spend(0, 300, 'new')]).some((c) => c.id === stopped)).toBe(false)
-    expect(calls([spend(3, 100), spend(1, 100), spend(0, 50, 'new')], [{ ...campaign, status: 'PAUSED' }]).some((c) => c.id === stopped)).toBe(false)
+    expect(calls([spend(3, 100), spend(1, 100), spend(0, 50, 'new')], [{ ...campaign, status: 'DISAPPROVED' }]).some((c) => c.id === stopped)).toBe(false)
   })
 
-  it("still warns when today's only spend is a paused campaign's trickle", () => {
-    const paused = [{ ...campaign, status: 'PAUSED' }]
-    expect(calls([...drop, spend(0, 10)], paused).find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹5,354/day before · all campaigns paused')
-    expect(calls([spend(3, 100), spend(1, 100), spend(0, 10)], paused).some((c) => c.id === stopped)).toBe(true)
-  })
-
-  it.each(['IN_PROCESS', 'WITH_ISSUES'])('does not read %s as paused', (status) => {
+  it.each(['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'ARCHIVED', 'DELETED'])('is not a call when the user stopped the ads himself (%s)', (status) => {
+    expect(calls(drop, [{ ...campaign, status }]).some((c) => c.id === stopped)).toBe(false)
     expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status }]).some((c) => c.id === stopped)).toBe(false)
   })
 
-  it('reads CAMPAIGN_PAUSED as paused even while Meta is stale', () => {
-    expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status: 'CAMPAIGN_PAUSED' }], null).find((c) => c.id === stopped)?.detail).toContain('all campaigns paused')
+  it('counts a drop in the campaigns still live when the user paused another one', () => {
+    const out = calls([...drop, spend(4, 9000, 'old'), spend(3, 9000, 'old'), spend(1, 9000, 'old')], [campaign, { ...campaign, id: 'old', status: 'PAUSED' }])
+    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹5,354/day before')
+  })
+
+  it.each(['DISAPPROVED', 'WITH_ISSUES', 'PENDING_BILLING_INFO'])('warns when Meta stopped every spending campaign (%s), even while Meta is stale', (status) => {
+    expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status }], null).find((c) => c.id === stopped)?.detail).toBe(`Meta stopped the campaign (${status})`)
+  })
+
+  it("still warns when today's only spend is a stopped campaign's trickle, and names both rules", () => {
+    const out = calls([...drop, spend(0, 10)], [{ ...campaign, status: 'DISAPPROVED' }])
+    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹5,354/day before · Meta stopped the campaign (DISAPPROVED)')
+  })
+
+  it('reads a mix of Meta-stopped and user-paused campaigns as a Meta stop', () => {
+    const out = calls([spend(3, 100), spend(1, 100), spend(2, 50, 'b')], [{ ...campaign, status: 'DISAPPROVED' }, { ...campaign, id: 'b', status: 'PAUSED' }])
+    expect(out.find((c) => c.id === stopped)?.detail).toBe('Meta stopped the campaign (DISAPPROVED)')
+  })
+
+  it('does not read IN_PROCESS as stopped', () => {
+    expect(calls([spend(3, 100), spend(1, 100)], [{ ...campaign, status: 'IN_PROCESS' }]).some((c) => c.id === stopped)).toBe(false)
   })
 
   it('warns on the spend drop and keeps the store loss call', () => {
@@ -651,20 +665,12 @@ describe('ads stopped calls', () => {
     expect(calls(rows).some((c) => c.id === stopped)).toBe(false)
   })
 
-  it('averages over the three complete days and includes the status when both rules fire', () => {
-    const out = calls([spend(2, 5354), spend(1, 28)], [{ ...campaign, status: 'PAUSED' }])
-    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹1,785/day before · all campaigns paused')
+  it('averages over the three complete days', () => {
+    expect(calls([spend(2, 5354), spend(1, 28)]).find((c) => c.id === stopped)?.detail).toBe('₹28 yesterday vs ₹1,785/day before')
   })
 
-  it('warns when every campaign that spent in the last seven complete days is paused', () => {
-    const out = calls([spend(8, 1000, 'idle'), spend(7, 120), spend(1, 80)], [
-      { ...campaign, status: 'PAUSED' }, { ...campaign, id: 'idle', status: 'ARCHIVED' },
-    ])
-    expect(out.find((c) => c.id === stopped)?.detail).toBe('₹80 yesterday · ₹200 over 7 days · all campaigns paused')
-  })
-
-  it('does not claim all paused while an ACTIVE campaign exists that has not spent yet (a replacement)', () => {
-    const out = calls([spend(7, 120), spend(1, 80)], [{ ...campaign, status: 'PAUSED' }, { ...campaign, id: 'new' }])
+  it('does not claim a Meta stop while an ACTIVE campaign exists that has not spent yet (a replacement)', () => {
+    const out = calls([spend(7, 120), spend(1, 80)], [{ ...campaign, status: 'DISAPPROVED' }, { ...campaign, id: 'new' }])
     expect(out.some((c) => c.id === stopped)).toBe(false)
   })
 
@@ -677,13 +683,37 @@ describe('ads stopped calls', () => {
   })
 
   it.each(['ACTIVE', null])('does not warn when a spending campaign has status %s', (status) => {
-    const out = calls([spend(2, 80), spend(1, 100, 'other')], [{ ...campaign, status: 'PAUSED' }, { ...campaign, id: 'other', status }])
+    const out = calls([spend(2, 80), spend(1, 100, 'other')], [{ ...campaign, status: 'DISAPPROVED' }, { ...campaign, id: 'other', status }])
     expect(out.some((c) => c.id === stopped)).toBe(false)
   })
 
-  it('requires spend in the last seven complete days even when campaigns are paused', () => {
-    const out = calls([spend(8, 1000), spend(0, 1000)], [{ ...campaign, status: 'PAUSED' }])
+  it('requires spend in the last seven complete days even when Meta stopped the campaigns', () => {
+    const out = calls([spend(8, 1000), spend(0, 1000)], [{ ...campaign, status: 'DISAPPROVED' }])
     expect(out.some((c) => c.id === stopped)).toBe(false)
+  })
+})
+
+describe('user-paused stores', () => {
+  const id = 'kaiven'
+  const campaign: Campaign = { id: 'kv1', storeId: id, sku: 'KV-DHS', name: 'Scalp – Broad', status: 'PAUSED' }
+  const spend = (daysAgo: number, amount: number): CampaignDay => ({
+    date: addDays(TODAY, -daysAgo), storeId: id, campaignId: campaign.id, sku: campaign.sku,
+    spend: amount, impressions: 1000, clicks: 10, metaPurchases: 0, attributedOrders: 0,
+  })
+  // No orders, so the spend makes the store lose money in the period.
+  const ids = (campaignDays: CampaignDay[], campaigns = [campaign]) =>
+    createMetrics({ ...MOCK, orders: [], cash: null, campaignDays, campaigns }).calls(resolvePeriod('7d'), [id]).map((c) => c.id).filter((c) => c.startsWith(id))
+  const losing = (out: string[]) => out.some((c) => c === `${id}-loss` || c === `${id}-below`)
+  const paid = [spend(4, 5354), spend(3, 5354), spend(2, 5354)]
+
+  it('drops the loss and below-breakeven calls once he paused every spending campaign and nothing spent yesterday', () => {
+    expect(ids(paid)).toEqual([])
+  })
+
+  it('keeps the loss call while ads still spent yesterday, or a campaign is still ACTIVE', () => {
+    expect(losing(ids([...paid, spend(1, 28)]))).toBe(true)
+    expect(losing(ids(paid, [{ ...campaign, status: 'ACTIVE' }]))).toBe(true)
+    expect(losing(ids(paid, [campaign, { ...campaign, id: 'new', status: 'ACTIVE' }]))).toBe(true)
   })
 })
 
@@ -721,6 +751,15 @@ describe('vFulfill staleness calls', () => {
     })
     expect(at(['kaiven', 'selnova'])?.title).toBe('Kaiven and Selnova not in the last vFulfill import')
     expect(at([])).toBeUndefined()
+  })
+
+  it('stays quiet when no order is waiting on vFulfill, however old the newest shipment or import', () => {
+    const at = (vfulfillOverdueOrders: number | null) =>
+      createMetrics({ ...MOCK, sync: { ...MOCK.sync, vfulfillImportDaysAgo: 4, vfulfillDataDaysAgo: null, shipmentsThrough: '2026-09-02', vfulfillOverdueOrders } })
+        .calls(resolvePeriod('7d'), []).find((c) => c.id === 'vf-stale')
+    expect(at(0)).toBeUndefined()
+    expect(at(6)?.title).toBe('vFulfill import is 4 days old')
+    expect(at(null)?.title).toBe('vFulfill import is 4 days old')
   })
 })
 

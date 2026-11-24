@@ -10,7 +10,7 @@ import { metaStoreIds } from './meta/accounts'
 import { selectAll } from './paged'
 import { monthlyRunRate, type FixedCost } from './pnl'
 import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
-import { coverageChecks } from './vfulfill/shipments'
+import { coverageChecks, SHIP_LAG_DAYS } from './vfulfill/shipments'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, OrderDay, OrderHour, OrderPayment, Product, ProductStage, RecentOrder, ResolvedDay,
   Store, StoreId, SyncStatus,
@@ -131,7 +131,7 @@ const META_SOURCES = ['meta']
 // run for every store and keeps this honest.
 export function mapSync(
   runs: SyncRunRow[], storeIds: string[], now: Date, metaStoreIds: string[] = storeIds, shipmentsThrough: string | null = null,
-  missingStores: { storeId: string; seenAt: string }[] = [],
+  missingStores: { storeId: string; seenAt: string }[] = [], overdueOrders: number | null = null,
 ): SyncStatus {
   // `skipUnseen`: a store with no ok run ever is left out instead of making the whole source "never" (Meta only).
   const unseen: string[] = []
@@ -166,8 +166,9 @@ export function mapSync(
   }
   const daysSince = (day: string) => Math.max(0, Math.floor((Date.parse(istNow(now).today) - Date.parse(day.slice(0, 10))) / 864e5))
   // The worse of the newest closed shipment and any store left out of the newest import (aged from its own last one).
+  // An old closed shipment is not stale data when no order since is waiting on vFulfill (a quiet store, nothing to ship).
   const ages = [
-    ...(shipmentsThrough === null ? [] : [daysSince(shipmentsThrough)]),
+    ...(shipmentsThrough === null || overdueOrders === 0 ? [] : [daysSince(shipmentsThrough)]),
     ...missingStores.map((m) => daysSince(istNow(new Date(m.seenAt)).today)),
   ]
   const vfulfillDataDaysAgo = ages.length === 0 ? null : Math.max(...ages)
@@ -181,6 +182,7 @@ export function mapSync(
     shipmentsThrough,
     vfulfillDataDaysAgo,
     vfulfillMissingStores: missingStores.map((m) => sid(m.storeId)),
+    vfulfillOverdueOrders: overdueOrders,
   }
 }
 
@@ -289,7 +291,7 @@ export async function readShipmentCoverage(sb: Client, storeIds: string[]): Prom
 
 /**
  * Per store, the IST day its shipments data runs to: the earlier of the newest closed shipment and its own last
- * import. A store missing here has no shipments data at all, so its unshipped orders read "No shipment data".
+ * import. A store missing here has never shipped through vFulfill: its unshipped orders stay "Not shipped".
  */
 export function shipmentCutoffs({ through, seenByStore }: ShipmentCoverage): Record<string, string> {
   if (through === null) return {}
@@ -297,6 +299,30 @@ export function shipmentCutoffs({ through, seenByStore }: ShipmentCoverage): Rec
     const seen = istNow(new Date(seenAt)).today
     return [id, seen < through ? seen : through]
   }))
+}
+
+/**
+ * Orders from stores with vFulfill history that should be in the shipments data by now and are not: real, uncancelled,
+ * placed after the newest closed shipment's day and more than SHIP_LAG_DAYS ago, with no shipment row. Null when there
+ * is no closed shipment to measure from.
+ */
+async function readOverdueOrders(sb: Client, { through, seenByStore }: ShipmentCoverage, now: Date): Promise<number | null> {
+  const stores = Object.keys(seenByStore)
+  if (through === null) return null
+  if (stores.length === 0) return 0
+  const due = await selectAll<{ store_id: string; order_name: string }>(() => sb.from('cc_orders').select('store_id, order_name')
+    .in('store_id', stores).eq('is_test', false).is('cancelled_at', null)
+    .gte('placed_at', `${addDays(through, 1)}T00:00:00+05:30`).lte('placed_at', new Date(now.getTime() - SHIP_LAG_DAYS * 864e5).toISOString())
+    .order('store_id').order('order_name'))
+  const names = [...new Set(due.map((o) => o.order_name))]
+  const shipped = new Set<string>()
+  for (let i = 0; i < names.length; i += 100) {
+    const part = names.slice(i, i + 100)
+    const rows = await selectAll<{ store_id: string; order_name: string }>(
+      () => sb.from('cc_shipments').select('store_id, order_name').in('order_name', part).order('store_id').order('order_name'))
+    for (const r of rows) shipped.add(`${r.store_id}|${r.order_name}`)
+  }
+  return due.filter((o) => !shipped.has(`${o.store_id}|${o.order_name}`)).length
 }
 
 /** Stores left out of the newest shipments import that have an order proving they should have been in it. */
@@ -322,8 +348,9 @@ async function readSync(sb: Client, storeIds: string[], metaStoreIds: string[], 
   }))
   const coverage = readShipmentCoverage(sb, storeIds)
   const missing = coverage.then((c) => readMissingStores(sb, c.seenByStore))
-  const [{ through }, missingStores, ...runs] = await Promise.all([coverage, missing, ...runQueries])
-  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores)
+  const overdue = coverage.then((c) => readOverdueOrders(sb, c, now))
+  const [{ through }, missingStores, overdueOrders, ...runs] = await Promise.all([coverage, missing, overdue, ...runQueries])
+  return mapSync(runs.flat(), storeIds, now, metaStoreIds, through, missingStores, overdueOrders)
 }
 
 /** The newest orders only, for the live map: two small reads, no history. */
