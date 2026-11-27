@@ -63,7 +63,7 @@ Breakeven ROAS is computed per store from real costs, never typed in.
 ## Brand Commitments
 
 - Store names: Oorvia, Kaiven, Selnova. Business name: VXP Ventures (internal only; not shown on storefronts, but fine in this private tool).
-- Visual direction: the user gave full creative control over the front end on 2026-11-20; the old UI and DESIGN.md were a quick preview, not a commitment. Binding, set by the user the same day: dark colours and Apple-style Liquid Glass material. Must share no design tokens with "Money" and cannot be mistaken for it. The earlier reference screenshot (ROAS gauge with breakeven marker, COD/prepaid order grid, sentence-style insights, cumulative revenue-vs-spend chart, live order stream) is a list of useful ideas, not a required look.
+- Visual direction: the user gave full creative control over the front end on 2026-11-20; the old UI and DESIGN.md were a quick preview, not a commitment. Binding, set by the user 2026-11-27 (replacing the Liquid Glass look pinned on 2026-11-20): dark, matte charcoal panels with no glass, blur or glow, and one luminous lime accent used as solid fills ("Lime", see DESIGN.md), chosen from the user's own references; must hold up as more stores are added. Must share no design tokens with "Money" and cannot be mistaken for it. The earlier reference screenshot (ROAS gauge with breakeven marker, COD/prepaid order grid, sentence-style insights, cumulative revenue-vs-spend chart, live order stream) is a list of useful ideas, not a required look.
 
 ## Evidence on Hand
 

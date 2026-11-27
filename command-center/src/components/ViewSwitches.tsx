@@ -3,12 +3,10 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { startTransition, useOptimistic, type ReactNode } from 'react'
-import type { StoreId } from '@/lib/types'
 import { viewKey } from '@/lib/view-key'
-import { StoreDot } from './bits'
 import { CustomRange } from './CustomRange'
 
-export type SwitchItem = { id: string; label: string; dot?: StoreId }
+export type SwitchItem = { id: string; label: string }
 /** `from`/`to`: a custom range just applied and still loading (Home's switch only). */
 type View = { store: string; period: string; from?: string; to?: string }
 
@@ -61,6 +59,8 @@ export function ViewSwitches({ store, period, hrefs, stores, periods, custom }: 
         const on = shown[dim] === it.id
         return (
           <Link key={it.id} href={urlOf(next)} aria-current={on ? 'true' : undefined}
+            // The linked highlight on Home outlines the store being traced.
+            data-peek={dim === 'store' && it.id !== 'all' ? it.id : undefined}
             onClick={(e) => {
               // A new tab or window: the browser handles it. The choice already showing: nothing to load.
               if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
@@ -69,7 +69,7 @@ export function ViewSwitches({ store, period, hrefs, stores, periods, custom }: 
               go(next)
             }}
             className={`${g.itemClass} ${on ? 'glass-pill-on font-semibold text-ink' : 'text-ink-2 hover:text-ink'}`}>
-            {it.dot && <StoreDot id={it.dot} />}{it.label}
+            {it.label}
           </Link>
         )
       })}

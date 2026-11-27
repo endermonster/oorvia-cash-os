@@ -1,11 +1,12 @@
 import Link from 'next/link'
 import { AlertTriangle, ChevronRight, CircleCheck, FileText, PieChart, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
-import { fmtX, inr, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
+import { fmtX, inr, pct, PERIODS, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
 import { istNow } from '@/lib/dates'
 import type { StoreId } from '@/lib/types'
-import { Delta, rateSourceNote, Signed, StoreDot, tone } from './bits'
+import { Delta, rateSourceNote, Signed, tone } from './bits'
+import { HighlightStatus, HighlightValue, LinkedHighlight } from './LinkedHighlight'
 import { LiveMap } from './LiveMap'
 import { Overview } from './Overview'
 import { RevenueChart } from './RevenueChart'
@@ -27,52 +28,81 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   const series = m.series(ids, period)
   const end = series.at(-1)
   const { net, prevNet, fixedCosts } = pf.total
+  // Each store's own slice, for the linked highlight: the overview and the chart show it while that store is traced.
+  const perStore = pf.stores.map((s) => ({ stats: s, series: m.series([s.store.id], period) }))
+  // Phone legend totals follow the traced store, like the chart lines.
+  const endRev = Object.fromEntries(perStore.map((s) => [s.stats.store.id, inr(s.series.at(-1)?.cumRevenue ?? 0)]))
+  const endSpend = Object.fromEntries(perStore.map((s) => [s.stats.store.id, inr(s.series.at(-1)?.cumSpend ?? 0)]))
+  const names = Object.fromEntries(m.stores.map((s) => [s.id, s.name]))
+  const v = verdict(pf.stores, m.metaNotConnected, stopped)
 
   return (
     <main className={`${pageFrame} space-y-3 pb-6 pt-3`}>
-      <Overview total={pf.total} series={series} period={period} nowHour={istNow(now).hour} prevHoursComplete={m.yesterdayHoursComplete(ids)} />
+      <LinkedHighlight />
+      <Overview total={pf.total} series={series} period={period} nowHour={istNow(now).hour} prevHoursComplete={m.yesterdayHoursComplete(ids)}
+        stores={perStore} links={(k, store) => {
+          const v = store ? { ...view, store: store.id as StoreId } : view
+          const scope = store?.name ?? 'all stores'
+          // Orders shows a calendar month (no period); Ads has only today, 7D, 30D and Month and falls back to 7D.
+          if (k !== 'spend') return { href: href('/orders', v), label: `Orders for ${scope} (this month)` }
+          const shown = PERIODS.some((p) => p.id === period.id) ? period.short : '7D'
+          return { href: href('/ads', v), label: `Ad spend for ${scope} in Ads (${shown})` }
+        }} />
 
-      {/* The verdict leads; the numbers behind it sit to its right. */}
-      <section aria-label="Verdict" className="glass rise grid gap-x-10 gap-y-5 px-5 py-5 sm:py-6 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
-        <div className="min-w-0 lg:self-center">
-          <h1 className="text-balance text-[clamp(1.75rem,2.7vw,2.6rem)] font-bold leading-[1.08] tracking-[-0.03em]">{verdict(pf.stores, m.metaNotConnected, stopped)}</h1>
-          {missing && <p className="mt-2 max-w-[75ch] text-[0.8125rem] text-warn">{missing}</p>}
+      {/* The verdict leads, set on the one lime block on the page; the numbers behind it sit to its right. */}
+      <section aria-label="Verdict" className="glass rise grid gap-2 p-2 sm:gap-2.5 sm:p-2.5 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+        <div className="relative min-w-0 overflow-hidden rounded-xl bg-lime px-5 py-5 text-on-lime sm:px-6 sm:py-6 lg:self-stretch">
+          <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 size-52 rounded-full bg-white/18" />
+          <p className="relative mb-3 inline-flex h-6 items-center rounded-full bg-on-lime px-2.5 text-xs font-semibold text-lime">Verdict · {period.short}</p>
+          <h1 className="relative text-balance text-[clamp(1.6rem,2.5vw,2.4rem)] font-bold leading-[1.12] tracking-[-0.035em]"><VerdictText text={v} stores={pf.stores} /></h1>
+          {missing && <p className="relative mt-3 max-w-[75ch] text-[0.8125rem] font-semibold"><AlertTriangle className="mr-1 inline size-3.5 align-[-2px]" aria-hidden />{missing}</p>}
         </div>
-        <div className="border-line lg:border-l lg:pl-10 lg:self-center">
-          <p className="label">Projected profit · {period.short} · All stores</p>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className={`whitespace-nowrap text-[clamp(2.6rem,3.6vw,3.5rem)] font-bold leading-none tracking-[-0.035em] ${tone(net)}`}>{net > 0 ? '+' : ''}<Signed value={net} /></p>
-            {prevNet > 0
-              ? <Delta now={net} prev={prevNet} suffix={`vs ${period.prevLabel}`} />
-              : <span className="text-sm text-ink-3">vs {inr(prevNet)} {period.prevLabel}</span>}
+        <div className="glass-row px-5 py-5 lg:min-w-72 lg:self-stretch">
+          <div data-hl-for="all">
+            <p className="label">Projected profit · {period.short} · All stores</p>
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <p className={`whitespace-nowrap text-[clamp(2.5rem,3.4vw,3.25rem)] font-semibold leading-none tracking-[-0.04em] ${tone(net)}`}>{net > 0 ? '+' : ''}<Signed value={net} /></p>
+              {prevNet > 0
+                ? <span className="inline-flex h-[22px] items-center rounded-md bg-white/6 px-1.5 [&>span]:text-xs"><Delta now={net} prev={prevNet} suffix={`vs ${period.prevLabel}`} /></span>
+                : <span className="inline-flex h-[22px] items-center rounded-md bg-white/6 px-1.5 text-xs font-semibold text-ink-2">vs {inr(prevNet)} {period.prevLabel}</span>}
+            </div>
+            {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
+            {fixedCosts > 0 && <p className="mt-2.5 w-0 min-w-full text-xs text-ink-2">After {inr(fixedCosts)} fixed costs at run rate</p>}
+            {rateNote && <p className="mt-1 w-0 min-w-full text-xs text-ink-4">Estimate · {rateNote}</p>}
           </div>
-          {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
-          {fixedCosts > 0 && <p className="mt-2 w-0 min-w-full text-xs text-ink-2">After {inr(fixedCosts)} fixed costs at run rate</p>}
-          {rateNote && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {rateNote}</p>}
+          {pf.stores.map((s) => (
+            <div key={s.store.id} data-hl-for={s.store.id} hidden>
+              <p className="label">Profit (est.) · {period.short} · {s.store.name}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <p className={`whitespace-nowrap text-[clamp(2.5rem,3.4vw,3.25rem)] font-semibold leading-none tracking-[-0.04em] ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></p>
+                <span className="inline-flex h-[22px] items-center rounded-md bg-white/6 px-1.5 text-xs font-semibold text-ink-2">of {net > 0 ? '+' : ''}{net < 0 ? '−' : ''}{inr(Math.abs(net))} VXP</span>
+              </div>
+              <p className="mt-2.5 w-0 min-w-full text-xs text-ink-4">Before VXP&apos;s fixed costs</p>
+            </div>
+          ))}
         </div>
-        <div className="border-line lg:border-l lg:pl-10 lg:self-center">
+        <div className="glass-row px-5 py-5 lg:self-stretch">
           <p className="label">Resolved · {period.short} · vFulfill</p>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className="text-[2.25rem] font-bold leading-none tracking-[-0.03em]">{resolved.delivered}<span className="ml-2 text-lg font-medium tracking-normal text-ink-2">delivered</span></p>
-            <span className="text-sm text-ink-2">{resolved.rto} RTO{resolved.rate !== null && <> · {pct(resolved.rate)} delivered</>}</span>
-          </div>
+          <p className="mt-3 text-[2.5rem] font-semibold leading-none tracking-[-0.04em]">{resolved.delivered}<span className="ml-2 text-[0.95rem] font-medium tracking-normal text-ink-3">delivered</span></p>
+          <p className="mt-2.5"><span className="inline-flex h-[22px] items-center rounded-md bg-white/6 px-1.5 text-xs font-semibold text-ink-2">{resolved.rto} RTO{resolved.rate !== null && <> · {pct(resolved.rate)} delivered</>}</span></p>
         </div>
       </section>
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-3">
-          <Stores stores={pf.stores} total={pf.total} view={view} period={period} notConnected={m.metaNotConnected} />
+          <Stores stores={pf.stores} total={pf.total} view={view} period={period} notConnected={m.metaNotConnected} names={names} />
           <Calls calls={calls} view={view} />
           <section aria-labelledby="pace-h" className="glass flex flex-col px-5 pb-3 pt-4 lg:flex-1">
             <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
               <h2 id="pace-h" className="text-lg font-bold">Cumulative revenue vs spend <span className="block text-sm font-medium text-ink-3 sm:ml-2 sm:inline">{period.short} · Shopify + Meta</span></h2>
               <p className="flex items-center gap-5 text-sm text-ink-2">
-                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-revenue" /><span>Revenue<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-revenue sm:hidden"> {inr(end.cumRevenue)}</span>}</span></span>
-                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-spend" /><span>Spend<span className="hidden sm:inline"> (cumulative)</span>{end && <span className={`whitespace-nowrap font-semibold sm:hidden ${end.cumSpend === 0 ? 'text-ink-2' : 'text-spend'}`}> {inr(end.cumSpend)}</span>}</span></span>
+                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-revenue" /><span>Revenue<span className="hidden sm:inline"> (cumulative)</span>{end && <span className="font-semibold text-revenue sm:hidden"> <HighlightValue vxp={inr(end.cumRevenue)} by={endRev} /></span>}</span></span>
+                <span className="flex items-center gap-2"><span aria-hidden className="h-[3px] w-5 rounded-full bg-spend" /><span>Spend<span className="hidden sm:inline"> (cumulative)</span>{end && <span className={`whitespace-nowrap font-semibold sm:hidden ${end.cumSpend === 0 ? 'text-ink-2' : 'text-spend'}`}> <HighlightValue vxp={inr(end.cumSpend)} by={endSpend} /></span>}</span></span>
               </p>
             </div>
             <div className={`mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${end?.cumSpend === 0 ? '[&_.text-spend]:text-ink-2' : ''}`}>
-              <RevenueChart points={series} unit={period.id === 'today' ? 'hour' : 'day'} />
+              <RevenueChart points={series} unit={period.id === 'today' ? 'hour' : 'day'}
+                byStore={perStore.map((s) => ({ id: s.stats.store.id, name: s.stats.store.name, points: s.series }))} />
             </div>
           </section>
         </div>
@@ -81,8 +111,8 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
           <div className="flex items-center justify-between gap-4 px-3 pt-2">
             <h2 id="map-h" className="text-lg font-bold">Orders across India</h2>
             <p className="flex items-center gap-4 text-sm text-ink-2">
-              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-full bg-prepaid" />Prepaid</span>
-              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-full bg-cod" />COD</span>
+              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-[2px] bg-prepaid" />Prepaid</span>
+              <span className="flex items-center gap-2"><span aria-hidden className="size-2 rounded-[2px] bg-cod" />COD</span>
             </p>
           </div>
           <div className="mt-3 flex min-h-0 flex-1 flex-col">
@@ -96,6 +126,25 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   )
 }
 
+/**
+ * The verdict, sentence by sentence: each sentence that names a store belongs to it (linked highlight), and a sentence
+ * about a store not paying its way is set reversed (black on the lime) so the problem is the loudest words on the page.
+ */
+function VerdictText({ text, stores }: { text: string; stores: StoreStats[] }) {
+  const sentences = text.split(/(?<=\.)\s+/)
+  return sentences.map((t, i) => {
+    const ids = stores.filter((s) => t.includes(s.store.name)).map((s) => s.store.id)
+    const bad = /isn’t|aren’t|stopped|missing|not connected/.test(t)
+    return (
+      <span key={i}>
+        {i > 0 && ' '}
+        <span data-s={ids.length ? ids.join(' ') : undefined}
+          className={`vs [box-decoration-break:clone] ${bad ? '-mx-[0.14em] bg-on-lime px-[0.14em] text-lime' : ''}`}>{t}</span>
+      </span>
+    )
+  })
+}
+
 export function codShareLabel({ orders, codOrders, unknownPayOrders }: Pick<StoreStats, 'orders' | 'codOrders' | 'unknownPayOrders'>): string | undefined {
   const knownOrders = orders - unknownPayOrders
   return knownOrders > 0 ? `${pct(codOrders / knownOrders)} COD` : undefined
@@ -104,7 +153,7 @@ export function codShareLabel({ orders, codOrders, unknownPayOrders }: Pick<Stor
 /** Cells share one first baseline, so a row's primary figures sit on one line and sub-lines hang below. */
 const ROW = 'grid grid-cols-2 gap-x-4 @min-[50rem]:gap-x-3 @min-[60rem]:gap-x-4 gap-y-3 @min-[50rem]:content-center @min-[50rem]:items-baseline @min-[50rem]:gap-y-0 @min-[50rem]:grid-cols-[minmax(6.75rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.75rem,0.9fr)_minmax(9.5rem,1.9fr)_minmax(6.75rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] @min-[60rem]:grid-cols-[minmax(7.5rem,1.15fr)_minmax(4.5rem,1fr)_minmax(3.5rem,0.9fr)_minmax(10.5rem,1.9fr)_minmax(5rem,1.15fr)_minmax(5.5rem,1.1fr)_5.75rem] [grid-template-areas:"name_call"_"roas_roas"_"spend_orders"_"rev_profit"] @min-[50rem]:[grid-template-areas:"name_spend_orders_roas_rev_profit_call"]'
 
-function Stores({ stores, total, view, period, notConnected }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; period: Period; notConnected: (id: StoreId) => boolean }) {
+function Stores({ stores, total, view, period, notConnected, names }: { stores: StoreStats[]; total: Portfolio['total']; view: ViewState; period: Period; notConnected: (id: StoreId) => boolean; names: Record<string, string> }) {
   const head = 'label whitespace-nowrap leading-tight'
   const moneyHead = `${head} text-right`
   const src = (s: string) => <span className="block text-[0.6875rem] font-normal normal-case tracking-normal text-ink-3">{period.short} · {s}</span>
@@ -112,7 +161,10 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
   const fixed = total.fixedCosts
   return (
     <section aria-labelledby="stores-h" className="glass rise p-2 [--delay:80ms]">
-      <h2 id="stores-h" className="sr-only">Stores</h2>
+      <div className="flex min-h-9 items-center justify-between gap-3 px-3 pt-1.5">
+        <h2 id="stores-h" className="text-base font-semibold tracking-[-0.015em]">Stores</h2>
+        <HighlightStatus names={names} />
+      </div>
       <div role="table" aria-label="Stores" className="@container">
         <div role="row" className={`${ROW} hidden px-3 pb-2 pt-2 @min-[50rem]:grid`}>
           <span role="columnheader" className={`${head} [grid-area:name]`}>Store</span>
@@ -125,10 +177,12 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
         </div>
         <div className="space-y-1.5">
           {stores.map((s) => (
-            <div role="row" key={s.store.id} className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
+            // Hover traces the store across the page; click (or Enter) pins it. The name still opens its own view.
+            <div role="row" key={s.store.id} data-s={s.store.id} tabIndex={0} aria-label={`${s.store.name}: trace across the page`}
+              className={`glass-row store-row cursor-pointer ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
               <span role="cell" className="[grid-area:name]">
                 <Link href={href('/', { ...view, store: s.store.id })} className="inline-flex min-h-9 items-center gap-2 text-[1.35rem] @min-[50rem]:text-[1.2rem] @min-[60rem]:text-[1.3rem] font-semibold tracking-[-0.015em] hover:underline">
-                  <StoreDot id={s.store.id} />{s.store.name}
+                  {s.store.name}
                 </Link>
               </span>
               <Cell area="spend" label="Spend" value={inr(s.spend)} />
@@ -143,7 +197,7 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
               <span role="cell" className="flex justify-end self-start [grid-area:call] @min-[50rem]:justify-center @min-[50rem]:self-baseline"><CallChip s={s} off={notConnected(s.store.id)} /></span>
             </div>
           ))}
-          <div role="row" className={`${ROW} mx-0 !mt-2 border-t border-line-strong px-3 pb-2 pt-4 @min-[50rem]:min-h-[4.5rem]`}>
+          <div role="row" className={`${ROW} hl-total mx-0 !mt-2 border-t border-line-strong px-3 pb-2 pt-4 transition-opacity duration-200 @min-[50rem]:min-h-[4.5rem]`}>
             <span role="cell" className="text-[1.35rem] @min-[50rem]:text-[1.2rem] @min-[60rem]:text-[1.3rem] font-semibold tracking-[-0.015em] [grid-area:name]">VXP <span className="text-base font-medium text-ink-2">(total)</span></span>
             <Cell area="spend" label="Spend" value={inr(total.spend)} />
             <Cell area="orders" label="Orders" value={String(total.orders)} />
@@ -174,14 +228,14 @@ function Cell({ area, label, value, sub }: { area: string; label: string; value:
 }
 
 function RoasBar({ s, off }: { s: StoreStats; off: boolean }) {
-  if (s.roas === null) return <span className="text-lg text-ink-2">{off ? 'Meta not connected' : 'No ads'}</span>
+  if (s.roas === null) return <span className="hatch inline-flex h-8 items-center rounded-lg px-3 text-sm text-ink-3">{off ? 'Meta not connected' : 'No ads running'}</span>
   if (s.economics === null) {
     return <div><p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-revenue">{fmtX(s.roas)}</p><p className="text-xs text-warn">Breakeven needs a product cost</p></div>
   }
   if (!breaksEven(s.economics)) {
     return <div><p className="text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold text-bad">{fmtX(s.roas)}</p><p className="text-xs text-bad">{noBreakevenText(s.economics)}</p></div>
   }
-  return <RoasTrack roas={s.roas} be={s.economics.breakevenRoas} target={s.economics.targetRoas} zone={s.zone} />
+  return <RoasTrack roas={s.roas} be={s.economics.breakevenRoas} target={s.economics.targetRoas} zone={s.zone} losing={s.contribution < 0} />
 }
 
 /** VXP's blended ROAS against its own breakeven: the stores' breakevens weighted by revenue, plus fixed costs. */
@@ -205,12 +259,12 @@ function VxpRoas({ total }: { total: Portfolio['total'] }) {
 /** One word per store, from where its ROAS sits against breakeven and target. */
 function CallChip({ s, off }: { s: StoreStats; off: boolean }) {
   const [word, cls] =
-    s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-2 ring-line-strong']
+    s.roas === null ? [off ? 'No data' : 'No ads', 'text-ink-3 ring-line-strong']
     : s.economics === null ? ['Add cost', 'text-warn ring-warn/40 bg-warn/10']
     // A store losing money this period never reads a calm Hold, even when its ROAS sits on the product breakeven.
-    : !breaksEven(s.economics) || s.zone === 'below' || s.contribution < 0 ? ['Cut or fix', 'text-bad ring-bad/45 bg-bad/12']
-    : s.zone === 'profit' ? ['Scale', 'text-good ring-good/45 bg-good/12']
-    : ['Hold', 'text-revenue ring-revenue/40 bg-revenue/10']
+    : !breaksEven(s.economics) || s.zone === 'below' || s.contribution < 0 ? ['Cut or fix', 'text-bad ring-bad/40 bg-bad/12']
+    : s.zone === 'profit' ? ['Scale', 'bg-lime text-on-lime ring-lime']
+    : ['Hold', 'text-ink bg-raised-2 ring-[#33383d]']
   return <span className={`inline-flex h-8 min-w-[5.25rem] items-center justify-center whitespace-nowrap rounded-lg px-3 text-sm font-semibold ring-1 ${cls}`}>{word}</span>
 }
 
@@ -219,6 +273,7 @@ const TONE = {
   warn: { Icon: AlertTriangle, cls: 'text-warn', word: 'Warning' },
   good: { Icon: TrendingUp, cls: 'text-good', word: 'Good' },
 } as const
+const TILE = { bad: 'bg-bad/14', warn: 'bg-warn/14', good: 'bg-lime/14' } as const
 
 function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
   return (
@@ -232,7 +287,7 @@ function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
             const { Icon, cls, word } = TONE[c.tone]
             const body = (
               <>
-                <span className="flex h-lh shrink-0 items-center"><Icon className={`size-4 ${cls}`} aria-hidden /></span>
+                <span className={`inline-flex size-7 shrink-0 items-center justify-center rounded-lg ${TILE[c.tone]}`}><Icon className={`size-4 ${cls}`} aria-hidden /></span>
                 <span className="sr-only">{word}: </span>
                 <span className="min-w-0 flex-1">
                   <span className="font-semibold">{c.title}</span>
@@ -246,8 +301,8 @@ function Calls({ calls, view }: { calls: Call[]; view: ViewState }) {
             return (
               <li key={c.id}>
                 {c.storeId
-                  ? <Link href={href('/', { ...view, store: c.storeId })} className="glass-row flex items-start gap-2 px-3 py-2.5">{body}</Link>
-                  : <div className="glass-row flex items-start gap-2 px-3 py-2.5">{body}</div>}
+                  ? <Link href={href('/', { ...view, store: c.storeId })} data-s={c.storeId} className="glass-row flex items-start gap-3 px-3 py-2.5 leading-7">{body}</Link>
+                  : <div className="glass-row flex items-start gap-3 px-3 py-2.5 leading-7">{body}</div>}
               </li>
             )
           })}
@@ -269,12 +324,12 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
   const meta = (a: string, b: string) => <span className="hidden text-xs leading-snug text-ink-3 xl:block">{a}<br />{b}</span>
   const moneyHref = href('/money', view)
-  const item = 'flex min-w-0 items-start gap-2 px-3 py-3 text-lg'
-  const iconBox = 'flex h-lh shrink-0 items-center text-ink-2'
+  const item = 'glass-row flex min-w-0 items-start gap-3 px-4 py-3.5 text-lg'
+  const iconBox = 'inline-flex size-7 shrink-0 items-center justify-center rounded-lg bg-raised-2 text-ink-2'
   const moneyLink = (label: string) => <Link href={moneyHref} aria-label={`${label} on Money`} className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">On Money <span aria-hidden className="text-sm">→</span></Link>
   return (
-    <section aria-label="Cash, GST and partner share" className="glass grid gap-x-2 gap-y-1 p-2 md:grid-cols-3 md:divide-x md:divide-line">
-      <Link href={moneyHref} className={`${item} rounded-xl hover:bg-raised/40`}>
+    <section aria-label="Cash, GST and partner share" className="glass grid gap-2 p-2 sm:gap-2.5 sm:p-2.5 md:grid-cols-3">
+      <Link href={moneyHref} className={item}>
         <span className={iconBox}><Wallet className="size-4" aria-hidden /></span>
         <span className="min-w-0 flex-1">
           {c ? <>

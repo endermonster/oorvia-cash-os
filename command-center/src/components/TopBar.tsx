@@ -55,13 +55,13 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
               const on = t.id === tab
               return (
                 <Link key={t.id} href={href(t.path, view)} aria-current={on ? 'page' : undefined}
-                  title={t.label} className={`${navSeg} gap-2 ${on ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
+                  title={t.label} className={`${navSeg} gap-2 ${on ? 'pill-lime font-semibold' : 'text-ink-2 hover:text-ink'}`}>
                   <Icon className="size-4" aria-hidden /><span className="sr-only sm:not-sr-only">{t.label}</span>
                 </Link>
               )
             })}
             <Link href={href('/settings', view)} aria-label="Settings" aria-current={tab === undefined ? 'page' : undefined}
-              title="Settings" className={`${navSeg} self-stretch ${tab === undefined ? 'glass-pill-on text-ink' : 'text-ink-2 hover:text-ink'}`}>
+              title="Settings" className={`${navSeg} self-stretch ${tab === undefined ? 'pill-lime' : 'text-ink-2 hover:text-ink'}`}>
               <Settings className="size-4" aria-hidden />
             </Link>
           </nav>
@@ -73,7 +73,7 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
               ...(custom ? [[viewKey({ store: st.id, period: 'custom' }), href(tabPath, { ...view, store: st.id })]] : []),
             ]))}
             stores={{
-              label: 'Store', items: stores.map((st) => ({ id: st.id, label: st.name, dot: st.id === 'all' ? undefined : st.id })),
+              label: 'Store', items: stores.map((st) => ({ id: st.id, label: st.name })),
               className: 'glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]',
               itemClass: `${seg} flex items-center gap-2 max-sm:min-h-9`,
             }}

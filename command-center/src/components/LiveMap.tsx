@@ -7,6 +7,7 @@ import { cityOnMap } from '@/lib/cities'
 import { INDIA_PATH, INDIA_VIEWBOX } from '@/lib/india-map'
 import { href, type ViewState } from '@/lib/nav'
 import type { RecentOrder, StoreId } from '@/lib/types'
+import { useHighlight } from './LinkedHighlight'
 
 const POLL_MS = 20_000
 const FRESH_MS = 7_000
@@ -29,6 +30,9 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
   const [orders, setOrders] = useState(initial)
   const [fresh, setFresh] = useState<Record<string, number>>({})
   const [elapsed, setElapsed] = useState(0)
+  // The traced store (linked highlight): these parts re-render on every poll, so they set their own classes from it.
+  const hl = useHighlight()
+  const hlClass = (ids: string[]) => (hl === null ? '' : ids.includes(hl) ? 'hl-on' : 'hl-off')
   const seen = useRef(new Set(initial.map((o) => o.id)))
   const mounted = useRef(0)
   const name = useMemo(() => Object.fromEntries(stores.map((s) => [s.id, s.name])) as Record<StoreId, string>, [stores])
@@ -87,19 +91,19 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
 
   // One dot per place (Delhi's districts share one): its size grows with orders, its colour is the newest order's payment.
   const cities = useMemo(() => {
-    const m = new Map<string, { key: string; x: number; y: number; n: number; newest: RecentOrder; fresh: boolean }>()
+    const m = new Map<string, { key: string; x: number; y: number; n: number; newest: RecentOrder; fresh: boolean; stores: StoreId[] }>()
     for (const o of orders) {
       const at = cityOnMap(o.city)
       if (!at) continue
       const key = `${Math.round(at.x)},${Math.round(at.y)}`
       const c = m.get(key)
-      if (c) { c.n++; if (fresh[o.id]) c.fresh = true }
-      else m.set(key, { key, x: at.x, y: at.y, n: 1, newest: o, fresh: !!fresh[o.id] })
+      if (c) { c.n++; if (fresh[o.id]) c.fresh = true; if (!c.stores.includes(o.storeId)) c.stores.push(o.storeId) }
+      else m.set(key, { key, x: at.x, y: at.y, n: 1, newest: o, fresh: !!fresh[o.id], stores: [o.storeId] })
     }
     return [...m.values()].sort((a, b) => Number(a.fresh) - Number(b.fresh))
   }, [orders, fresh])
 
-  const labels = orders.filter((o) => fresh[o.id] && cityOnMap(o.city)).slice(0, 2)
+  const labels = orders.filter((o) => fresh[o.id] && cityOnMap(o.city) && (hl === null || hl === o.storeId)).slice(0, 2)
   const nowMs = Date.parse(serverNow) + elapsed
   const minutes = (iso: string) => Math.max(0, Math.round((nowMs - Date.parse(iso)) / 60000))
   const unplaced = orders.filter((o) => !cityOnMap(o.city)).length
@@ -108,36 +112,27 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
     <>
       <div className="relative mx-auto w-full max-w-[21rem]" style={{ aspectRatio: `${W} / ${H}` }}
         role="img" aria-label={`Map of India with the ${orders.length} newest orders at their cities`}>
-        {/* The map never changes, so each SVG gets its own GPU layer and is painted once: new dots and labels on top
-            no longer repaint the 35 KB outline. The glow is a CSS blur (GPU), not an SVG filter (CPU). */}
-        <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 size-full overflow-visible" aria-hidden
-          style={{ filter: 'blur(5px)', willChange: 'transform' }}>
-          <path d={INDIA_PATH} style={{ fill: 'var(--color-map-glow)' }} opacity="0.28" />
-        </svg>
+        {/* The land is a field of grey dots, painted once on its own GPU layer: new squares and labels on top never
+            repaint the 35 KB outline. */}
         <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 size-full overflow-visible" aria-hidden style={{ willChange: 'transform' }}>
           <defs>
-            <linearGradient id="land" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" style={{ stopColor: 'var(--color-map-land-top)' }} />
-              <stop offset="1" style={{ stopColor: 'var(--color-map-land-bottom)' }} />
-            </linearGradient>
-            <pattern id="land-dots" width="14" height="14" patternUnits="userSpaceOnUse">
-              <circle cx="7" cy="7" r="1.6" style={{ fill: 'var(--color-map-dots)' }} opacity="0.16" />
+            <pattern id="land-dots" width="16" height="16" patternUnits="userSpaceOnUse">
+              <circle cx="8" cy="8" r="3.1" style={{ fill: 'var(--color-map-dots)' }} />
             </pattern>
           </defs>
-          <path d={INDIA_PATH} style={{ fill: 'url(#land)' }} />
           <path d={INDIA_PATH} style={{ fill: 'url(#land-dots)' }} />
-          <path d={INDIA_PATH} style={{ fill: 'none', stroke: 'var(--color-map-edge)' }} strokeOpacity="0.55" strokeWidth="2.2" strokeLinejoin="round" />
         </svg>
 
-        {/* Dots are HTML so their pop is a compositor animation, never a repaint of the map. */}
+        {/* Squares are HTML so their pop is a compositor animation, never a repaint of the map. */}
         {cities.map((c) => {
-          const size = Math.min(26, 9 + Math.sqrt(c.n - 1) * 5)
+          const size = Math.min(18, 7 + Math.sqrt(c.n - 1) * 3.5)
           return (
             <span key={c.key} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${(c.x / W) * 100}%`, top: `${(c.y / H) * 100}%` }}
               title={`${c.newest.city}: ${c.n} ${c.n === 1 ? 'order' : 'orders'}`}>
-              <span className={`block rounded-full ${payBg(c.newest.payment)} ${c.fresh ? 'map-pop' : ''}`}
-                style={{ width: size, height: size, boxShadow: `0 0 ${size}px ${size / 3}px ${`color-mix(in srgb, var(--color-${c.newest.payment === 'cod' ? 'cod' : 'prepaid'}) 55%, transparent)`}`, opacity: c.fresh ? 1 : 0.85 }} />
-              {c.fresh && <span aria-hidden className={`map-ring absolute inset-0 rounded-full ${c.newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'}`} />}
+              <span data-s={c.stores.join(' ')}
+                className={`map-sq block cursor-pointer rounded-[3px] ${payBg(c.newest.payment)} ${c.newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'} ${c.fresh ? 'map-pop' : ''} ${hlClass(c.stores)}`}
+                style={{ width: size, height: size }} />
+              {c.fresh && <span aria-hidden className={`map-ring pointer-events-none absolute inset-0 ${c.newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'}`} />}
             </span>
           )
         })}
@@ -149,10 +144,10 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
           const right = x > 50
           return (
             <span key={o.id} aria-live="polite"
-              className={`map-tag glass-pill absolute flex gap-1 whitespace-nowrap bg-map-tag px-2.5 py-1 text-[0.8125rem] font-semibold text-ink ${right ? '-translate-x-[calc(100%+14px)]' : 'translate-x-[14px]'}`}
+              className={`map-tag absolute flex gap-1 whitespace-nowrap rounded-lg px-2.5 py-1 text-[0.8125rem] font-semibold text-on-lime ${o.payment === 'prepaid' ? 'bg-prepaid' : 'bg-map-tag'} ${right ? '-translate-x-[calc(100%+14px)]' : 'translate-x-[14px]'}`}
               style={{ left: `${x}%`, top: `calc(${(at.y / H) * 100}% - ${14 + i * 30}px)`, maxWidth: `calc(${right ? x : 100 - x}% - 14px)` }}>
               <span className="min-w-0 truncate">{name[o.storeId]} · {o.city}</span>
-              <span className="shrink-0">· {inr(o.value)} <span className={o.payment === 'cod' ? 'text-cod' : 'text-prepaid'}>{payWord(o.payment)}</span></span>
+              <span className="shrink-0">· {inr(o.value)} · {payWord(o.payment)}</span>
             </span>
           )
         })}
@@ -173,8 +168,9 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
           <ul className="mt-3 space-y-1.5">
             {orders.slice(0, 4).map((o) => (
               <li key={o.id} className={fresh[o.id] ? 'map-row-in' : ''}>
-                <Link href={href('/orders', { ...view, store: o.storeId })} className="glass-row grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-2 px-3 py-2.5">
-                  <span className="flex h-lh items-center"><span aria-hidden className={`size-2 rounded-full ${payBg(o.payment)}`} /></span>
+                <Link href={href('/orders', { ...view, store: o.storeId })} data-s={o.storeId}
+                  className={`glass-row grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-start gap-2 px-3 py-2.5 ${hlClass([o.storeId])}`}>
+                  <span className="flex h-lh items-center"><span aria-hidden className={`size-2 rounded-[2px] ${payBg(o.payment)}`} /></span>
                   <span className="wrap-anywhere">
                     <span className="block font-semibold">{name[o.storeId] ?? o.storeId} · {o.city}</span>
                     <span className="block text-sm text-ink-2">{o.product}</span>

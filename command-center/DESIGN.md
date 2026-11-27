@@ -1,277 +1,155 @@
 ---
 name: VXP Command Center
-description: India at Night. A dark Liquid Glass profit cockpit for three stores, lit by sodium-gold city light.
+description: Lime. A matte charcoal profit cockpit for three stores (and more), with one luminous lime used as a solid fill where it matters.
 colors:
-  ground: "#060a13"
-  raised: "#121c2e"
-  raised-2: "#1a2740"
-  line: "rgb(150 180 225 / 0.12)"
-  line-strong: "rgb(150 180 225 / 0.22)"
-  ink: "#eef2f8"
-  ink-2: "#b4bfcf"
-  ink-3: "#8a96a8"
-  good: "#4fd08a"
-  bad: "#ff6b5e"
+  ground: "#08090a"
+  panel: "#121416"
+  raised: "#181b1e"
+  raised-2: "#22262a"
+  line: "#1e2124"
+  line-strong: "#2a2e33"
+  ink: "#eceef0"
+  ink-2: "#aeb3b9"
+  ink-3: "#8b9097"
+  ink-4: "#7e838a"
+  lime: "#b8f23a"
+  on-lime: "#0b0c0d"
+  good: "#b8f23a"
+  bad: "#ff5a4e"
   warn: "#f2b24a"
-  revenue: "#6fb6ff"
-  spend: "#ff8a4c"
-  oorvia: "#e3a33a"
-  kaiven: "#9d8cff"
-  selnova: "#ef6aa0"
-  cod: "#f2b24a"
-  prepaid: "#6fb6ff"
-  sodium: "#f2b24a"
+  revenue: "#b8f23a"
+  spend: "#c3c7cc"
+  prepaid: "#b8f23a"
+  cod: "#eceef0"
+  map-dots: "#2c3035"
 typography:
   verdict:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(1.75rem, 2.7vw, 2.6rem)"
+    fontSize: "clamp(1.6rem, 2.5vw, 2.4rem)"
     fontWeight: 700
-    lineHeight: 1.08
-    letterSpacing: "-0.03em"
+    lineHeight: 1.12
+    letterSpacing: "-0.035em"
   hero-figure:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(2.6rem, 3.6vw, 3.5rem)"
-    fontWeight: 700
+    fontSize: "clamp(2.5rem, 3.4vw, 3.25rem)"
+    fontWeight: 600
     lineHeight: 1
-    letterSpacing: "-0.035em"
+    letterSpacing: "-0.04em"
   overview-figure:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.75rem"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1
-    letterSpacing: "-0.025em"
+    letterSpacing: "-0.03em"
   store-name:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.3rem"
     fontWeight: 600
     letterSpacing: "-0.015em"
-  figure:
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.3rem"
-    fontWeight: 700
-    lineHeight: 1.25
   panel-title:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.125rem"
-    fontWeight: 700
-  body:
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1rem"
-    fontWeight: 400
-  control:
-    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 500
+    fontWeight: 600
   label:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "0.6875rem"
     fontWeight: 600
     lineHeight: "1rem"
-    letterSpacing: "0.08em"
+    letterSpacing: "0.1em"
 rounded:
-  panel: "20px"
-  row: "14px"
-  pill: "12px"
+  panel: "16px"
+  tray: "12px"
+  pill: "11px"
   segment: "9.6px"
   chip: "8px"
+  square: "3px"
 spacing:
   base: "4px"
-  inset: "20px"
-  row-inset: "8px"
-  row-pad-x: "12px"
-  heading-gap: "12px"
   panel-gap: "12px"
-  row-gap: "6px"
+  tray-gap: "10px"
+  panel-pad: "10px"
 components:
-  glass-panel:
-    backgroundColor: "rgb(40 62 100 / 0.30)"
-    textColor: "{colors.ink}"
+  panel:
+    backgroundColor: "{colors.panel}"
+    border: "1px {colors.line}"
     rounded: "{rounded.panel}"
-    padding: "16px 20px"
-  glass-row:
-    backgroundColor: "rgb(150 180 230 / 0.045)"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.row}"
-    padding: "12px"
-    height: "72px"
-  glass-pill:
-    backgroundColor: "rgb(10 16 30 / 0.35)"
-    textColor: "{colors.ink-2}"
-    rounded: "{rounded.pill}"
-    padding: "3px"
-  glass-pill-on:
-    backgroundColor: "rgb(120 160 220 / 0.32)"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.segment}"
-    height: "30px"
-  call-chip-scale:
-    textColor: "{colors.good}"
-    rounded: "{rounded.chip}"
-    width: "84px"
-  call-chip-cut:
-    textColor: "{colors.bad}"
-    rounded: "{rounded.chip}"
-    width: "84px"
+  tray:
+    backgroundColor: "{colors.raised}"
+    border: "1px #23272b"
+    rounded: "{rounded.tray}"
+  pill-on:
+    backgroundColor: "{colors.raised-2}"
+  pill-lime:
+    backgroundColor: "{colors.lime}"
+    textColor: "{colors.on-lime}"
 ---
 
 # Design System: VXP Command Center
 
-Not "Money" (the user's personal finance app). The two share no tokens and this must never be mistaken for it. Product principles live in `PRODUCT.md`; the Home surface brief is `.impeccable/surfaces/src-app-page-tsx.md`.
+Not "Money" (the user's personal finance app). The two share no tokens and this must never be mistaken for it. Product principles live in `PRODUCT.md`.
 
 ## Overview
 
-**Creative North Star: "India at Night"**
+**North Star: "Lime"** (chosen by the user 2026-11-27 from their own references; it replaced "India at Night", the Liquid Glass look, and the WebGL glass and city-light backdrop that went with it).
 
-Binding (user, 2026-11-20): dark colours and Apple-style Liquid Glass. A blue-black night ground, dark blue-smoke glass panels with edge lensing and a thin specular rim, and sodium-gold city light. Ice-blue is prepaid and revenue, orange is spend, gold is COD, green is gain, red is loss, always with a sign or a word. Inter with tabular figures. The approved comp (`.impeccable/mocks/home-d.png`) is now only a reference; the built page is the direction.
+Matte, not glass. A flat near-black ground, charcoal panels with a 1px edge, slightly lighter trays inside them, and no blur, shine or glow anywhere. One luminous lime (#b8f23a) is the only accent, and it is loudest as a **solid fill with black text**: the verdict block, the tab you are on, Sync now, the cell arrows, a Scale call, the revenue end tag. Everything else is greys.
 
-Home is the pattern for the rest of the app: a verdict strip leads, store rows give each store a call, a live map of India shows orders landing, a chart and a footer strip close it. Every number states its period and source in the label style (for example "SPEND · 7D · META").
-
-**Key Characteristics:**
-- Dark only (`color-scheme: dark`). One night ground, glass panels on it, lighter glass rows on the panels.
-- Colour carries meaning only. Status is never colour alone.
-- Spacing is the most important system on the page (see Layout).
-- One motion moment: a new order landing.
+Home's layout is unchanged from India at Night (overview strip, verdict strip, stores, Needs your call, chart, map with Latest orders, footer). The signature interaction is the **linked highlight** (below).
 
 ## Colors
 
-One blue-black ground, one cool ink ramp, and a small set of meaning colours. Hex and rgb values in the frontmatter are normative.
+- **Neutrals:** `ground` page, `panel` panels, `raised` trays, `raised-2` selected pills and icon tiles, `line` / `line-strong` edges and rules, `ink` → `ink-4` text from primary to faint.
+- **Lime** (`lime`, also `good`, `revenue`, `prepaid`): the accent, gain (always with "+"), the revenue line, prepaid orders.
+- **Loss red** (`bad`): loss (with "−"), Cut or fix, the breakeven tick.
+- **Warn amber** (`warn`): stale data, missing costs, with an icon.
+- **COD white** (`cod`): COD orders. Prepaid is lime because it is money already in hand (user, 2026-11-27).
+- **Spend** (`spend`): a quiet light grey, dashed in charts.
+- Store colours (`oorvia`, `kaiven`, `selnova`) are no longer used on Home or in the store switcher: the dots repeated the name. Ads, Orders and Settings still show them until those tabs are redone.
 
-### Neutral
-- **Night Ground** (`ground`): page background and the colour the backdrop fades to. The WebGL shader hardcodes the same value (6, 10, 19).
-- **Raised, Raised 2** (`raised`, `raised-2`): solid surfaces for the sparse places glass is not used.
-- **Ink, Ink 2, Ink 3** (`ink`, `ink-2`, `ink-3`): primary text, secondary text, labels and placeholders.
-- **Line, Line Strong** (`line`, `line-strong`): hairlines (verdict dividers, list dividers, chip rings), translucent blue-grey.
+**The Zero Rule** and **the Never-Alone Rule** still hold: ₹0 is neither gain nor loss, and lime/red always travel with a sign, word, icon or tick.
 
-### Meaning
-- **Gain Green** (`good`): gain, above target, Scale, healthy sources. Positive profit shows "+".
-- **Loss Red** (`bad`): loss, below breakeven, Cut or fix, the breakeven tick.
-- **Warn Amber** (`warn`): missing cost, stale vFulfill (with an icon), warnings.
-- **Ice Blue** (`revenue`, `prepaid`): revenue series, prepaid orders, covering-costs zone, Hold chip, focus ring, selection tint.
-- **Spend Orange** (`spend`): ad spend series only.
-- **Sodium Gold** (`cod`, `sodium`): COD orders and map light.
-- **Store dots** (`oorvia`, `kaiven`, `selnova`): small dots beside a store name, nothing else.
+## Surfaces
 
-### Named Rules
-**The Zero Rule.** Zero is neither gain nor loss: ₹0 renders in `ink-2` with no sign. Only a value above 0 is green with "+", only below 0 is red with "−".
-**The Never-Alone Rule.** Green and red always travel with a sign, word, icon or tick shape. Chips carry a word; calls carry an icon and a screen-reader word.
-**The Gold Share Rule.** `cod`, `sodium` and `warn` are the same hex. COD and a warning never share a component without a label.
+- **Panel** (`.glass`, name kept so every tab follows): `panel` fill, 1px `line`, 16px radius.
+- **Tray** (`.glass-row`): `raised` fill, 1px #23272b, 12px radius; hover brightens the edge. Trays sit 10px apart inside a panel with 10px padding.
+- **Pill** (`.glass-pill`): #0c0d0f, 1px `line`. Selected segment `.glass-pill-on` is `raised-2`; the current tab is `.pill-lime`.
+- **Hatch** (`.hatch`): diagonal stripes for "nothing here" (No ads running).
+- Background: flat `ground` with a faint lime haze along the bottom edge. Nothing else.
 
-## Typography
+## Components (Home)
 
-**Family:** Inter, variable, with its optical-size axis (next/font `axes: ['opsz']`), so the verdict and big figures get Inter's tighter display cut on their own. Falls back to ui-sans-serif, system-ui. Document-wide `font-feature-settings: "tnum" 1, "lnum" 1, "cv11" 1`, so every figure is tabular and lining.
+- **Overview strip:** one panel, four trays (revenue, orders, AOV, ad spend). Label with period and source, a lime arrow link to the tab behind it, the figure, the change in a small tinted chip, and a **square-cell column chart** (`SquareBars`): one column of stacked 5px squares per bucket, merged to at most 30 columns; revenue lime, the rest grey.
+- **Verdict strip:** the verdict on a solid lime block in black, a sentence about a store not paying its way reversed (lime on black). Projected profit and Resolved sit in trays beside it.
+- **Store rows:** trays, no store dot. ROAS on a segmented track with three zones: track faintly red below breakeven, white from breakeven to target, lime past target; the fill and figure take the zone's colour (red also when the store lost money this period). Breakeven tick red, target tick lime. Calls: Scale solid lime, Hold grey, Cut or fix red-tinted, Add cost amber, No ads outlined.
+- **Needs your call:** trays with a tinted icon tile.
+- **Revenue chart:** cumulative revenue (lime, faint fill) against cumulative spend (grey, dashed). End tags: revenue solid lime, spend grey.
+- **Live map:** India as a field of grey dots; orders as small squares, prepaid lime, COD white, sized by count. A new order pops with a square ring and a solid tag.
+- **Footer:** three trays (cash, GST, partner share) with icon tiles.
 
-**Character:** a plain grotesque. Weight and size carry hierarchy; there is no second family.
+## Linked highlight
 
-### Hierarchy
-- **Verdict** (700, clamp(1.75rem, 2.7vw, 2.6rem), 1.08, -0.03em): the computed sentence, once per page. The loudest words on the page.
-- **Hero figure** (700, clamp(2.6rem, 3.6vw, 3.5rem), 1, -0.035em): projected profit, the loudest number on Home (3.25rem cap on Ads, Orders and the store view). Resolved delivered steps down to 2.25rem.
-- **Overview figure** (700, 1.75rem): the four cells of the overview strip, deliberately quieter than the hero.
-- **Store name** (600, 1.3rem, -0.015em): store rows and the VXP total. A row anchor, not a headline.
-- **Figure** (600 for spend, orders, revenue; 700 for profit, 1.3rem): row cells. Profit and the call chip are what a row says.
-- **Panel title** (700, 1.125rem): panel headings.
-- **Body / control** (400 / 500, 1rem / 0.875rem): body text; tabs, segments, buttons.
-- **Sub-line** (400, 0.75rem or 0.6875rem, `ink-2` or `ink-3`): "7D · Meta" under a column head, "x% COD" under orders, the ROAS key.
-- **Label** (600, 0.6875rem, 0.08em, uppercase, `ink-3`): metric, period, source.
+Hover anything that belongs to a store (its row, its map squares, its orders, its calls, its sentence in the verdict) and that store is traced across Home; everything else drops to about 20%. Click or tap a store row or a map square to pin it; the × in the Stores header or Esc releases it. While traced:
 
-### Named Rules
-**The Period-and-Source Rule.** Every number is labelled with its period and source: `Projected profit · 7D · All stores`, `Resolved · 7D · vFulfill`, column heads such as "Spend / 7D · Meta". Estimates say "Estimate".
+- the overview shows the store's own figures, its share of VXP and its own columns;
+- the profit tray shows the store's estimated profit "of" VXP's;
+- the store's row gets a lime edge and the switcher outlines its name;
+- the chart greys VXP's lines and draws the store's revenue band and spend line;
+- the map rings the store's squares and fades the rest.
 
-## Layout
-
-Home is a single column up to `lg`, then a 2fr / 1fr grid: stores, Needs your call and the chart on the left; the map with Latest orders on the right. Page max width 1536px, page padding 12px (16px from `sm`), top bar and content separated by 12px.
-
-Spacing is a 4px-base system and the single most important part of this design.
-
-- **Panel gap:** 12px, between every panel, vertical and horizontal.
-- **Panel content inset:** content starts 20px from a panel's edge horizontally. Panels with their own padding (verdict, chart, top bar) use `px-5`. List panels (stores, Needs your call, map with Latest orders, footer) use `p-2` (8px) and inset rows by 8px, and rows pad 12px horizontally (`px-3`): 8 + 12 = 20.
-- **Heading to content:** 12px (`mt-3`) in every panel.
-- **Row gap:** 6px between rows in a list.
-- **One control height per row:** top bar segmented pills are 30px inside a 36px group (3px padding); freshness chips, "Sync now" and "Sign out" are 26px.
-- **Store rows:** minimum 72px from `md`. Cells share one first baseline: primary figures sit on one line, sub-lines hang below. Column headers are single-line (`whitespace-nowrap`) with a source sub-line.
-- **Call chips:** one width (min 5.25rem), so the column aligns.
-- **Left column stretches** to end level with the map column; the revenue chart grows to fill the remaining height (min plot 128px).
-
-Responsive: store rows become a two-column card grid below `md` (name and call, ROAS full width, spend and orders, revenue and profit). The footer goes three-up from `md`; source captions appear from `xl`. See Components > Top bar for phone behaviour.
-
-## Elevation & Depth
-
-Depth is optical, not shadowed. A fixed canvas behind the page paints the night, and every `.glass` panel is frosted glass over it: dark blue smoke, edge lensing, a thin specular rim and a pointer sheen. Rows and pills are lighter panes laid on a panel, with only a faint inset highlight and a short drop.
-
-### Glass vocabulary
-- **Glass panel** (20px radius): vertical smoke gradient (`rgb(40 62 100 / 0.30)` to `rgb(12 20 38 / 0.46)`), 12px backdrop blur at 180% saturation in the CSS fallback, a 1px gradient rim brightest at top-left (white 0.55 to blue 0.30), inset top highlight `rgb(255 255 255 / 0.28)`, a caustic along the bottom, and `0 24px 50px -20px rgb(0 0 0 / 0.75)` ambient.
-- **Glass row** (14px): a quiet tonal band (`rgb(150 180 230 / 0.045)`, a 3.5% white top hairline), no rim and no drop: a panel reads as one sheet of glass with content on it, never boxes inside a box. Links brighten to 9% on hover (160ms, ease-out). The VXP total is not a band: a `line-strong` rule above it marks it as the sum.
-- **Glass pill** (12px): recessed (`rgb(10 16 30 / 0.35)`, inset shadow). **Pill on**: raised, lighter gradient, with a drop.
-- **WebGL glass:** `LiquidGlass` draws the night and, under each `.glass`, the same light seen through thick glass: frosted in the middle, bent and colour-split in a 34px rim (max displacement 54px), tinted toward blue smoke, with a pointer sheen. It adds `gl-glass` to `<html>`; CSS then removes the panels' `backdrop-filter`, the sheen and the `.night` image. Without WebGL2 the CSS blur is the fallback. Phones use a denser tint (0.42 / 0.58) and 10px blur.
-- **Backdrop:** kept dim on purpose (2026-11-27 polish, after "nothing stands out / looks cheap"): the haze fades to the blue-black ground and only the brightest cities stay, as faint soft gold points (shader threshold 0.24 to 0.85, gain 0.42; CSS fallback `brightness(0.3)` plus a 2px blur). Inside a panel the frosted light is cut to 42% and mixed 30% toward blue smoke, so text sits on calm glass while the 34px rim still bends full light. A blue glow sits at the top-left.
-
-### Named Rules
-**The One Light Rule.** Light comes from the top-left: rims, highlights and the page glow all agree. Never glow a panel in a status colour.
-**The Glass Is for Panels Rule.** Only `.glass` panels get lensing. Rows, pills and chips never nest a second lens.
-
-## Shapes
-
-Generous, consistent radii by role: panels 20px, rows 14px, pills and the focus ring 12px or 10px, segments inside pills 9.6px, call chips 8px, ticks and bars fully round. Rims are 1px gradient strokes, not borders. Dots are circles.
-
-## Components
-
-### Top bar
-A glass panel, one flex-wrap of everything: wordmark ("VXP"; the "Command Center" subtitle only from 1360px), tabs (Home, Ads, Orders, Money; icons only on phones), store switcher (All VXP, Oorvia, Kaiven, Selnova with a store dot), period segments, freshness chips, then Sync and Sign out pushed right. On Home the seven periods open the second row beside the chips (two rows at 1280 to 1536, not three); on the other tabs the periods sit right on row one. Segments are 30px in a 36px recessed pill; the current one is the raised pill. Tabs and periods scroll horizontally if cramped. On phones the switcher and chip row scroll horizontally with an edge fade, and a stale chip moves first.
-- **Freshness chips** (Shopify, Meta, vFulfill, 26px): a dot or icon plus source and age. Shopify "live" is green. vFulfill older than 2 days (or never imported) turns amber with a warning icon and a screen-reader "(stale)".
-- **Sync now** (26px pill) and **Sign out** (26px, text only). "Mock data" is an amber outlined tag.
-
-### Overview strip
-One glass panel with four cells (revenue, orders, AOV, ad spend) split by `line` hairlines: one row from `lg`, 2 × 2 below. Each cell: label with period and source, overview figure, change vs the previous period, a 44px sparkline. Never four separate cards.
-
-### Verdict strip
-Glass panel: the computed verdict left; projected profit with its delta (arrow, sign, percent) and resolved delivered / RTO counts right, divided by hairlines. A missing-cost note shows in amber under the verdict.
-
-### Store rows
-One glass row per store plus a VXP total row. Name (links to the store view), spend, orders with COD share, ROAS bar, booked revenue, estimated profit, call chip.
-- **ROAS bar:** fill coloured by zone: below breakeven red, covering costs blue, above target green. Breakeven tick red, target tick green, each with a thin dark edge so it stays visible on a same-coloured fill. The labels are a key under the bar, BE at the left edge and Target at the right edge, each with a matching mini tick; never centred on the ticks (they collided).
-- **Target** = (ex-GST breakeven + 1.5) x 1.18, on Meta's GST-inclusive scale.
-- **Call chip** (min 5.25rem, ringed, tinted): Scale (green), Hold (blue), Cut or fix (red), Add cost (amber), No ads / No data (neutral).
-
-### Needs your call
-Glass rows, worst first: icon (trend-down red, alert amber, trend-up green), bold title, ink-2 detail, chevron when it links to a store. Empty: "Nothing needs you today."
-
-### Live map
-India as an SVG outline (blue glow, dotted land, 55%-opacity rim). One dot per place, sized by order count (9px to 26px), blue prepaid, gold COD, grey unknown; districts map to points (`cities.ts`). It replaced a rejected night-photo map with labelled pins. A new order pops in with two rings and a label (store, city, value, payment) for about 7 seconds, and its row slides into Latest orders. It polls `/api/orders/live` every 20 seconds while the tab is visible. Latest orders shows the newest four as glass rows (payment dot, store and city, product, value, payment, age).
-
-### Revenue chart
-Cumulative booked revenue (blue, with a soft fill) against cumulative ad spend (orange), one scale, no dual axis. Hairline gridlines, value tags at the line ends, a dashed crosshair and a glass tooltip. Under 480px wide the ticks shorten (₹60k, ₹1.2L), the end tags go, and the legend carries the end values.
-
-### Footer strip
-Three glass cells: Cash (links to Money), GST (month, amount, due date), Your share (50%). Each states period and source from `xl`.
-
-### Focus and inputs
-Focus ring: 2px `revenue`, 3px offset. Selection: `revenue` at 40%. Caret: `revenue`. Placeholder: `ink-3`. Scrollbars are thin and translucent blue-grey; swipe rows hide theirs.
+Built in `LinkedHighlight.tsx`: server parts opt in with `data-s`, `data-hl-for` and `data-peek`; the map and chart read `useHighlight()`. A 140ms grace on leaving stops the page flashing back between rows.
 
 ## Motion
 
-One moment: a new order landing. Ease is exponential ease-out, `cubic-bezier(0.16, 1, 0.3, 1)`. Dot pop 600ms, rings 1.6s twice, label 7s, Latest orders row slide 600ms. Transform and opacity only. Everything animated sits inside `prefers-reduced-motion: no-preference`. No bounce or elastic easing. The only other movement is a one-time 700ms rise (8px, staggered by `--delay`) as the top panels first load.
-
-## Performance notes
-
-- The map's glow is a CSS blur, and each map layer has its own GPU layer; the old SVG filter caused lag. Dots and labels are HTML so their animation never repaints the outline.
-- The WebGL glass draws on scroll, resize, pointer and layout changes, never on a loop. Device pixel ratio capped at 1.5, low-power GPU hint, up to 16 panels per frame.
-- With the GPU glass on, CSS backdrop filters, the sheen and the fallback night image are switched off so nothing is paid for twice.
+Ease-out expo, transform and opacity only, all inside `prefers-reduced-motion: no-preference`: the new-order pop (600ms), ring (1.6s ×2), tag (7s), row slide (600ms); the first-load rise (700ms); highlight fades (220ms). No bounce.
 
 ## Do's and Don'ts
 
-### Do:
-- **Do** keep content 20px from a panel's edge horizontally, 12px heading to content, 12px between panels.
-- **Do** keep one control height per row (30px segments in a 36px group; 26px chips and buttons).
-- **Do** label every number with period and source.
-- **Do** pair green and red with a sign, word, icon or tick shape.
-- **Do** keep all motion on transform and opacity, with the expo ease-out.
-
-### Don't:
-- **Don't** reuse any token from "Money", or make this look like it.
-- **Don't** treat ₹0 as a gain or a loss.
-- **Don't** put labels centred on the ROAS ticks, or make the two ticks the same colour.
-- **Don't** nest a lensed panel inside another, or glow a panel in a status colour.
-- **Don't** add bounce easing, or a second animated moment.
+- **Do** keep lime for solid fills and meaning; never as a glow, gradient or decoration.
+- **Do** keep every number labelled with its period and source.
+- **Don't** bring back blur, glass, shine or a picture behind the panels.
+- **Don't** colour stores; the name is the identity.
+- **Don't** reuse any token from "Money".
 
 ## Not yet
 
-Ads, Orders and Money are not yet redesigned; they only pick up the colour tokens.
+Ads, Orders and Money pick up the colours and matte panels but are not redesigned: they still show store dots and their own chip styles.
