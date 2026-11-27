@@ -47,7 +47,7 @@ function verdict(rows: CampaignStats[], spend: number, range: string, allDisconn
   return sentences.join(' ') || 'No campaign data for this period.'
 }
 
-const heroFigure = 'text-[2.6rem] font-extrabold leading-none tracking-[-0.035em]'
+const heroFigure = 'text-[clamp(2.6rem,3.6vw,3.25rem)] font-bold leading-none tracking-[-0.035em]'
 const heroCell = 'min-w-0 border-line lg:border-l lg:pl-8'
 const figure = 'text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight'
 const note = 'text-xs text-ink-3'
@@ -65,8 +65,8 @@ export function AdsVerdict({ t, be, single, rows, range, period, scope, months, 
         {months}
       </div>
       <div className="min-w-0 lg:self-center">
-        <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(rows, t.spendPaise, range, allDisconnected, notConnected.length > 0)}</h1>
-        <p className={`mt-1 ${note}`}>Campaign ROAS counts tracked orders only ({t.trackedOrders} of {t.orders}).</p>
+        <h1 className="text-balance text-[clamp(1.75rem,2.7vw,2.6rem)] font-bold leading-[1.08] tracking-[-0.03em]">{verdict(rows, t.spendPaise, range, allDisconnected, notConnected.length > 0)}</h1>
+        <p className={`mt-2 ${note}`}>Campaign ROAS counts tracked orders only ({t.trackedOrders} of {t.orders}).</p>
         {notConnected.length > 0 && <p className="mt-1 flex items-start gap-2 text-sm text-warn"><span className="flex h-lh shrink-0 items-center"><AlertTriangle className="size-4" aria-hidden /></span>Meta not connected yet: {notConnected.join(', ')}.</p>}
       </div>
       <div className={heroCell}>
@@ -187,7 +187,7 @@ export function StoreAdsTable({ rows, storeName, period, losing = [] }: { rows: 
             const idle = s.spendPaise === 0 && s.orders === 0
             return (
               <div role="row" key={s.storeId} className={`${glassRow} ${storeGrid}${idle ? ' text-ink-3' : ''}`}>
-                <div role="rowheader" className="flex items-center gap-2 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] [grid-area:name]"><StoreDot id={s.storeId} />{storeName(s.storeId)}</div>
+                <div role="rowheader" className="flex items-center gap-2 text-[1.35rem] @min-[50rem]:text-[1.2rem] @min-[60rem]:text-[1.3rem] font-semibold tracking-[-0.015em] [grid-area:name]"><StoreDot id={s.storeId} />{storeName(s.storeId)}</div>
                 <Cell money area="spend" label="Spend" value={rs(s.spendPaise)} />
                 <Cell area="orders" label="Orders" value={String(s.orders)} detail={s.orders === 0 ? undefined : `${pct(s.trackedOrders / s.orders)} tracked`} />
                 <div role="cell" className="[grid-area:roas]">
@@ -251,7 +251,7 @@ export function CampaignsTable({ rows, sort, sortHref, storeName, showStore, per
               return (
                 <div role="row" key={c.id} className={`${glassRow} ${campaignGrid}`}>
                   <div role="rowheader" className="min-w-0 [grid-area:name]">
-                    <div className="flex items-start gap-2 font-semibold leading-tight @min-[50rem]:text-[1.35rem]">
+                    <div className="flex items-start gap-2 font-semibold leading-tight tracking-[-0.01em] @min-[50rem]:text-[1.125rem]">
                       <span className="flex h-lh shrink-0 items-center"><StoreDot id={c.storeId} /></span>
                       <span className="[overflow-wrap:anywhere] @min-[50rem]:line-clamp-2" title={c.name}>{c.name}</span>
                     </div>

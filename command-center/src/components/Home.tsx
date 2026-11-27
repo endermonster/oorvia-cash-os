@@ -33,27 +33,27 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
       <Overview total={pf.total} series={series} period={period} nowHour={istNow(now).hour} prevHoursComplete={m.yesterdayHoursComplete(ids)} />
 
       {/* The verdict leads; the numbers behind it sit to its right. */}
-      <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <section aria-label="Verdict" className="glass rise grid gap-x-10 gap-y-5 px-5 py-5 sm:py-6 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
         <div className="min-w-0 lg:self-center">
-          <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict(pf.stores, m.metaNotConnected, stopped)}</h1>
-          {missing && <p className="mt-1 max-w-[75ch] text-[0.8125rem] text-warn">{missing}</p>}
+          <h1 className="text-balance text-[clamp(1.75rem,2.7vw,2.6rem)] font-bold leading-[1.08] tracking-[-0.03em]">{verdict(pf.stores, m.metaNotConnected, stopped)}</h1>
+          {missing && <p className="mt-2 max-w-[75ch] text-[0.8125rem] text-warn">{missing}</p>}
         </div>
-        <div className="border-line lg:border-l lg:pl-8">
+        <div className="border-line lg:border-l lg:pl-10 lg:self-center">
           <p className="label">Projected profit · {period.short} · All stores</p>
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className={`whitespace-nowrap text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(net)}`}>{net > 0 ? '+' : ''}<Signed value={net} /></p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className={`whitespace-nowrap text-[clamp(2.6rem,3.6vw,3.5rem)] font-bold leading-none tracking-[-0.035em] ${tone(net)}`}>{net > 0 ? '+' : ''}<Signed value={net} /></p>
             {prevNet > 0
               ? <Delta now={net} prev={prevNet} suffix={`vs ${period.prevLabel}`} />
               : <span className="text-sm text-ink-3">vs {inr(prevNet)} {period.prevLabel}</span>}
           </div>
           {/* w-0 min-w-full: the note wraps to the column instead of widening it and squeezing the verdict. */}
-          {fixedCosts > 0 && <p className="mt-1 w-0 min-w-full text-xs text-ink-2">After {inr(fixedCosts)} fixed costs at run rate</p>}
+          {fixedCosts > 0 && <p className="mt-2 w-0 min-w-full text-xs text-ink-2">After {inr(fixedCosts)} fixed costs at run rate</p>}
           {rateNote && <p className="mt-0.5 w-0 min-w-full text-xs text-ink-3">Estimate · {rateNote}</p>}
         </div>
-        <div className="border-line lg:border-l lg:pl-8">
+        <div className="border-line lg:border-l lg:pl-10 lg:self-center">
           <p className="label">Resolved · {period.short} · vFulfill</p>
-          <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <p className="text-[2.6rem] font-extrabold leading-none tracking-[-0.035em]">{resolved.delivered}<span className="ml-2 text-xl font-semibold tracking-normal text-ink-2">delivered</span></p>
+          <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <p className="text-[2.25rem] font-bold leading-none tracking-[-0.03em]">{resolved.delivered}<span className="ml-2 text-lg font-medium tracking-normal text-ink-2">delivered</span></p>
             <span className="text-sm text-ink-2">{resolved.rto} RTO{resolved.rate !== null && <> · {pct(resolved.rate)} delivered</>}</span>
           </div>
         </div>
@@ -127,7 +127,7 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
           {stores.map((s) => (
             <div role="row" key={s.store.id} className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
               <span role="cell" className="[grid-area:name]">
-                <Link href={href('/', { ...view, store: s.store.id })} className="inline-flex min-h-9 items-center gap-2 text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] hover:underline">
+                <Link href={href('/', { ...view, store: s.store.id })} className="inline-flex min-h-9 items-center gap-2 text-[1.35rem] @min-[50rem]:text-[1.2rem] @min-[60rem]:text-[1.3rem] font-semibold tracking-[-0.015em] hover:underline">
                   <StoreDot id={s.store.id} />{s.store.name}
                 </Link>
               </span>
@@ -143,8 +143,8 @@ function Stores({ stores, total, view, period, notConnected }: { stores: StoreSt
               <span role="cell" className="flex justify-end self-start [grid-area:call] @min-[50rem]:justify-center @min-[50rem]:self-baseline"><CallChip s={s} off={notConnected(s.store.id)} /></span>
             </div>
           ))}
-          <div role="row" className={`glass-row ${ROW} px-3 py-3 @min-[50rem]:min-h-[4.5rem] @min-[50rem]:py-2`}>
-            <span role="cell" className="text-[1.6rem] @min-[50rem]:text-[1.35rem] @min-[60rem]:text-[1.6rem] font-bold tracking-[-0.02em] [grid-area:name]">VXP <span className="text-lg font-medium text-ink-2">(total)</span></span>
+          <div role="row" className={`${ROW} mx-0 !mt-2 border-t border-line-strong px-3 pb-2 pt-4 @min-[50rem]:min-h-[4.5rem]`}>
+            <span role="cell" className="text-[1.35rem] @min-[50rem]:text-[1.2rem] @min-[60rem]:text-[1.3rem] font-semibold tracking-[-0.015em] [grid-area:name]">VXP <span className="text-base font-medium text-ink-2">(total)</span></span>
             <Cell area="spend" label="Spend" value={inr(total.spend)} />
             <Cell area="orders" label="Orders" value={String(total.orders)} />
             <span role="cell" className="[grid-area:roas]"><VxpRoas total={total} /></span>
@@ -167,7 +167,7 @@ function Cell({ area, label, value, sub }: { area: string; label: string; value:
   return (
     <span role="cell" className={`min-w-0 ${money ? 'whitespace-nowrap text-right tabular-nums' : ''}`} style={{ gridArea: area }}>
       <span className="text-xs text-ink-3 @min-[50rem]:hidden">{label} </span>
-      <span className="block text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-bold leading-tight">{value}</span>
+      <span className="block text-[1.3rem] @min-[50rem]:text-[1.125rem] @min-[60rem]:text-[1.3rem] font-semibold leading-tight">{value}</span>
       {sub && <span className="text-xs text-ink-2">{sub}</span>}
     </span>
   )

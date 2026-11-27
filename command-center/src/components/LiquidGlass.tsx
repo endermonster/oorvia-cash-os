@@ -58,10 +58,11 @@ float sdRR(vec2 p, vec2 b, float r) { vec2 q = abs(p) - b + r; return length(max
 
 void main() {
   vec2 p = vec2(gl_FragCoord.x, uRes.y * uDpr - gl_FragCoord.y) / uDpr;
-  // Haze fades to the blue-black ground; only bright cities stay, as soft points of gold. A light blur keeps them soft.
+  // Haze fades to the blue-black ground; only the brightest cities stay, as faint soft points of gold, so the
+  // night is there without competing with the numbers. A blur keeps them soft.
   vec3 bg = lightAt(p, 1.0);
   float lum = dot(bg, vec3(0.299, 0.587, 0.114));
-  vec3 col = dusk(GROUND + bg * smoothstep(0.16, 0.7, lum) * 0.85, p);
+  vec3 col = dusk(GROUND + bg * smoothstep(0.24, 0.85, lum) * 0.42, p);
   for (int i = 0; i < ${MAX}; i++) {
     if (i >= uCount) break;
     vec4 R = uRects[i];
@@ -78,12 +79,13 @@ void main() {
     vec2 n = normalize(vec2(sdRR(q + vec2(e, 0.0), b, r) - sdRR(q - vec2(e, 0.0), b, r),
                             sdRR(q + vec2(0.0, e), b, r) - sdRR(q - vec2(0.0, e), b, r)) + 1e-6);
     vec2 off = -n * mag * ${SCALE}.0 * 0.5;
-    vec3 frost = lightAt(p + off * 0.94, 1.9);
+    // The middle is frosted and dimmed so text reads on calm glass; the rim keeps the full light it bends.
+    vec3 frost = lightAt(p + off * 0.94, 1.9) * 0.42;
     vec3 rim = vec3(lightAt(p + off, 0.6).r, lightAt(p + off * 0.94, 0.6).g, lightAt(p + off * 0.88, 0.6).b);
     vec3 g = dusk(mix(frost, rim, clamp(mag * 1.8, 0.0, 1.0)), p);
     float l = dot(g, vec3(0.299, 0.587, 0.114));
     g = mix(vec3(l), g, 1.45) * 1.04;
-    g = mix(g * vec3(0.82, 0.94, 1.22), vec3(0.085, 0.13, 0.23), 0.16); // blue smoke, not grey
+    g = mix(g * vec3(0.82, 0.94, 1.22), vec3(0.075, 0.115, 0.205), 0.3); // blue smoke, not grey
     g += vec3(0.075) * clamp(1.0 - length(p - uPtr) / 322.0, 0.0, 1.0);
     col = g;
     break;

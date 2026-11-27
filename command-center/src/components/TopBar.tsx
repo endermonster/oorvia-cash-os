@@ -80,30 +80,32 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
             periods={tab === 'home' || tab === 'ads' ? {
               label: 'Period', items: periodList.map((p) => ({ id: p.id, label: p.label })),
               // Home's seven choices overflow a phone: fade the edge as the store switch does, so the rest reads as scrollable.
-              className: `glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto${tab === 'home' ? ' max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]' : ''}`,
+              // Home's seven do not fit beside the switcher: they open the second row, ahead of the freshness chips.
+              className: `glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar${tab === 'home' ? ' max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]' : ' lg:ml-auto'}`,
               itemClass: `${seg} flex items-center max-sm:min-h-9`,
             } : null}
             custom={tab === 'home' ? { range: custom, min: addDays(today, -(CUSTOM_MAX_DAYS - 1)), max: today } : undefined} />}
-        </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">
-          <span className={freshnessChip} title="Shopify orders arrive by webhook">
-            <ShopifyMark className="size-3.5" />
-            <span className="sr-only">Shopify</span><span className={`${freshnessAge} ${shopify === 'live' ? 'text-good' : 'text-ink-2'}`}>{shopify}</span>
-          </span>
-          <span className={freshnessChip} title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
-            <MetaMark className="size-3.5" />
-            <span className="sr-only">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
-          </span>
-          <span className={`${freshnessChip} ${vfStale ? 'text-warn max-sm:order-first' : ''}`} title={`vFulfill arrives by CSV import: the shipments data ${vfs.phrase}`}>
-            <VFulfillMark className="size-3.5" />
-            <span className="sr-only">vFulfill</span>
-            {vfStale && <AlertTriangle className="size-3.5" aria-hidden />}
-            <span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
-            {vfStale && <span className="sr-only">(stale)</span>}
-          </span>
+          {/* Freshness and the controls wrap with the rest: one row fewer wherever the switches leave room. */}
+          <div className="flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">
+            <span className={freshnessChip} title="Shopify orders arrive by webhook">
+              <ShopifyMark className="size-3.5" />
+              <span className="sr-only">Shopify</span><span className={`${freshnessAge} ${shopify === 'live' ? 'text-good' : 'text-ink-2'}`}>{shopify}</span>
+            </span>
+            <span className={freshnessChip} title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
+              <MetaMark className="size-3.5" />
+              <span className="sr-only">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
+            </span>
+            <span className={`${freshnessChip} ${vfStale ? 'text-warn max-sm:order-first' : ''}`} title={`vFulfill arrives by CSV import: the shipments data ${vfs.phrase}`}>
+              <VFulfillMark className="size-3.5" />
+              <span className="sr-only">vFulfill</span>
+              {vfStale && <AlertTriangle className="size-3.5" aria-hidden />}
+              <span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
+              {vfStale && <span className="sr-only">(stale)</span>}
+            </span>
+          </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2 whitespace-nowrap text-[0.8125rem]">
             {d.source === 'mock' && (
               <span className="rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-warn ring-1 ring-warn/40"
                 title={`Fake numbers, frozen at ${d.now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`}>

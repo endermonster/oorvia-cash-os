@@ -56,13 +56,15 @@ export function Overview({ total, series: points, period, nowHour, prevHoursComp
   const labels = series.map((p) => p.label)
 
   return (
-    <section aria-label={`Overview · ${period.range}`} className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <section aria-label={`Overview · ${period.range}`} className="space-y-2">
       {/* A custom range's dates in view: on a phone its pill can sit scrolled away, and "7D" alone reads as the last 7 days. */}
       {period.id === 'custom' && (
-        <p className="label col-span-full -mb-1 px-1">Custom range <span className="font-normal normal-case tracking-normal text-ink-2">· {period.range} · {period.short}</span></p>
+        <p className="label px-1">Custom range <span className="font-normal normal-case tracking-normal text-ink-2">· {period.range} · {period.short}</span></p>
       )}
+      {/* One sheet of glass with four cells, not four cards: the plain read of the period, kept quieter than the verdict. */}
+      <div className="glass rise grid grid-cols-2 lg:grid-cols-4">
       {cards.map((c, i) => (
-        <div key={c.k} className="glass rise flex min-w-0 flex-col px-4 pb-3 pt-3.5 sm:px-5 sm:pt-4" style={{ '--delay': `${i * 40}ms` } as React.CSSProperties}>
+        <div key={c.k} className={`flex min-w-0 flex-col border-line px-4 pb-3 pt-3.5 sm:px-5 sm:pt-4 ${CELL_EDGE[i]}`}>
           {/* One line from sm up; on a phone's narrow card the source drops to a second line instead of being cut. */}
           <p className="label sm:truncate">
             <span className="block truncate sm:inline">
@@ -71,7 +73,7 @@ export function Overview({ total, series: points, period, nowHour, prevHoursComp
             </span>
             <span className="block truncate font-normal normal-case tracking-normal text-ink-3 sm:inline"><span className="max-sm:hidden"> · </span>{c.source}</span>
           </p>
-          <p className="mt-1.5 whitespace-nowrap text-[clamp(1.2rem,5.2vw,1.6rem)] font-extrabold leading-none tracking-[-0.03em] tabular-nums sm:text-[2rem]">{c.value}</p>
+          <p className="mt-2 whitespace-nowrap text-[clamp(1.2rem,5.2vw,1.5rem)] font-bold leading-none tracking-[-0.025em] tabular-nums sm:text-[1.75rem]">{c.value}</p>
           {/* The comparison wraps whole under the change on a narrow card, never word by word beside it. */}
           <div className="mt-1.5 flex min-h-5 flex-wrap items-center gap-x-1 text-sm text-ink-3">
             {noPrev ? <span>no data for {period.prevLabel}</span>
@@ -86,6 +88,10 @@ export function Overview({ total, series: points, period, nowHour, prevHoursComp
           </div>
         </div>
       ))}
+      </div>
     </section>
   )
 }
+
+/** Hairlines between the cells: a 2 × 2 grid on phones and tablets, one row of four from lg. */
+const CELL_EDGE = ['border-r border-b lg:border-b-0', 'border-b lg:border-b-0 lg:border-r', 'border-r', '']

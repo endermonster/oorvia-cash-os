@@ -52,7 +52,7 @@ export function OrdersVerdict({ s, context, monthName, short, nav, vf }: {
         <MonthPill nav={nav} />
       </div>
       <div className="min-w-0 lg:self-center">
-        <h1 className="text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict}</h1>
+        <h1 className="text-balance text-[clamp(1.75rem,2.7vw,2.6rem)] font-bold leading-[1.08] tracking-[-0.03em]">{verdict}</h1>
         {vf.stale
           ? <p className="mt-1 flex max-w-[75ch] items-start gap-1.5 text-[0.8125rem] text-warn"><AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />The vFulfill shipments data {vf.phrase}: orders shipped since may read No shipment data.</p>
           : <p className="mt-1 text-xs text-ink-3">The vFulfill shipments data {vf.phrase}</p>}
@@ -60,13 +60,13 @@ export function OrdersVerdict({ s, context, monthName, short, nav, vf }: {
       <div className="border-line lg:border-l lg:pl-8">
         <p className="label">Delivered · {short} · vFulfill</p>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <p className="text-[2.6rem] font-extrabold leading-none tracking-[-0.035em]">{s.delivered}<span className="ml-2 text-xl font-semibold tracking-normal text-ink-2">delivered</span></p>
+          <p className="text-[clamp(2.6rem,3.6vw,3.25rem)] font-bold leading-none tracking-[-0.035em]">{s.delivered}<span className="ml-2 text-lg font-medium tracking-normal text-ink-2">delivered</span></p>
           <span className="text-sm text-ink-2">{s.rto} RTO{s.rtoShareOfAll !== null && <> ({pct(s.rtoShareOfAll, 1)} of all orders)</>}{s.rtoRate !== null && <> · {pct(1 - s.rtoRate)} of resolved delivered</>}</span>
         </div>
       </div>
       <div className="border-line lg:border-l lg:pl-8">
         <p className="label">Booked · {short} · Shopify</p>
-        <p className="mt-1 text-[2.6rem] font-extrabold leading-none tracking-[-0.035em]">{rs(s.bookedPaise)}</p>
+        <p className="mt-1 text-[clamp(2.6rem,3.6vw,3.25rem)] font-bold leading-none tracking-[-0.035em]">{rs(s.bookedPaise)}</p>
         <p className="mt-1 text-sm text-ink-2">incl. GST, cancelled left out</p>
       </div>
     </section>

@@ -24,7 +24,7 @@ export function Sparkline({ values, labels, kind, stroke, fill, dot, name }: {
   // Kept in range: after Back to a shorter period the card stays mounted and the old index can outrun the new series.
   const hover = picked === null ? null : Math.max(0, Math.min(n - 1, picked))
   const nums = values.filter((v): v is number => v !== null)
-  if (n === 0 || nums.length === 0) return <div className="h-14" aria-hidden />
+  if (n === 0 || nums.length === 0) return <div className="h-11" aria-hidden />
   const max = Math.max(...nums)
   const min = Math.min(0, ...nums)
   const x = (i: number) => (n <= 1 ? W / 2 : (i / (n - 1)) * W)
@@ -63,7 +63,7 @@ export function Sparkline({ values, labels, kind, stroke, fill, dot, name }: {
   return (
     <div role="slider" tabIndex={0} aria-label={`${name}, ${labels[0]} to ${labels.at(-1)}`}
       aria-valuemin={0} aria-valuemax={n - 1} aria-valuenow={at} aria-valuetext={`${labels[at]}: ${fmt(values[at])}`}
-      className="relative h-14 touch-pan-y rounded-md outline-none focus-visible:ring-2 focus-visible:ring-revenue/60 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
+      className="relative h-11 touch-pan-y rounded-md outline-none focus-visible:ring-2 focus-visible:ring-revenue/60 focus-visible:ring-offset-4 focus-visible:ring-offset-transparent"
       onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={(e) => { if (document.activeElement !== e.currentTarget) setHover(null) }}
       onKeyDown={onKey} onFocus={() => setHover((h) => h ?? n - 1)} onBlur={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block size-full overflow-visible" aria-hidden>

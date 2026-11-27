@@ -50,7 +50,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
             <p className="flex min-w-0 items-center gap-2 text-[1.6rem] font-bold tracking-[-0.02em]"><StoreDot id={id} /><span className="truncate">{store.name}</span></p>
             <CallChip s={s} off={off} />
           </div>
-          <h1 className="mt-2 text-balance text-[clamp(1.5rem,2.2vw,2.1rem)] font-extrabold leading-[1.12] tracking-[-0.025em]">{verdict([s], m.metaNotConnected)}</h1>
+          <h1 className="mt-2 text-balance text-[clamp(1.75rem,2.7vw,2.6rem)] font-bold leading-[1.08] tracking-[-0.03em]">{verdict([s], m.metaNotConnected)}</h1>
           <p className="mt-2 text-sm text-ink-2">{products.map((p) => <span key={p.sku}>{p.name} {inr(p.price)} <span className={`font-semibold ${STAGE[p.stage].tone}`}>{STAGE[p.stage].label}</span> · </span>)}live since {liveSince}</p>
           {warnings.length > 0 && (
             <div className="mt-1 text-sm text-warn">
@@ -97,7 +97,7 @@ export function StoreView({ id, view, period, m, orders }: { id: StoreId; view: 
 
         <div className="border-line lg:border-l lg:pl-8">
           <p className="label">Profit (est.) · {period.short} · Estimate</p>
-          <p className={`mt-1 text-[2.6rem] font-extrabold leading-none tracking-[-0.035em] ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></p>
+          <p className={`mt-1 text-[clamp(2.6rem,3.6vw,3.25rem)] font-bold leading-none tracking-[-0.035em] ${tone(s.contribution)}`}>{s.contribution > 0 ? '+' : ''}<Signed value={s.contribution} /></p>
           {s.contribution < 0 && <p className="mt-1 text-xs text-bad">loss this period</p>}
           <p className="mt-1 text-sm text-ink-2">{s.orders} orders</p>
         </div>

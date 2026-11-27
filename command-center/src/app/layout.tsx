@@ -5,7 +5,8 @@ import { LiquidGlass } from '@/components/LiquidGlass'
 import map from '../../assets/plates/map.png'
 import './globals.css'
 
-const inter = Inter({ variable: '--font-inter', subsets: ['latin'], weight: ['400', '500', '600', '700', '800'] })
+// Variable Inter with its optical-size axis: big figures and the verdict get the tighter display cut on their own.
+const inter = Inter({ variable: '--font-inter', subsets: ['latin'], axes: ['opsz'] })
 
 export const metadata: Metadata = {
   title: 'VXP Command Center',

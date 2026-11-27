@@ -24,21 +24,27 @@ colors:
 typography:
   verdict:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "clamp(1.5rem, 2.2vw, 2.1rem)"
-    fontWeight: 800
-    lineHeight: 1.12
-    letterSpacing: "-0.025em"
+    fontSize: "clamp(1.75rem, 2.7vw, 2.6rem)"
+    fontWeight: 700
+    lineHeight: 1.08
+    letterSpacing: "-0.03em"
   hero-figure:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "2.6rem"
-    fontWeight: 800
+    fontSize: "clamp(2.6rem, 3.6vw, 3.5rem)"
+    fontWeight: 700
     lineHeight: 1
     letterSpacing: "-0.035em"
+  overview-figure:
+    fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
+    fontSize: "1.75rem"
+    fontWeight: 700
+    lineHeight: 1
+    letterSpacing: "-0.025em"
   store-name:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
-    fontSize: "1.6rem"
-    fontWeight: 700
-    letterSpacing: "-0.02em"
+    fontSize: "1.3rem"
+    fontWeight: 600
+    letterSpacing: "-0.015em"
   figure:
     fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif"
     fontSize: "1.3rem"
@@ -83,7 +89,7 @@ components:
     rounded: "{rounded.panel}"
     padding: "16px 20px"
   glass-row:
-    backgroundColor: "rgb(80 115 170 / 0.20)"
+    backgroundColor: "rgb(150 180 230 / 0.045)"
     textColor: "{colors.ink}"
     rounded: "{rounded.row}"
     padding: "12px"
@@ -152,15 +158,16 @@ One blue-black ground, one cool ink ramp, and a small set of meaning colours. He
 
 ## Typography
 
-**Family:** Inter (next/font, weights 400 to 800), falling back to ui-sans-serif, system-ui. Document-wide `font-feature-settings: "tnum" 1, "lnum" 1, "cv11" 1`, so every figure is tabular and lining.
+**Family:** Inter, variable, with its optical-size axis (next/font `axes: ['opsz']`), so the verdict and big figures get Inter's tighter display cut on their own. Falls back to ui-sans-serif, system-ui. Document-wide `font-feature-settings: "tnum" 1, "lnum" 1, "cv11" 1`, so every figure is tabular and lining.
 
 **Character:** a plain grotesque. Weight and size carry hierarchy; there is no second family.
 
 ### Hierarchy
-- **Verdict** (800, clamp(1.5rem, 2.2vw, 2.1rem), 1.12, -0.025em): the computed sentence, once per page.
-- **Hero figure** (800, 2.6rem, 1, -0.035em): projected profit and resolved delivered count in the verdict strip.
-- **Store name** (700, 1.6rem, -0.02em): store rows and the VXP total.
-- **Figure** (700, 1.3rem): row cells (spend, orders, ROAS, revenue, profit).
+- **Verdict** (700, clamp(1.75rem, 2.7vw, 2.6rem), 1.08, -0.03em): the computed sentence, once per page. The loudest words on the page.
+- **Hero figure** (700, clamp(2.6rem, 3.6vw, 3.5rem), 1, -0.035em): projected profit, the loudest number on Home (3.25rem cap on Ads, Orders and the store view). Resolved delivered steps down to 2.25rem.
+- **Overview figure** (700, 1.75rem): the four cells of the overview strip, deliberately quieter than the hero.
+- **Store name** (600, 1.3rem, -0.015em): store rows and the VXP total. A row anchor, not a headline.
+- **Figure** (600 for spend, orders, revenue; 700 for profit, 1.3rem): row cells. Profit and the call chip are what a row says.
 - **Panel title** (700, 1.125rem): panel headings.
 - **Body / control** (400 / 500, 1rem / 0.875rem): body text; tabs, segments, buttons.
 - **Sub-line** (400, 0.75rem or 0.6875rem, `ink-2` or `ink-3`): "7D · Meta" under a column head, "x% COD" under orders, the ROAS key.
@@ -192,10 +199,10 @@ Depth is optical, not shadowed. A fixed canvas behind the page paints the night,
 
 ### Glass vocabulary
 - **Glass panel** (20px radius): vertical smoke gradient (`rgb(40 62 100 / 0.30)` to `rgb(12 20 38 / 0.46)`), 12px backdrop blur at 180% saturation in the CSS fallback, a 1px gradient rim brightest at top-left (white 0.55 to blue 0.30), inset top highlight `rgb(255 255 255 / 0.28)`, a caustic along the bottom, and `0 24px 50px -20px rgb(0 0 0 / 0.75)` ambient.
-- **Glass row** (14px): lighter blue pane (`rgb(80 115 170 / 0.20)` to `rgb(30 50 85 / 0.22)`), same rim at lower strength. Links lift on hover (160ms, ease-out).
+- **Glass row** (14px): a quiet tonal band (`rgb(150 180 230 / 0.045)`, a 3.5% white top hairline), no rim and no drop: a panel reads as one sheet of glass with content on it, never boxes inside a box. Links brighten to 9% on hover (160ms, ease-out). The VXP total is not a band: a `line-strong` rule above it marks it as the sum.
 - **Glass pill** (12px): recessed (`rgb(10 16 30 / 0.35)`, inset shadow). **Pill on**: raised, lighter gradient, with a drop.
 - **WebGL glass:** `LiquidGlass` draws the night and, under each `.glass`, the same light seen through thick glass: frosted in the middle, bent and colour-split in a 34px rim (max displacement 54px), tinted toward blue smoke, with a pointer sheen. It adds `gl-glass` to `<html>`; CSS then removes the panels' `backdrop-filter`, the sheen and the `.night` image. Without WebGL2 the CSS blur is the fallback. Phones use a denser tint (0.42 / 0.58) and 10px blur.
-- **Backdrop:** the haze fades to the blue-black ground; only bright cities stay, as soft gold points. A blue glow sits at the top-left.
+- **Backdrop:** kept dim on purpose (2026-11-27 polish, after "nothing stands out / looks cheap"): the haze fades to the blue-black ground and only the brightest cities stay, as faint soft gold points (shader threshold 0.24 to 0.85, gain 0.42; CSS fallback `brightness(0.3)` plus a 2px blur). Inside a panel the frosted light is cut to 42% and mixed 30% toward blue smoke, so text sits on calm glass while the 34px rim still bends full light. A blue glow sits at the top-left.
 
 ### Named Rules
 **The One Light Rule.** Light comes from the top-left: rims, highlights and the page glow all agree. Never glow a panel in a status colour.
@@ -208,9 +215,12 @@ Generous, consistent radii by role: panels 20px, rows 14px, pills and the focus 
 ## Components
 
 ### Top bar
-A glass panel: wordmark ("VXP"; the "Command Center" subtitle only from 1360px), tabs (Home, Ads, Orders, Money; icons only on phones), store switcher (All VXP, Oorvia, Kaiven, Selnova with a store dot), period segments. Second row: freshness chips and the controls. Segments are 30px in a 36px recessed pill; the current one is the raised pill. Tabs and periods scroll horizontally if cramped. On phones the switcher and chip row scroll horizontally with an edge fade, and a stale chip moves first.
+A glass panel, one flex-wrap of everything: wordmark ("VXP"; the "Command Center" subtitle only from 1360px), tabs (Home, Ads, Orders, Money; icons only on phones), store switcher (All VXP, Oorvia, Kaiven, Selnova with a store dot), period segments, freshness chips, then Sync and Sign out pushed right. On Home the seven periods open the second row beside the chips (two rows at 1280 to 1536, not three); on the other tabs the periods sit right on row one. Segments are 30px in a 36px recessed pill; the current one is the raised pill. Tabs and periods scroll horizontally if cramped. On phones the switcher and chip row scroll horizontally with an edge fade, and a stale chip moves first.
 - **Freshness chips** (Shopify, Meta, vFulfill, 26px): a dot or icon plus source and age. Shopify "live" is green. vFulfill older than 2 days (or never imported) turns amber with a warning icon and a screen-reader "(stale)".
 - **Sync now** (26px pill) and **Sign out** (26px, text only). "Mock data" is an amber outlined tag.
+
+### Overview strip
+One glass panel with four cells (revenue, orders, AOV, ad spend) split by `line` hairlines: one row from `lg`, 2 × 2 below. Each cell: label with period and source, overview figure, change vs the previous period, a 44px sparkline. Never four separate cards.
 
 ### Verdict strip
 Glass panel: the computed verdict left; projected profit with its delta (arrow, sign, percent) and resolved delivered / RTO counts right, divided by hairlines. A missing-cost note shows in amber under the verdict.
