@@ -1,6 +1,7 @@
 import { hourLabel, inr, type Period, type Portfolio, type SeriesPoint } from '@/lib/metrics'
 import { Delta } from './bits'
 import { Sparkline } from './Sparkline'
+import { PerformanceTimeline } from './PerformanceTimeline'
 
 type Card = {
   /** `short`: the label on phones. `prev` null: no comparison (an average over no orders). */
@@ -62,7 +63,7 @@ export function Overview({ total, series: points, period, nowHour, prevHoursComp
         <p className="label px-1">Custom range <span className="font-normal normal-case tracking-normal text-ink-2">· {period.range} · {period.short}</span></p>
       )}
       {/* One sheet of glass with four cells, not four cards: the plain read of the period, kept quieter than the verdict. */}
-      <div className="glass rise grid grid-cols-2 lg:grid-cols-4">
+      <PerformanceTimeline key={`${period.id}/${period.from}/${period.to}`} labels={labels} hourly={period.id === 'today'}>
       {cards.map((c, i) => (
         <div key={c.k} className={`flex min-w-0 flex-col border-line px-4 pb-3 pt-3.5 sm:px-5 sm:pt-4 ${CELL_EDGE[i]}`}>
           {/* One line from sm up; on a phone's narrow card the source drops to a second line instead of being cut. */}
@@ -82,13 +83,13 @@ export function Overview({ total, series: points, period, nowHour, prevHoursComp
               : c.prev > 0 ? <><Delta now={c.now} prev={c.prev} goodWhenUp={c.goodWhenUp ?? true} neutral={c.neutral} /><span>vs {period.prevLabel}</span></>
               : <span>vs {c.kind === 'money' ? inr(0) : '0'} {period.prevLabel}</span>}
           </div>
+          {c.note && <p className="mt-1 text-xs text-warn">{c.note}</p>}
           <div className="mt-auto pt-3">
             <Sparkline values={c.values} labels={labels} kind={c.kind} stroke={c.stroke} fill={c.fill} dot={c.dot} name={c.label} />
-            {c.note && <p className="mt-1 text-xs text-warn">{c.note}</p>}
           </div>
         </div>
       ))}
-      </div>
+      </PerformanceTimeline>
     </section>
   )
 }

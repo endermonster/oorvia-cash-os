@@ -4,6 +4,7 @@ import { createMetrics, type Portfolio, type SeriesPoint } from '@/lib/metrics'
 import { MOCK } from '@/lib/mock'
 import { Overview } from './Overview'
 import { Sparkline } from './Sparkline'
+import { PerformanceTimeline } from './PerformanceTimeline'
 
 const m = createMetrics(MOCK)
 const period = m.resolvePeriod('30d')
@@ -69,11 +70,26 @@ describe('Overview cards', () => {
     expect(html).toContain(custom.range)
     expect(render({})).not.toContain('Custom range')
   })
+
+  it('keeps AOV on the shared timeline when none of the selected days had orders', () => {
+    const html = render({ orders: 0, revenue: 0 }, [point(0, 0)])
+    expect(html.match(/role="slider"/g)).toHaveLength(4)
+    expect(html).toContain('aria-valuetext="1 Nov: no orders"')
+  })
+
+  it('omits the scrub instruction and sliders when there are no time buckets', () => {
+    const html = render({}, [])
+    expect(html).not.toContain('role="slider"')
+    expect(html).not.toContain('Scrub any chart')
+  })
 })
 
 describe('Sparkline', () => {
   it('is a keyboard slider whose value text names the bucket and its value', () => {
-    const html = renderToStaticMarkup(<Sparkline values={[10, null, 30]} labels={['1 Nov', '2 Nov', '3 Nov']} kind="money" stroke="" fill="" dot="" name="Revenue" />)
+    const labels = ['1 Nov', '2 Nov', '3 Nov']
+    const html = renderToStaticMarkup(<PerformanceTimeline labels={labels} hourly={false}>
+      <Sparkline values={[10, null, 30]} labels={labels} kind="money" stroke="" fill="" dot="" name="Revenue" />
+    </PerformanceTimeline>)
     expect(html).toContain('role="slider"')
     expect(html).toContain('tabindex="0"')
     expect(html).toContain('aria-valuetext="3 Nov: ₹30"')
