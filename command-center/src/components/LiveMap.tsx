@@ -89,16 +89,23 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
     return () => { clearInterval(tick); clearInterval(sweep); if (poll) clearInterval(poll); if (demo) clearInterval(demo) }
   }, [initial, mock, serverNow])
 
-  // One dot per place (Delhi's districts share one): its size grows with orders, its colour is the newest order's payment.
+  // One square per place (Delhi's districts share one): its size grows with orders, its colour is the newest order's
+  // payment. Each store's own count and newest order are kept too, so a traced store's squares show only its orders.
   const cities = useMemo(() => {
-    const m = new Map<string, { key: string; x: number; y: number; n: number; newest: RecentOrder; fresh: boolean; stores: StoreId[] }>()
+    type Tally = { n: number; newest: RecentOrder }
+    const m = new Map<string, Tally & { key: string; x: number; y: number; fresh: boolean; stores: StoreId[]; by: Partial<Record<StoreId, Tally>> }>()
     for (const o of orders) {
       const at = cityOnMap(o.city)
       if (!at) continue
       const key = `${Math.round(at.x)},${Math.round(at.y)}`
       const c = m.get(key)
-      if (c) { c.n++; if (fresh[o.id]) c.fresh = true; if (!c.stores.includes(o.storeId)) c.stores.push(o.storeId) }
-      else m.set(key, { key, x: at.x, y: at.y, n: 1, newest: o, fresh: !!fresh[o.id], stores: [o.storeId] })
+      if (c) {
+        c.n++
+        if (fresh[o.id]) c.fresh = true
+        const s = c.by[o.storeId]
+        if (s) s.n++
+        else { c.stores.push(o.storeId); c.by[o.storeId] = { n: 1, newest: o } }
+      } else m.set(key, { key, x: at.x, y: at.y, n: 1, newest: o, fresh: !!fresh[o.id], stores: [o.storeId], by: { [o.storeId]: { n: 1, newest: o } } })
     }
     return [...m.values()].sort((a, b) => Number(a.fresh) - Number(b.fresh))
   }, [orders, fresh])
@@ -125,14 +132,17 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
 
         {/* Squares are HTML so their pop is a compositor animation, never a repaint of the map. */}
         {cities.map((c) => {
-          const size = Math.min(18, 7 + Math.sqrt(c.n - 1) * 3.5)
+          // While a store is traced, its squares count and colour only its own orders.
+          const { n, newest } = (hl !== null && c.by[hl as StoreId]) || c
+          const size = Math.min(18, 7 + Math.sqrt(n - 1) * 3.5)
           return (
             <span key={c.key} className="absolute -translate-x-1/2 -translate-y-1/2" style={{ left: `${(c.x / W) * 100}%`, top: `${(c.y / H) * 100}%` }}
-              title={`${c.newest.city}: ${c.n} ${c.n === 1 ? 'order' : 'orders'}`}>
+              title={`${newest.city}: ${n} ${n === 1 ? 'order' : 'orders'}`}>
+              {/* Corners scale with the square (as in the legend), so a 1-order square doesn't round into a dot. */}
               <span data-s={c.stores.join(' ')}
-                className={`map-sq block cursor-pointer rounded-[3px] ${payBg(c.newest.payment)} ${c.newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'} ${c.fresh ? 'map-pop' : ''} ${hlClass(c.stores)}`}
-                style={{ width: size, height: size }} />
-              {c.fresh && <span aria-hidden className={`map-ring pointer-events-none absolute inset-0 ${c.newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'}`} />}
+                className={`map-sq block cursor-pointer ${payBg(newest.payment)} ${newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'} ${c.fresh ? 'map-pop' : ''} ${hlClass(c.stores)}`}
+                style={{ width: size, height: size, borderRadius: size / 4 }} />
+              {c.fresh && <span aria-hidden className={`map-ring pointer-events-none absolute inset-0 ${newest.payment === 'cod' ? 'text-cod' : 'text-prepaid'}`} />}
             </span>
           )
         })}
