@@ -3,9 +3,11 @@ import { AlertTriangle, ChevronRight, CircleCheck, FileText, PieChart, TrendingD
 import { breaksEven, noBreakevenText } from '@/lib/calculator'
 import { fmtX, inr, pct, type Call, type Metrics, type Period, type Portfolio, type StoreStats } from '@/lib/metrics'
 import { href, type ViewState } from '@/lib/nav'
+import { istNow } from '@/lib/dates'
 import type { StoreId } from '@/lib/types'
 import { Delta, rateSourceNote, Signed, StoreDot, tone } from './bits'
 import { LiveMap } from './LiveMap'
+import { Overview } from './Overview'
 import { RevenueChart } from './RevenueChart'
 import { RoasTrack } from './RoasTrack'
 import { pageFrame } from './TopBar'
@@ -28,6 +30,8 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
 
   return (
     <main className={`${pageFrame} space-y-3 pb-6 pt-3`}>
+      <Overview total={pf.total} series={series} period={period} nowHour={istNow(now).hour} prevHoursComplete={m.yesterdayHoursComplete(ids)} />
+
       {/* The verdict leads; the numbers behind it sit to its right. */}
       <section aria-label="Verdict" className="glass rise grid gap-x-8 gap-y-4 px-5 py-4 lg:grid-cols-[minmax(0,1fr)_auto_auto]">
         <div className="min-w-0 lg:self-center">

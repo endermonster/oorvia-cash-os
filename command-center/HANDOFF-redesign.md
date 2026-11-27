@@ -90,6 +90,10 @@ Removed: `src/components/IndiaMap.tsx`. `PaceChart.tsx` stays because StoreView 
 6. Carry the world to Ads, Orders and Money.
 7. Commit (the user asks for commits explicitly). Per the user's CLAUDE.md, code written by Opus should be reviewed with `/codex:review`.
 
+## Backend notes
+
+- Home's 365D and long custom ranges (added 2026-11-27) reach before the data starts: Meta spend is backfilled from 2026-01-01 but Oorvia's Shopify orders start in March 2026, so a range covering Jan–Feb counts spend with no matching orders (ROAS and profit read low). The cards say "no data for previous N days" when the comparison window is empty; marking a partly covered window needs a per-source coverage date from the backend.
+
 ## Gotchas
 
 - Login gate: every page needs a session. For automated screenshots, a Chrome launched with `--remote-debugging-port` plus its own `--user-data-dir` needs the user to sign in once. Copied profiles lose the session (app-bound cookie encryption).

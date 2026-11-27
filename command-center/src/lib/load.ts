@@ -8,6 +8,7 @@ import type { Chrome, Data } from './data'
 import { addDays, istNow } from './dates'
 import { metaStoreIds } from './meta/accounts'
 import { mapFundsRow, type FundsRow } from './meta/funds-level'
+import { SNAPSHOT_DAYS } from './metrics'
 import { selectAll } from './paged'
 import { monthlyRunRate, type FixedCost } from './pnl'
 import { estimateSettlements, LOOKBACK_DAYS, type SettlementEstimate } from './settlements'
@@ -204,8 +205,11 @@ function verifiedYesterday(detail: string | null | undefined): boolean {
 
 // ── Read ─────────────────────────────────────────────────────────────────────
 
-/** How far back the day-level reads go: 30D + its comparison, and this month + last month, with room. */
-const HISTORY_DAYS = 70
+/**
+ * How far back the day-level reads go by default: 30D + its comparison, and this month + last month, with room
+ * (SNAPSHOT_DAYS). Home's long ranges ask for more (metrics.historyDaysFor).
+ */
+const HISTORY_DAYS = SNAPSHOT_DAYS
 /** Newest orders read for the order list and the map. */
 const RECENT_LIMIT = 60
 
@@ -414,11 +418,11 @@ export async function loadChrome(): Promise<Chrome> {
   return { now, source: 'supabase', stores, sync: await readSync(sb, stores.map((s) => s.id), metaStoreIds, now) }
 }
 
-export async function loadData(now = new Date()): Promise<Data> {
+export async function loadData(now = new Date(), historyDays = HISTORY_DAYS): Promise<Data> {
   const sb = await getClient()
   const { today, hour: nowHour, minute: nowMinute } = istNow(now)
   const yesterday = addDays(today, -1)
-  const since = addDays(today, -HISTORY_DAYS)
+  const since = addDays(today, -Math.max(HISTORY_DAYS, historyDays))
 
   const orderCols = 'store_id, sku, payment, orders, units, revenue, cogs, slabs500, slabs_kg'
   const dayCols = `${orderCols}, orders_missing_cogs`

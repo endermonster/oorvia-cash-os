@@ -36,12 +36,12 @@ export async function cachedChrome() {
  * The snapshot for IST day `today`, taken now. If the clock has crossed midnight since the caller read `today`, it is
  * taken as of the last moment of `today`, so it agrees with the reads the caller made for that day (Home's extras).
  */
-export async function cachedData(today: string) {
+export async function cachedData(today: string, historyDays?: number) {
   'use cache: remote'
   fresh()
   const [{ loadData }, { istNow }] = await Promise.all([import('./load'), import('./dates')])
   const now = new Date()
-  return loadData(istNow(now).today === today ? now : new Date(`${today}T23:59:59.999+05:30`))
+  return loadData(istNow(now).today === today ? now : new Date(`${today}T23:59:59.999+05:30`), historyDays)
 }
 
 export async function cachedPnl(fromMonth: string, toMonth: string, asOf?: string) {

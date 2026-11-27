@@ -3,7 +3,7 @@ import {
   addDays, CAMPAIGN_DAYS, CAMPAIGN_HOURS, CAMPAIGNS, COGS_HISTORY, cogsOn, MOCK, NOW_HOUR, NOW_MINUTE, ORDER_HOURS_YESTERDAY, ORDERS, PRODUCTS,
   RESOLVED, STORES, TODAY,
 } from './mock'
-import { createMetrics, MIN_SAMPLE, type RateWindow } from './metrics'
+import { clampCustom, createMetrics, historyDaysFor, MIN_SAMPLE, type RateWindow } from './metrics'
 import type { AdAccountFunds, Campaign, CampaignDay, OrderDay, ResolvedDay, StoreId } from './types'
 
 const m = createMetrics(MOCK)
@@ -863,5 +863,98 @@ describe('a store losing money always reaches Needs your call', () => {
     expect(call.tone).toBe('bad')
     expect(call.detail).toMatch(/^Profit \(est\.\) −₹[\d,]+ over 7D/)
     expect(gap.calls(week).some((c) => c.id === 'selnova-below')).toBe(false)
+  })
+})
+
+describe('Home long ranges (90D, 365D, custom)', () => {
+  const at = (today: string) => createMetrics({ ...MOCK, today })
+
+  it('90D and 365D end today and compare with the same number of days before', () => {
+    expect(at('2026-11-27').resolvePeriod('90d')).toMatchObject({ from: '2026-08-30', to: '2026-11-27', prevFrom: '2026-06-01', prevTo: '2026-08-29', prevLabel: 'previous 90 days' })
+    expect(at('2026-11-27').resolvePeriod('365d')).toMatchObject({ from: '2025-11-28', to: '2026-11-27', prevFrom: '2024-11-28', prevTo: '2025-11-27' })
+  })
+
+  it('a custom range compares with the same number of days just before it', () => {
+    expect(at('2026-11-27').resolvePeriod('custom', { from: '2026-10-01', to: '2026-10-10' }))
+      .toMatchObject({ id: 'custom', from: '2026-10-01', to: '2026-10-10', prevFrom: '2026-09-21', prevTo: '2026-09-30', prevLabel: 'previous 10 days' })
+  })
+
+  it('clamps a custom range to the last 365 days, swaps reversed ends and falls back to 7D without dates', () => {
+    expect(clampCustom('2026-11-27', '2020-01-01', '2030-01-01')).toEqual({ from: '2025-11-28', to: '2026-11-27' })
+    expect(clampCustom('2026-11-27', '2026-11-20', '2026-11-10')).toEqual({ from: '2026-11-10', to: '2026-11-20' })
+    expect(clampCustom('2026-11-27', 'nope', '2026-11-10')).toBeNull()
+    expect(at('2026-11-27').resolvePeriod('custom', {}).id).toBe('7d')
+  })
+
+  it('reads enough history for the period and its comparison', () => {
+    expect(historyDaysFor('30d')).toBeGreaterThanOrEqual(60)
+    expect(historyDaysFor('90d')).toBeGreaterThanOrEqual(180)
+    expect(historyDaysFor('365d')).toBeGreaterThanOrEqual(730)
+  })
+
+  it('sizes a custom read to the validated range and its comparison, not to the largest bucket', () => {
+    const t = '2026-11-27'
+    expect(historyDaysFor('custom', t, { from: t, to: t })).toBe(70)
+    expect(historyDaysFor('custom', t, { from: '2026-10-29', to: t })).toBe(70) // 30 days + 30 before: 60
+    expect(historyDaysFor('custom', t, { from: '2026-09-09', to: t })).toBe(180) // 80 + 80: 160
+    expect(historyDaysFor('custom', t, { from: '2026-01-01', to: '2026-01-31' })).toBe(730)
+    expect(historyDaysFor('custom', t, { from: '2020-01-01', to: t })).toBe(730) // clamped to 365 + 365
+    expect(historyDaysFor('custom', t, { from: '2026-04-31', to: t })).toBe(70) // unreadable: shows 7D
+    // The read reaches the comparison's first day.
+    const p = at(t).resolvePeriod('custom', { from: '2026-09-09', to: t })
+    expect(p.prevFrom >= addDays(t, -historyDaysFor('custom', t, { from: '2026-09-09', to: t }))).toBe(true)
+  })
+
+  it('a long series matches the per-day totals and the capped comparison', () => {
+    const p = resolvePeriod('month')
+    const ids = STORES.map((s) => s.id)
+    const pts = series(ids, p)
+    const day = pts[3]
+    expect(day.revenue).toBeCloseTo(m.portfolio({ ...p, from: day.key, to: day.key }).total.revenue, 6)
+    const prevAll = m.portfolio({ ...p, from: p.prevFrom, to: p.prevTo }).total.revenue
+    expect(pts.at(-1)!.prevCumRevenue).toBeCloseTo(prevAll, 6)
+  })
+
+  it('COD share ignores rows older than the 70-day snapshot, so a long read leaves it unchanged', () => {
+    const row: OrderDay = { date: addDays(TODAY, -40), storeId: 'oorvia', sku: 'OMS-1M', payment: 'cod', orders: 6, units: 6, revenue: 1, cogs: 1, slabs500: 6, slabsKg: 6 }
+    const ancient: OrderDay = { ...row, date: addDays(TODAY, -300), payment: 'prepaid', orders: 500 }
+    expect(createMetrics({ ...MOCK, orders: [row, ancient] }).codShare('oorvia', 'OMS-1M'))
+      .toEqual(createMetrics({ ...MOCK, orders: [row] }).codShare('oorvia', 'OMS-1M'))
+  })
+
+  it('carries orders per bucket and the previous period\'s orders', () => {
+    const p = resolvePeriod('30d')
+    const ids = STORES.map((s) => s.id)
+    const pf = m.portfolio(p)
+    expect(series(ids, p).reduce((t, x) => t + x.orders, 0)).toBeCloseTo(pf.total.orders, 6)
+    expect(pf.total.prevOrders).toBe(pf.stores.reduce((t, s) => t + s.prev.orders, 0))
+  })
+})
+
+describe("yesterday's hourly spend", () => {
+  it('is complete when its hours add up to the daily total, and short when the daily total holds more', () => {
+    const y = addDays(MOCK.today, -1)
+    const hours = MOCK.campaignHoursYesterday.filter((r) => r.storeId === 'oorvia')
+    const total = hours.reduce((s, r) => s + r.spend, 0)
+    const day = MOCK.campaignDays.find((r) => r.storeId === 'oorvia')!
+    const only = (spend: number) => ({ ...MOCK, campaignHoursYesterday: hours, campaignDays: [{ ...day, date: y, spend }] })
+    expect(createMetrics(only(total)).yesterdayHoursComplete(['oorvia'])).toBe(true)
+    expect(createMetrics(only(total + 0.5)).yesterdayHoursComplete(['oorvia'])).toBe(true) // rounding
+    expect(createMetrics(only(total + 50)).yesterdayHoursComplete(['oorvia'])).toBe(false)
+  })
+})
+
+describe('custom range dates must be real days', () => {
+  it('rejects a date JavaScript would roll over (31 April is not 1 May)', () => {
+    expect(clampCustom('2026-11-27', '2026-04-31', '2026-05-01')).toBeNull()
+    expect(clampCustom('2026-11-27', '2026-02-29', '2026-03-01')).toBeNull()
+    expect(clampCustom('2028-11-27', '2028-02-29', '2028-03-01')).toEqual({ from: '2028-02-29', to: '2028-03-01' })
+  })
+})
+
+describe('range labels', () => {
+  it('name the years when a range crosses one', () => {
+    expect(createMetrics({ ...MOCK, today: '2026-11-27' }).resolvePeriod('365d').range).toBe('28 Nov 2025 – 27 Nov 2026')
+    expect(createMetrics({ ...MOCK, today: '2026-11-27' }).resolvePeriod('90d').range).toBe('30 Aug – 27 Nov')
   })
 })

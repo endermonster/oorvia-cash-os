@@ -10,13 +10,55 @@ import { fundsFresh, fundsMessage } from './meta/funds-level'
 import type { Data } from './data'
 import type { CampaignDay, OrderDay, PaymentType, ResolvedDay, Store, StoreId } from './types'
 
-export type PeriodId = 'today' | '7d' | '30d' | 'month'
+export type PeriodId = 'today' | '7d' | '30d' | 'month' | '90d' | '365d' | 'custom'
+/** The periods every tab's switch offers. */
 export const PERIODS: { id: PeriodId; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: '7d', label: '7D' },
   { id: '30d', label: '30D' },
   { id: 'month', label: 'Month' },
 ]
+/** Home also offers the long ranges; Custom is its own control (components/CustomRange.tsx). */
+export const HOME_PERIODS: { id: PeriodId; label: string }[] = [...PERIODS, { id: '90d', label: '90D' }, { id: '365d', label: '365D' }]
+
+/** A custom range spans at most this many days, ending today at the latest. */
+export const CUSTOM_MAX_DAYS = 365
+/** Days of order and spend rows the estimates treat as the snapshot (load.ts reads at least this many). */
+export const SNAPSHOT_DAYS = 70
+
+const dayCount = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 864e5) + 1
+/** A real calendar day: Date.parse rolls 2026-04-31 over to 1 May, so the day must come back unchanged. */
+const isDay = (s: string | undefined): s is string => {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false
+  const t = Date.parse(`${s}T00:00:00Z`)
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s
+}
+
+/** A custom range clamped to [today − 364, today], from ≤ to. Null when either end is missing or not a date. */
+export function clampCustom(today: string, from?: string, to?: string): { from: string; to: string } | null {
+  if (!isDay(from) || !isDay(to)) return null
+  const min = addDays(today, -(CUSTOM_MAX_DAYS - 1))
+  const clamp = (d: string) => (d < min ? min : d > today ? today : d)
+  const [a, b] = [clamp(from), clamp(to)]
+  return a <= b ? { from: a, to: b } : { from: b, to: a }
+}
+
+const HISTORY_BUCKETS = [SNAPSHOT_DAYS, 180, 2 * CUSTOM_MAX_DAYS]
+
+/**
+ * Days of order and spend history a period needs loaded (its own days and the comparison before them), in three sizes.
+ * A custom range takes the smallest size covering it once validated; an unreadable one falls back to 7D, so the snapshot.
+ */
+export function historyDaysFor(id: PeriodId, today?: string, custom?: { from?: string; to?: string }): number {
+  if (id !== 'custom') return id === '365d' ? 2 * CUSTOM_MAX_DAYS : id === '90d' ? 180 : SNAPSHOT_DAYS
+  const c = today ? clampCustom(today, custom?.from, custom?.to) : null
+  if (!c || !today) return SNAPSHOT_DAYS
+  const need = dayCount(addDays(c.from, -dayCount(c.from, c.to)), today)
+  return HISTORY_BUCKETS.find((b) => b >= need) ?? 2 * CUSTOM_MAX_DAYS
+}
+
+/** An hour of the day as the charts label it, e.g. "9 am". */
+export const hourLabel = (hour: number) => new Date(Date.UTC(2026, 0, 1, hour)).toLocaleTimeString('en-IN', { hour: 'numeric', hour12: true, timeZone: 'UTC' })
 
 export type Period = {
   id: PeriodId
@@ -33,6 +75,12 @@ export type Period = {
 
 const fmtDay = (d: string) =>
   new Date(`${d}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+/** "1 Sep – 27 Nov"; with years when the range crosses one ("28 Nov 2025 – 27 Nov 2026"), so 365D is not "28 Nov – 27 Nov". */
+const fmtRange = (from: string, to: string) => {
+  if (from === to) return fmtDay(from)
+  const y = from.slice(0, 4) !== to.slice(0, 4)
+  return y ? `${fmtDay(from)} ${from.slice(0, 4)} – ${fmtDay(to)} ${to.slice(0, 4)}` : `${fmtDay(from)} – ${fmtDay(to)}`
+}
 
 // ── Rates and unit economics, per product (store × SKU) ──────────────────────
 
@@ -146,7 +194,7 @@ export type Portfolio = {
   total: Totals & {
     /** Before fixed costs. */
     contribution: number
-    prevContribution: number; prevRevenue: number; prevSpend: number; roas: number | null
+    prevContribution: number; prevRevenue: number; prevOrders: number; prevSpend: number; roas: number | null
     fixedCosts: number; net: number; prevFixedCosts: number; prevNet: number; fixedOnRecord: boolean
     /** Null when no costed store has revenue in the period. */
     breakeven: VxpBreakeven | null
@@ -158,6 +206,7 @@ export type SeriesPoint = {
   key: string
   label: string
   revenue: number
+  orders: number
   spend: number
   profit: number
   cumRevenue: number
@@ -200,6 +249,8 @@ export const pct = (n: number, digits = 0) => `${(n * 100).toFixed(digits)}%`
 export function createMetrics(d: Data) {
   const TODAY = d.today
   const windowStart: Record<RateWindow, string> = { '7d': addDays(TODAY, -6), '30d': addDays(TODAY, -29), lifetime: '' }
+  /** load.ts reads order rows from today − SNAPSHOT_DAYS on; longer reads are for Home's long ranges only. */
+  const snapshotStart = addDays(TODAY, -SNAPSHOT_DAYS)
 
   const storeById = (id: StoreId) => d.stores.find((s) => s.id === id)!
 
@@ -227,8 +278,25 @@ export function createMetrics(d: Data) {
     return p
   }
 
-  function resolvePeriod(id: PeriodId): Period {
+  function resolvePeriod(id: PeriodId, custom?: { from?: string; to?: string }): Period {
+    // The last n days to today, against the n days before them.
+    const lastDays = (pid: PeriodId, n: number, short: string): Period => ({
+      id: pid, from: addDays(TODAY, -(n - 1)), to: TODAY, prevFrom: addDays(TODAY, -(2 * n - 1)), prevTo: addDays(TODAY, -n),
+      short, range: fmtRange(addDays(TODAY, -(n - 1)), TODAY), prevLabel: `previous ${n} days`,
+    })
     switch (id) {
+      case '90d':
+        return lastDays('90d', 90, '90D')
+      case '365d':
+        return lastDays('365d', 365, '365D')
+      case 'custom': {
+        const c = clampCustom(TODAY, custom?.from, custom?.to)
+        if (!c) return resolvePeriod('7d')
+        const n = dayCount(c.from, c.to)
+        const range = fmtRange(c.from, c.to)
+        // `short` sits in tight column headers: the day count, with the dates on the Custom pill and in `range`.
+        return { id, from: c.from, to: c.to, prevFrom: addDays(c.from, -n), prevTo: addDays(c.from, -1), short: `${n}D`, range, prevLabel: n === 1 ? 'the day before' : `previous ${n} days` }
+      }
       case 'today':
         return { id, from: TODAY, to: TODAY, prevFrom: addDays(TODAY, -1), prevTo: addDays(TODAY, -1), short: 'Today', range: `Today, ${fmtDay(TODAY)}`, prevLabel: 'yesterday by this hour' }
       case '30d':
@@ -253,14 +321,21 @@ export function createMetrics(d: Data) {
    * Delivered ÷ (delivered + RTO) for one product and payment type, over shipments
    * that closed in the window, with lifetime history as a fallback.
    */
+  const rateCache = new Map<string, Rate>()
   function deliveryRate(storeId: StoreId, sku: string, payment: PaymentType, window: RateWindow = '30d'): Rate {
+    // Memoised: a year-long series asks for the same rate once per order row.
+    const key = `${storeId}|${sku}|${payment}|${window}`
+    const hit = rateCache.get(key)
+    if (hit) return hit
+    let rate: Rate = { value: SHEET_RATES.deliveryRate, basis: 'sheet', n: 0, window: null }
     for (const [basis, w, match] of rateLevels(storeId, sku, window)) {
       const rs = d.resolved.filter((r) => r.payment === payment && r.closedOn >= windowStart[w] && match(r))
       const delivered = rs.reduce((s, r) => s + r.delivered, 0)
       const n = delivered + rs.reduce((s, r) => s + r.rto, 0)
-      if (n >= MIN_SAMPLE) return { value: delivered / n, basis, n, window: w }
+      if (n >= MIN_SAMPLE) { rate = { value: delivered / n, basis, n, window: w }; break }
     }
-    return { value: SHEET_RATES.deliveryRate, basis: 'sheet', n: 0, window: null }
+    rateCache.set(key, rate)
+    return rate
   }
 
   /**
@@ -300,7 +375,8 @@ export function createMetrics(d: Data) {
    */
   function codShare(storeId: StoreId, sku: string): ShareRate {
     const count = (rs: typeof d.orders) => rs.reduce((s, r) => s + r.orders, 0)
-    const own = d.orders.filter((r) => r.storeId === storeId && r.sku === sku)
+    // The snapshot only: Home may load a year of rows for its long ranges, and COD share must not move with them.
+    const own = d.orders.filter((r) => r.storeId === storeId && r.sku === sku && r.date >= snapshotStart)
     for (const w of ['30d', 'lifetime'] as const) {
       const all = own.filter((r) => w === 'lifetime' || (r.date >= windowStart[w] && r.date <= TODAY))
       const rs = all.filter((r) => r.payment !== 'unknown')
@@ -492,6 +568,7 @@ export function createMetrics(d: Data) {
         net: contribution - fixedCosts,
         prevNet: prevContribution - prevFixedCosts,
         prevRevenue: stores.reduce((s, x) => s + x.prev.revenue, 0),
+        prevOrders: stores.reduce((s, x) => s + x.prev.orders, 0),
         prevSpend: stores.reduce((s, x) => s + x.prev.spend, 0),
         roas, breakeven,
         // A store with sales but no cost is in the blended ROAS but not the breakeven: no zone rather than a false one.
@@ -526,31 +603,43 @@ export function createMetrics(d: Data) {
   function series(storeIds: StoreId[], p: Period): SeriesPoint[] {
     const bucket = (s: Slice) => {
       const t = totalsOf(s)
-      return { revenue: t.revenue, spend: t.spend, profit: contributionOf(s) }
+      return { revenue: t.revenue, orders: t.orders, spend: t.spend, profit: contributionOf(s) }
     }
 
-    let buckets: { key: string; label: string; revenue: number; spend: number; profit: number }[]
+    let buckets: { key: string; label: string; revenue: number; orders: number; spend: number; profit: number }[]
     let prev: number[]
+    const inStores = (r: { storeId: StoreId }) => storeIds.includes(r.storeId)
     if (p.id === 'today') {
-      const inStores = <T extends { storeId: StoreId }>(rows: T[]) => rows.filter((r) => storeIds.includes(r.storeId))
-      const orders = inStores(d.orderHours)
-      const spend = inStores(d.campaignHours)
+      const orders = d.orderHours.filter(inStores)
+      const spend = d.campaignHours.filter(inStores)
       const hours = [...new Set([...orders, ...spend].map((h) => h.hour))].sort((a, b) => a - b)
       buckets = hours.map((hour) => ({
         key: String(hour),
-        label: new Date(Date.UTC(2026, 0, 1, hour)).toLocaleTimeString('en-IN', { hour: 'numeric', hour12: true, timeZone: 'UTC' }),
+        label: hourLabel(hour),
         ...bucket({ orders: orders.filter((h) => h.hour === hour), spend: spend.filter((h) => h.hour === hour) }),
       }))
-      const yesterday = inStores(d.orderHoursYesterday)
+      const yesterday = d.orderHoursYesterday.filter(inStores)
       prev = buckets.map((b) => yesterday.filter((h) => h.hour <= Number(b.key)).reduce((s, h) => s + h.revenue * elapsed(h.hour), 0))
     } else {
+      // One pass over the rows, grouped by day: a year of buckets must not rescan the snapshot per day.
+      const byDay = new Map<string, Slice>()
+      const dayOf = (day: string) => {
+        let s = byDay.get(day)
+        if (!s) byDay.set(day, (s = { orders: [], spend: [] }))
+        return s
+      }
+      for (const r of d.orders) if (r.date >= p.prevFrom && r.date <= p.to && inStores(r)) dayOf(r.date).orders.push(r)
+      for (const r of d.campaignDays) if (r.date >= p.prevFrom && r.date <= p.to && inStores(r)) dayOf(r.date).spend.push(r)
+      const none: Slice = { orders: [], spend: [] }
       const days: string[] = []
       for (let day = p.from; day <= p.to; day = addDays(day, 1)) days.push(day)
-      buckets = days.map((day) => ({ key: day, label: fmtDay(day), ...bucket(sliceIn(storeIds, day, day)) }))
+      buckets = days.map((day) => ({ key: day, label: fmtDay(day), ...bucket(byDay.get(day) ?? none) }))
       // Capped at prevTo: after a shorter month the comparison must not run on into the current one.
+      let run = 0
       prev = days.map((_, i) => {
-        const end = addDays(p.prevFrom, i)
-        return totalsOf(sliceIn(storeIds, p.prevFrom, end > p.prevTo ? p.prevTo : end)).revenue
+        const day = addDays(p.prevFrom, i)
+        if (day <= p.prevTo) run += totalsOf(byDay.get(day) ?? none).revenue
+        return run
       })
     }
     let cr = 0, cs = 0, cp = 0
@@ -783,8 +872,19 @@ export function createMetrics(d: Data) {
 
   const minutesAgo = (iso: string) => Math.max(0, Math.round((d.now.getTime() - Date.parse(iso)) / 60000))
 
+  /**
+   * Yesterday's hourly Meta spend adds up to its daily total (within ₹1). Today's spend comparison is built from those
+   * hours, and the hourly feed can lag the daily one (HANDOFF-meta-sync.md): short hours would read as a rise.
+   */
+  function yesterdayHoursComplete(storeIds: StoreId[]): boolean {
+    const y = addDays(TODAY, -1)
+    const hours = d.campaignHoursYesterday.filter((r) => storeIds.includes(r.storeId)).reduce((s, r) => s + r.spend, 0)
+    const day = d.campaignDays.filter((r) => r.date === y && storeIds.includes(r.storeId)).reduce((s, r) => s + r.spend, 0)
+    return day - hours < 1
+  }
+
   return {
-    resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, rateSources, storeStats, portfolio,
+    yesterdayHoursComplete, resolvePeriod, deliveryRate, deliveryTable, codShare, skuEconomics, storeEconomics, profitBeforeAds, borrowedRates, rateSources, storeStats, portfolio,
     series, calls, adsStopped, cash, gst, ownerShare, sync, campaigns, recentOrders, resolvedCounts, minutesAgo, relevantProducts,
     products: d.products, stores: d.stores, storeById, productOf,
     /** True when the store has never had a successful Meta sync, so "no ads" would really mean "no data". */

@@ -2,7 +2,8 @@ import Link from 'next/link'
 import { AlertTriangle, Database, House, Megaphone, Package, Settings } from 'lucide-react'
 import { MetaMark, ShopifyMark, VFulfillMark } from './BrandMarks'
 import type { Chrome } from '@/lib/data'
-import { PERIODS } from '@/lib/metrics'
+import { addDays, istNow } from '@/lib/dates'
+import { clampCustom, CUSTOM_MAX_DAYS, HOME_PERIODS, PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
 import { vfState } from './bits'
 import { viewKey } from '@/lib/view-key'
@@ -24,6 +25,10 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
   const s = d.sync
   const unconnected = s.metaNotConnected.map((id) => d.stores.find((x) => x.id === id)?.name ?? id)
   const stores = [{ id: 'all' as const, name: 'All VXP' }, ...d.stores.map((x) => ({ id: x.id, name: x.name }))]
+  // Home adds the long ranges and a custom one; Ads keeps the four its own reads are built for.
+  const periodList = tab === 'home' ? HOME_PERIODS : PERIODS
+  const today = istNow(d.now).today
+  const custom = tab === 'home' && view.period === 'custom' ? clampCustom(today, view.from, view.to) : null
 
   const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`
   const mins = (n: number) => (n < 60 ? `${n} min ago` : n < 1440 ? `${Math.floor(n / 60)} h ago` : `${days(Math.floor(n / 1440))} ago`)
@@ -62,17 +67,23 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
           </nav>
 
           {tabPath && <ViewSwitches store={view.store} period={view.period}
-            hrefs={Object.fromEntries(stores.flatMap((st) => PERIODS.map((p) => [viewKey({ store: st.id, period: p.id }), href(tabPath, { ...view, store: st.id, period: p.id })])))}
+            hrefs={Object.fromEntries(stores.flatMap((st) => [
+              ...periodList.map((p) => [viewKey({ store: st.id, period: p.id }), href(tabPath, { ...view, store: st.id, period: p.id })]),
+              // A store switch while a custom range shows keeps the range.
+              ...(custom ? [[viewKey({ store: st.id, period: 'custom' }), href(tabPath, { ...view, store: st.id })]] : []),
+            ]))}
             stores={{
               label: 'Store', items: stores.map((st) => ({ id: st.id, label: st.name, dot: st.id === 'all' ? undefined : st.id })),
               className: 'glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]',
               itemClass: `${seg} flex items-center gap-2 max-sm:min-h-9`,
             }}
             periods={tab === 'home' || tab === 'ads' ? {
-              label: 'Period', items: PERIODS.map((p) => ({ id: p.id, label: p.label })),
-              className: 'glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto',
+              label: 'Period', items: periodList.map((p) => ({ id: p.id, label: p.label })),
+              // Home's seven choices overflow a phone: fade the edge as the store switch does, so the rest reads as scrollable.
+              className: `glass-pill flex max-w-full items-center gap-0.5 overflow-x-auto p-[3px] no-scrollbar lg:ml-auto${tab === 'home' ? ' max-sm:pr-4 max-sm:[mask-image:linear-gradient(to_right,var(--color-ink)_calc(100%_-_12px),transparent)]' : ''}`,
               itemClass: `${seg} flex items-center max-sm:min-h-9`,
-            } : null} />}
+            } : null}
+            custom={tab === 'home' ? { range: custom, min: addDays(today, -(CUSTOM_MAX_DAYS - 1)), max: today } : undefined} />}
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">

@@ -3,6 +3,7 @@
  * mock or the Supabase read; `createMetrics(data)` computes every figure from it.
  */
 import { connection } from 'next/server'
+import { SNAPSHOT_DAYS } from './metrics'
 import type {
   Campaign, CampaignDay, CampaignHour, CashPosition, GstPosition, OrderDay, OrderHour, Product, RecentOrder, ResolvedDay,
   Store, SyncStatus,
@@ -65,7 +66,11 @@ export async function getChrome(): Promise<Chrome> {
   return { ...(await cachedChrome()), now: new Date() }
 }
 
-export async function getData(): Promise<Data> {
+/** The snapshot under one cache key: Home's 70 and the other tabs' default are the same read. */
+const historyKey = (n?: number) => (n === undefined || n <= SNAPSHOT_DAYS ? undefined : n)
+
+/** `historyDays`: days of order and spend rows to read (default the 70-day snapshot); Home's long ranges ask for more. */
+export async function getData(historyDays?: number): Promise<Data> {
   // Request-time data: under Cache Components this must run inside a <Suspense> boundary.
   await connection()
   await signedIn()
@@ -74,10 +79,10 @@ export async function getData(): Promise<Data> {
     return MOCK
   }
   const [{ cachedData }, { istNow }] = await Promise.all([import('./cached'), import('./dates')])
-  return cachedData(istNow(new Date()).today)
+  return cachedData(istNow(new Date()).today, historyKey(historyDays))
 }
 
-export async function getHomeData(): Promise<Data> {
+export async function getHomeData(historyDays?: number): Promise<Data> {
   await connection()
   await signedIn()
   if (process.env.DATA_SOURCE !== 'supabase') {
@@ -87,6 +92,6 @@ export async function getHomeData(): Promise<Data> {
   const [{ cachedData }, { loadHomeExtras }, { istNow }] = await Promise.all([import('./cached'), import('./home-load'), import('./dates')])
   // One IST day for both reads, so they agree even at midnight.
   const today = istNow(new Date()).today
-  const [data, extras] = await Promise.all([cachedData(today), loadHomeExtras(today)])
+  const [data, extras] = await Promise.all([cachedData(today, historyKey(historyDays)), loadHomeExtras(today)])
   return { ...data, ...extras }
 }
