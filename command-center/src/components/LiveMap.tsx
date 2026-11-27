@@ -20,13 +20,14 @@ const payWord = (p: RecentOrder['payment']) => (p === 'cod' ? 'COD' : p === 'pre
 const payBg = (p: RecentOrder['payment']) => (p === 'cod' ? 'bg-cod' : p === 'prepaid' ? 'bg-prepaid' : 'bg-ink-3')
 const ago = (m: number) => (m < 1 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.floor(m / 60)} h ago` : `${Math.floor(m / 1440)} d ago`)
 
-type Props = { initial: RecentOrder[]; stores: { id: StoreId; name: string }[]; serverNow: string; mock: boolean; view: ViewState }
+type MapPeriod = { from: string; to: string; short: string; endsToday: boolean }
+type Props = { initial: RecentOrder[]; stores: { id: StoreId; name: string }[]; serverNow: string; mock: boolean; view: ViewState; period: MapPeriod }
 
 /**
- * India with the newest orders lit at their cities. Every ~20 s it asks for the newest orders; anything not seen
+ * India with the period's newest orders lit at their cities. Every ~20 s it asks for them again; anything not seen
  * before pops in with a ripple and a label, and joins the list below. In mock mode, demo orders arrive on a timer.
  */
-export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
+export function LiveMap({ initial, stores, serverNow, mock, view, period }: Props) {
   const [orders, setOrders] = useState(initial)
   const [fresh, setFresh] = useState<Record<string, number>>({})
   const [elapsed, setElapsed] = useState(0)
@@ -74,11 +75,13 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
         arrive([{ ...base, id: `demo-${++k}-${base.id}`, city, placedAt }])
       }, MOCK_EVERY_MS)
     } else {
-      const load = () => fetch('/api/orders/live', { cache: 'no-store' })
+      const load = () => fetch(`/api/orders/live?from=${period.from}&to=${period.to}`, { cache: 'no-store' })
         .then((r) => (r.ok ? r.json() : null))
         .then((j: { orders: RecentOrder[] } | null) => { if (j) replace(j.orders) })
         .catch(() => {})
-      poll = setInterval(() => { if (document.visibilityState === 'visible') load() }, POLL_MS)
+      // A range ending before today is not in the newest orders the page arrived with, and gets no new ones: read it once.
+      if (!period.endsToday) load()
+      else poll = setInterval(() => { if (document.visibilityState === 'visible') load() }, POLL_MS)
     }
     // Drop the "fresh" mark once its animation and label are done.
     const sweep = setInterval(() => setFresh((prev) => {
@@ -87,7 +90,7 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
       return keep.length === Object.keys(prev).length ? prev : Object.fromEntries(keep)
     }), 1000)
     return () => { clearInterval(tick); clearInterval(sweep); if (poll) clearInterval(poll); if (demo) clearInterval(demo) }
-  }, [initial, mock, serverNow])
+  }, [initial, mock, serverNow, period.from, period.to, period.endsToday])
 
   // One square per place (Delhi's districts share one): its size grows with orders, its colour is the newest order's
   // payment. Each store's own count and newest order are kept too, so a traced store's squares show only its orders.
@@ -163,7 +166,8 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
         })}
       </div>
       <p className="mt-2 px-3 text-center text-xs text-ink-3">
-        Newest {orders.length} orders · {mock ? 'demo orders arrive every few seconds' : 'checks Shopify every 20 s'}
+        {orders.length >= 60 ? `Newest 60 orders in ${period.short}` : `${orders.length} ${orders.length === 1 ? 'order' : 'orders'} in ${period.short}`}
+        {' · '}{mock ? 'demo orders arrive every few seconds' : period.endsToday ? 'checks Shopify every 20 s' : 'past range'}
         {unplaced > 0 && <> · {unplaced} without a known city</>}
       </p>
 
@@ -173,7 +177,7 @@ export function LiveMap({ initial, stores, serverNow, mock, view }: Props) {
           <Link href={href('/orders', view)} className="flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">All orders<ChevronRight className="size-3.5" aria-hidden /></Link>
         </div>
         {orders.length === 0 ? (
-          <p className="px-2 pt-3 text-ink-3">No orders yet.</p>
+          <p className="px-2 pt-3 text-ink-3">No orders in {period.short}.</p>
         ) : (
           <ul className="mt-3 space-y-1.5">
             {orders.slice(0, 4).map((o) => (

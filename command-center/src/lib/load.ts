@@ -395,10 +395,13 @@ async function readAdAccountFunds(sb: Client, storeIds: string[]): Promise<AdAcc
 }
 
 /** The newest orders only, for the live map: two small reads, no history. */
-export async function loadRecentOrders(): Promise<RecentOrder[]> {
+/** The newest orders, optionally only those placed on IST dates from..to (inclusive, YYYY-MM-DD). */
+export async function loadRecentOrders(range?: { from: string; to: string }): Promise<RecentOrder[]> {
   const sb = await getClient()
-  const { data, error } = await sb.from('cc_orders').select('store_id, order_name, placed_at, payment, total_paise, primary_sku, city')
-    .is('cancelled_at', null).eq('is_test', false).order('placed_at', { ascending: false }).limit(RECENT_LIMIT)
+  let q = sb.from('cc_orders').select('store_id, order_name, placed_at, payment, total_paise, primary_sku, city')
+    .is('cancelled_at', null).eq('is_test', false)
+  if (range) q = q.gte('placed_at', `${range.from}T00:00:00+05:30`).lt('placed_at', `${addDays(range.to, 1)}T00:00:00+05:30`)
+  const { data, error } = await q.order('placed_at', { ascending: false }).limit(RECENT_LIMIT)
   if (error) throw new Error(error.message)
   const rows = (data ?? []) as OrderRow[]
   const skus = [...new Set(rows.map((r) => r.primary_sku))]

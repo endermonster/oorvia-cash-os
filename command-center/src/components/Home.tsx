@@ -24,7 +24,9 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
   // Uncapped: calls() shows three, and a stop must lead the verdict even when it is not among them.
   const stopped = m.adsStopped()
   const missing = missingCosts(pf.stores)
-  const orders = m.recentOrders(ids, 60)
+  // The map follows the period, like the Stores table. The 60 newest orders hold every period ending today that has
+  // up to 60 orders; a past custom range is fetched by the map itself on mount.
+  const orders = m.recentOrders(ids, 60).filter((o) => { const d = istNow(new Date(o.placedAt)).today; return d >= period.from && d <= period.to })
   const series = m.series(ids, period)
   const end = series.at(-1)
   const { net, prevNet, fixedCosts } = pf.total
@@ -116,7 +118,8 @@ export function HomeView({ view, period, m, now, mock }: { view: ViewState; peri
             </p>
           </div>
           <div className="mt-3 flex min-h-0 flex-1 flex-col">
-            <LiveMap initial={orders} stores={m.stores.map((s) => ({ id: s.id, name: s.name }))} serverNow={now.toISOString()} mock={mock} view={view} />
+            <LiveMap key={`${period.from}:${period.to}`} initial={orders} stores={m.stores.map((s) => ({ id: s.id, name: s.name }))} serverNow={now.toISOString()} mock={mock} view={view}
+              period={{ from: period.from, to: period.to, short: period.short, endsToday: period.to === istNow(now).today }} />
           </div>
         </section>
       </div>
