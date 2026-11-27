@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { AlertTriangle, Database, House, Infinity as MetaMark, Megaphone, Package, Settings } from 'lucide-react'
+import { AlertTriangle, Database, House, Megaphone, Package, Settings } from 'lucide-react'
+import { MetaMark, ShopifyMark, VFulfillMark } from './BrandMarks'
 import type { Chrome } from '@/lib/data'
 import { PERIODS } from '@/lib/metrics'
 import { href, TABS, type Tab, type ViewState } from '@/lib/nav'
@@ -11,8 +12,8 @@ import { SyncButton } from './SyncButton'
 const ICON = { home: House, ads: Megaphone, orders: Package, money: Database } as const
 const seg = 'rounded-[0.6rem] px-3.5 py-[5px] text-sm font-medium whitespace-nowrap transition-colors'
 const navSeg = `${seg} flex shrink-0 items-center justify-center max-sm:size-10 max-sm:p-0`
-const freshnessChip = 'glass-pill inline-grid grid-cols-[auto_1fr] items-center px-2.5 py-[3px] sm:inline-flex'
-const freshnessAge = 'col-span-2 text-xs sm:text-[0.8125rem]'
+const freshnessChip = 'glass-pill inline-flex items-center gap-x-1.5 px-2.5 py-[3px]'
+const freshnessAge = 'text-xs sm:text-[0.8125rem]'
 export const pageFrame = 'mx-auto max-w-[1536px] px-3 sm:px-4'
 
 /** vFulfill data older than this is called out, not just dated. */
@@ -75,17 +76,19 @@ export function TopBar({ tab, view, d }: { tab?: Tab; view: ViewState; d: Chrome
         </div>
 
         <div className="mt-2 flex flex-wrap items-center gap-2 whitespace-nowrap text-[0.8125rem]">
-          <span className={`${freshnessChip} gap-x-2`} title="Shopify orders arrive by webhook">
-            <span aria-hidden className={`size-2 rounded-full ${shopify === 'live' ? 'bg-good' : 'bg-ink-3'}`} />
-            <span className="font-medium text-ink">Shopify</span><span className={`${freshnessAge} text-ink-2`}>{shopify}</span>
+          <span className={freshnessChip} title="Shopify orders arrive by webhook">
+            <ShopifyMark className="size-3.5" />
+            <span className="sr-only">Shopify</span><span className={`${freshnessAge} ${shopify === 'live' ? 'text-good' : 'text-ink-2'}`}>{shopify}</span>
           </span>
-          <span className={`${freshnessChip} gap-x-1.5`} title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
-            <MetaMark className="size-3.5 text-revenue" aria-hidden />
-            <span className="font-medium text-ink">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
+          <span className={freshnessChip} title={unconnected.length ? `Not connected: ${unconnected.join(', ')}` : 'Meta syncs daily and on Sync now'}>
+            <MetaMark className="size-3.5" />
+            <span className="sr-only">Meta</span><span className={`${freshnessAge} text-ink-2`}>{meta}</span>
           </span>
-          <span className={`${freshnessChip} ${vfStale ? 'gap-x-1.5 text-warn max-sm:order-first' : 'gap-x-2'}`} title={`vFulfill arrives by CSV import: the shipments data ${vfs.phrase}`}>
-            {vfStale ? <AlertTriangle className="size-3.5" aria-hidden /> : <span aria-hidden className="size-2 rounded-full bg-good" />}
-            <span className={`font-medium ${vfStale ? '' : 'text-ink'}`}>vFulfill</span><span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
+          <span className={`${freshnessChip} ${vfStale ? 'text-warn max-sm:order-first' : ''}`} title={`vFulfill arrives by CSV import: the shipments data ${vfs.phrase}`}>
+            <VFulfillMark className="size-3.5" />
+            <span className="sr-only">vFulfill</span>
+            {vfStale && <AlertTriangle className="size-3.5" aria-hidden />}
+            <span className={`${freshnessAge} ${vfStale ? '' : 'text-ink-2'}`}>{vf}</span>
             {vfStale && <span className="sr-only">(stale)</span>}
           </span>
 
