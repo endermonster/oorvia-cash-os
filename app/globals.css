@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* command-center/ is a separate app in this repo; scanning it breaks this build. */
+@source not "../command-center";
 
 :root {
   --background: #020617;
