@@ -273,7 +273,7 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
   const iconBox = 'flex h-lh shrink-0 items-center text-ink-2'
   const moneyLink = (label: string) => <Link href={moneyHref} aria-label={`${label} on Money`} className="inline-flex min-h-9 items-center gap-1 text-sm font-semibold text-ink-2 hover:text-ink">On Money <span aria-hidden className="text-sm">→</span></Link>
   return (
-    <section aria-label="Cash, GST and your share" className="glass grid gap-x-2 gap-y-1 p-2 md:grid-cols-3 md:divide-x md:divide-line">
+    <section aria-label="Cash, GST and partner share" className="glass grid gap-x-2 gap-y-1 p-2 md:grid-cols-3 md:divide-x md:divide-line">
       <Link href={moneyHref} className={`${item} rounded-xl hover:bg-raised/40`}>
         <span className={iconBox}><Wallet className="size-4" aria-hidden /></span>
         <span className="min-w-0 flex-1">
@@ -297,7 +297,7 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
       <div className={item}>
         <span className={iconBox}><PieChart className="size-4" aria-hidden /></span>
         <span className="min-w-0 flex-1">
-          {share ? <><span className="font-semibold">Your share (50%) this month</span> <span className={`whitespace-nowrap font-bold tabular-nums ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <><span className="block font-semibold">Your share</span>{moneyLink('Your share')}</>}
+          {share ? <><span className="font-semibold">Per partner (50%) this month</span> <span className={`whitespace-nowrap font-bold tabular-nums ${tone(share.share)}`}>{share.share > 0 ? '+' : ''}<Signed value={share.share} /></span></> : <><span className="block font-semibold">Partner share</span>{moneyLink('Partner share')}</>}
         </span>
         {share && meta('Period: this month', 'Source: monthly P&L')}
       </div>
@@ -305,9 +305,9 @@ function BottomLine({ m, view, period }: { m: Metrics; view: ViewState; period: 
   )
 }
 
-/** "Cash, GST and your share" with only the parts still missing, capitalised. */
+/** "Cash, GST and partner share" with only the parts still missing, capitalised. */
 export function laterParts(cash: boolean, gst: boolean, share: boolean): string {
-  const parts = [cash && 'cash', gst && 'GST', share && 'your share'].filter((p): p is string => !!p)
+  const parts = [cash && 'cash', gst && 'GST', share && 'partner share'].filter((p): p is string => !!p)
   const s = parts.length <= 1 ? parts.join('') : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
   return s.charAt(0).toUpperCase() + s.slice(1)
 }

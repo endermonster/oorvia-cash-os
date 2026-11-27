@@ -62,8 +62,8 @@ describe('CashCard', () => {
 
 describe('laterParts', () => {
   it('names only what is still to come', () => {
-    expect(laterParts(true, true, true)).toBe('Cash, GST and your share')
-    expect(laterParts(false, true, true)).toBe('GST and your share')
-    expect(laterParts(false, false, true)).toBe('Your share')
+    expect(laterParts(true, true, true)).toBe('Cash, GST and partner share')
+    expect(laterParts(false, true, true)).toBe('GST and partner share')
+    expect(laterParts(false, false, true)).toBe('Partner share')
   })
 })

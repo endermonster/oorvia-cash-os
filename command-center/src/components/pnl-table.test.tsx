@@ -32,12 +32,12 @@ describe('PnlTable', () => {
     expect(html).toContain('3 orders counted delivered')
   })
 
-  describe('the "Your 50% share" sign', () => {
+  describe('the "Per partner (50%)" sign', () => {
     const withShare = (v: number) => ({ ...pnl, months: pnl.months.map((m) => ({ ...m, vxp: { ...m.vxp, ownerShare: v } })) })
-    /** The wide table's share cells: the row labelled "Your 50% share". */
+    /** The wide table's share cells: the row labelled "Per partner (50%)". */
     const cells = (v: number) => {
       const html = renderToStaticMarkup(<PnlTable pnl={withShare(v)} store={null} storeName="All VXP" currentMonth="2026-11" />)
-      const row = html.slice(html.indexOf('Your 50% share'), html.indexOf('</tr>', html.indexOf('Your 50% share')))
+      const row = html.slice(html.indexOf('Per partner (50%)'), html.indexOf('</tr>', html.indexOf('Per partner (50%)')))
       return [...row.matchAll(/<td class="([^"]*)">([^<]*)<\/td>/g)].map((x) => ({ cls: x[1], text: x[2] }))
     }
 

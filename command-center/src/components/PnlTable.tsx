@@ -55,7 +55,7 @@ export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResu
           })}
           {shareRow ? (
             <div className="flex items-baseline justify-between gap-4 py-1.5">
-              <dt className="text-ink-2">Your 50% share</dt>
+              <dt className="text-ink-2">Per partner (50%)</dt>
               <dd className={`text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</dd>
             </div>
           ) : null}
@@ -103,7 +103,7 @@ export function PnlTable({ pnl, store, storeName, currentMonth }: { pnl: PnlResu
               ))}
               {shareRow ? (
                 <tr>
-                  <th scope="row" className="py-3 pr-4 font-normal text-ink-2">Your 50% share</th>
+                  <th scope="row" className="py-3 pr-4 font-normal text-ink-2">Per partner (50%)</th>
                   {months.map((m) => (
                     <td key={m.month} className={`py-3 pl-4 text-right whitespace-nowrap font-semibold ${tone(share(m), true)}`}>{show(share(m), true)}</td>
                   ))}

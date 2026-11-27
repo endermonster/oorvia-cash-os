@@ -59,7 +59,7 @@ describe('Home cash details', () => {
     const view: ViewState = { store: 'all', period: '30d' }
     const html = renderToStaticMarkup(<HomeView view={view} period={m.resolvePeriod(view.period)} m={{ ...m, gst: () => null, ownerShare: () => null }} now={MOCK.now} mock />)
     expect(html).toMatch(/aria-label="GST on Money"[^>]*href="\/money\?period=30d"/)
-    expect(html).toMatch(/aria-label="Your share on Money"[^>]*href="\/money\?period=30d"/)
+    expect(html).toMatch(/aria-label="Partner share on Money"[^>]*href="\/money\?period=30d"/)
   })
 })
 
